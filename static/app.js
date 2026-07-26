@@ -732,30 +732,25 @@ document.addEventListener("DOMContentLoaded", () => {
     // ----------------------------------------------------
     function openReaderMode(audio, localUrl) {
         currentReadingAudioId = audio.id;
-        currentAudioObject = audio; // 현재 오디오 객체 참조 저장
+        currentAudioObject = audio; 
         
-        // Remove file extension for display title
+        // UI 초기화
         readerBookTitle.textContent = audio.title.replace(/\.[^/.]+$/, "");
-        readerAudio.src = localUrl;
-        
-        // Reset player UI
         showPlayIcon();
         readerCurrentTime.textContent = "00:00";
         readerDuration.textContent = "00:00";
         readerProgressFill.style.width = "0%";
         
-        // Reset container
         readerContent.innerHTML = "";
         lastActiveSpan = null;
         
-        // Render sentences
+        // 문장 렌더링
         audio.sentences.forEach((s, index) => {
             const span = document.createElement("span");
             span.className = "reader-sentence";
             span.id = `sent-${index}`;
             span.textContent = s.text + " ";
             
-            // Allow clicking sentence to skip audio playback directly
             span.addEventListener("click", () => {
                 readerAudio.currentTime = s.start / 1000;
                 readerAudio.play().catch(err => console.log("Play failed:", err));
@@ -764,16 +759,26 @@ document.addEventListener("DOMContentLoaded", () => {
             readerContent.appendChild(span);
         });
         
-        // Show Reader screen
         readerOverlay.classList.add("show");
         resetReaderUiTimeout();
         
-        // Load metadata (audio duration)
+        // [해결 1] 동일 Blob URL이라도 WebKit 미디어 엔진을 강제로 새로고침
+        readerAudio.src = localUrl;
+        readerAudio.load(); 
+        
+        // [해결 2] 오디오 메타데이터가 준비된 이후에만 시간 설정 및 자동 재생 실행
         readerAudio.onloadedmetadata = () => {
-            readerDuration.textContent = formatTime(readerAudio.duration);
+            if (readerAudio.duration && !isNaN(readerAudio.duration)) {
+                readerDuration.textContent = formatTime(readerAudio.duration);
+            }
+            
+            if (audio.lastPosition > 0) {
+                readerAudio.currentTime = audio.lastPosition;
+            }
+            readerAudio.play().catch(err => console.log("Autoplay blocked:", err));
+            showPauseIcon();
         };
         
-        // Custom Play/Pause Button handler
         function togglePlayPause(e) {
             if (e) { e.preventDefault(); e.stopPropagation(); }
             if (readerAudio.paused) {
@@ -782,15 +787,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 readerAudio.pause();
             }
         }
-
-        // 아래와 같이 onclick 하나만 연결하고, 기존에 추가했던 ontouchend 관련 코드는 모두 지워주세요.
+        
+        // 터치 이벤트 충돌 원천 차단 (onclick만 사용)
         readerPlayPauseBtn.onclick = togglePlayPause;
-  
-        // Handle audio events to toggle custom icon state
+        
         readerAudio.onplay = function() { showPauseIcon(); };
         readerAudio.onpause = function() { showPlayIcon(); };
         
-        // Handle click on progress bar to seek
         readerProgressBar.onclick = (e) => {
             const rect = readerProgressBar.getBoundingClientRect();
             const clickX = e.clientX - rect.left;
@@ -801,13 +804,11 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         };
         
-        // Listen to timeupdate to sync highlighting & scrolling & progress fill
         readerAudio.ontimeupdate = () => {
             const currentSec = readerAudio.currentTime;
             const currentMs = currentSec * 1000;
             const duration = readerAudio.duration || 0;
             
-            // Update custom player progress bar UI
             readerCurrentTime.textContent = formatTime(currentSec);
             if (duration > 0) {
                 readerProgressFill.style.width = `${(currentSec / duration) * 100}%`;
@@ -815,7 +816,6 @@ document.addEventListener("DOMContentLoaded", () => {
             
             let activeIndex = -1;
             
-            // Find current sentence index
             for (let i = 0; i < audio.sentences.length; i++) {
                 const s = audio.sentences[i];
                 if (currentMs >= s.start && currentMs <= s.end) {
@@ -824,7 +824,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             }
             
-            // Find closest sentence if boundary gap occurs
             if (activeIndex === -1 && audio.sentences.length > 0) {
                 if (currentMs < audio.sentences[0].start) {
                     activeIndex = 0;
@@ -847,7 +846,6 @@ document.addEventListener("DOMContentLoaded", () => {
                     activeSpan.classList.add("highlight");
                     
                     isAutoScrolling = true;
-                    // Scroll within readerContent container (not whole page)
                     const spanTop = activeSpan.offsetTop;
                     const containerHeight = readerContent.clientHeight;
                     const targetScroll = spanTop - containerHeight / 2 + activeSpan.clientHeight / 2;
@@ -858,40 +856,29 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             }
         };
-        
-        if (audio.lastPosition > 0) {
-            readerAudio.currentTime = audio.lastPosition;
-            // 기존: showPlayIcon(); 만 호출하여 일시정지 상태로 대기
-            // 변경: 설정된 시간부터 즉시 오디오를 재생하고 일시정지 아이콘 표시
-            readerAudio.play().catch(function(err) { console.log("Autoplay blocked:", err); });
-            showPauseIcon();
-        } else {
-            readerAudio.play().catch(function(err) { console.log("Autoplay blocked:", err); });
-        }
     }
-    
-    // Close reader - shared handler for both click and touch
+
     function closeReader(e) {
         if (e) { e.preventDefault(); e.stopPropagation(); }
         
-        // 재생 위치 저장
         if (currentAudioObject && readerAudio.currentTime > 0) {
             updateAudiobookPosition(currentAudioObject.id, readerAudio.currentTime);
             currentAudioObject.lastPosition = readerAudio.currentTime;
         }
         
+        // src 비우기 절대 금지, pause 및 currentTime만 초기화
         readerAudio.pause();
+        readerAudio.currentTime = 0;
         
         readerAudio.onplay = null;
         readerAudio.onpause = null;
         readerAudio.ontimeupdate = null;
         readerAudio.onloadedmetadata = null;
-
-        // UI 핸들러 정리
+        
         readerPlayPauseBtn.onclick = null;
+        readerPlayPauseBtn.ontouchend = null; // 혹시 남아있을 속성 제거
         readerProgressBar.onclick = null;
         
-        // 화면 닫기 및 UI 초기화
         readerOverlay.classList.remove("show");
         clearTimeout(readerUiTimeout);
         if (readerContainer) readerContainer.classList.remove("hide-ui");
@@ -902,7 +889,7 @@ document.addEventListener("DOMContentLoaded", () => {
             lastActiveSpan.classList.remove("highlight");
             lastActiveSpan = null;
         }
-    }    
+    }
 
     closeReaderBtn.addEventListener("click", closeReader);
     closeReaderBtn.addEventListener("touchend", closeReader, { passive: false });
