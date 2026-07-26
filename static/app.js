@@ -115,6 +115,53 @@ document.addEventListener("DOMContentLoaded", () => {
         renderLibrary();
     });
 
+    // -------------------------------------------------------
+    // Background → Foreground 복귀 시 배포 업데이트 감지
+    // 서버가 재시작(재배포)되면 build_id가 바뀌어 자동 리로드
+    // -------------------------------------------------------
+    let cachedBuildId = null;
+
+    async function fetchBuildId() {
+        try {
+            const res = await fetch("/api/version", { cache: "no-store" });
+            if (!res.ok) return null;
+            const data = await res.json();
+            return data.build_id || null;
+        } catch {
+            return null; // 네트워크 오프라인이면 조용히 무시
+        }
+    }
+
+    // 최초 로드 시 build_id 기억
+    fetchBuildId().then(id => { cachedBuildId = id; });
+
+    // 앱이 포그라운드로 돌아올 때마다 체크
+    document.addEventListener("visibilitychange", async () => {
+        if (document.visibilityState !== "visible") return;
+        if (!cachedBuildId) {
+            // 아직 초기 ID가 없으면 지금 저장
+            cachedBuildId = await fetchBuildId();
+            return;
+        }
+        const latestId = await fetchBuildId();
+        if (latestId && latestId !== cachedBuildId) {
+            // 새 배포 감지 → 토스트 알림 후 3초 뒤 리로드
+            showToast("새 버전이 배포되었습니다. 곧 업데이트됩니다...", "info");
+            setTimeout(() => {
+                // Service Worker 캐시도 함께 비우고 리로드
+                if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
+                    caches.keys().then(keys => {
+                        Promise.all(keys.map(k => caches.delete(k))).then(() => {
+                            window.location.reload();
+                        });
+                    });
+                } else {
+                    window.location.reload();
+                }
+            }, 3000);
+        }
+    });
+
     // Mobile specific UI adjustments
     const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
     if (isMobileDevice) {

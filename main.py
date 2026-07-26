@@ -34,6 +34,10 @@ STATIC_DIR = os.path.join(BASE_DIR, "static")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(STATIC_DIR, exist_ok=True)
 
+# App build ID: generated once at server startup.
+# Changes on every redeploy (new process start), used by client to detect updates.
+APP_BUILD_ID = str(int(time.time()))
+
 # In-memory storage for extracted texts
 # Keeps text temporarily for 30 minutes. Auto-expired by background task.
 text_storage = {}
@@ -282,6 +286,11 @@ async def get_job_status(job_id: str):
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # Serve PWA Configs at root level for scope compliance
+@app.get("/api/version")
+async def get_version():
+    """Returns the server's build ID. Client polls this on foreground resume to detect redeployment."""
+    return JSONResponse(content={"build_id": APP_BUILD_ID})
+
 @app.get("/manifest.json")
 async def get_manifest():
     return FileResponse(os.path.join(STATIC_DIR, "manifest.json"), media_type="application/json")
