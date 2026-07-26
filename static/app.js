@@ -73,6 +73,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let db = null;
     let objectUrls = {}; // Store generated object URLs to clean them up later
     let lastActiveSpan = null;
+    let currentReadingAudioId = null;
 
     // Initialize Database and App
     initDB().then(() => {
@@ -169,6 +170,24 @@ document.addEventListener("DOMContentLoaded", () => {
             const request = store.delete(id);
             
             request.onsuccess = () => resolve();
+            request.onerror = (e) => reject(e.target.error);
+        });
+    }
+
+    function updateAudiobookPosition(id, lastPosition) {
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(["audiobooks"], "readwrite");
+            const store = transaction.objectStore("audiobooks");
+            const request = store.get(id);
+            
+            request.onsuccess = (e) => {
+                const data = e.target.result;
+                if (data) {
+                    data.lastPosition = lastPosition;
+                    store.put(data);
+                }
+                resolve();
+            };
             request.onerror = (e) => reject(e.target.error);
         });
     }
@@ -633,6 +652,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // 7. Synced Reader Mode Implementation
     // ----------------------------------------------------
     function openReaderMode(audio, localUrl) {
+        currentReadingAudioId = audio.id;
+        
         // Remove file extension for display title
         readerBookTitle.textContent = audio.title.replace(/\.[^/.]+$/, "");
         readerAudio.src = localUrl;
@@ -756,11 +777,24 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         };
         
-        readerAudio.play().catch(err => console.log("Autoplay blocked:", err));
+        // Resume from cached position if available
+        if (audio.lastPosition > 0) {
+            readerAudio.currentTime = audio.lastPosition;
+            // User requested it to be PAUSED if resuming from cache
+            readerPlayPauseBtn.innerHTML = '<i data-lucide="play"></i>';
+            lucide.createIcons();
+        } else {
+            readerAudio.play().catch(err => console.log("Autoplay blocked:", err));
+        }
     }
     
     // Close button
     closeReaderBtn.addEventListener("click", () => {
+        // Save current position before closing
+        if (currentReadingAudioId && readerAudio.currentTime > 0) {
+            updateAudiobookPosition(currentReadingAudioId, readerAudio.currentTime);
+        }
+        
         readerAudio.pause();
         readerAudio.src = "";
         readerAudio.onplay = null;
