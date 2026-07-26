@@ -734,7 +734,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 // 서버에 임시 업로드 (24시간 후 자동 삭제)
                 const formData = new FormData();
-                formData.append("audio_file", audioBlob, "audio.mp3");
+                formData.append("audio", audioBlob, "audio.mp3");
                 formData.append("title", target.title);
                 formData.append("sentences", JSON.stringify(freshAudio.sentences || []));
 
@@ -760,8 +760,12 @@ document.addEventListener("DOMContentLoaded", () => {
                     url: shareUrl
                 });
             } else {
-                await navigator.clipboard.writeText(shareUrl);
-                showToast("공유 링크가 복사되었습니다! (24시간 유효)", "success");
+                try {
+                    await navigator.clipboard.writeText(shareUrl);
+                    showToast("공유 링크가 복사되었습니다! (24시간 유효)", "success");
+                } catch (clipErr) {
+                    prompt("브라우저 보안 설정으로 자동 복사가 제한되었습니다. 아래 링크를 복사하세요:", shareUrl);
+                }
             }
         } catch (err) {
             if (err.name !== "AbortError") {
