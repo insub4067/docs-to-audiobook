@@ -712,8 +712,6 @@ document.addEventListener("DOMContentLoaded", () => {
         closeActionSheet();
         
         try {
-            showToast("공유 링크 생성 중...", "info");
-            
             // IndexedDB에서 오디오 데이터 가져오기
             const freshAudio = await getAudiobookFromDB(target.id);
             if (!freshAudio || !freshAudio.audioData) {
@@ -721,20 +719,37 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            const audioBlob = freshAudio.audioData instanceof Blob
-                ? freshAudio.audioData
-                : new Blob([freshAudio.audioData], { type: "audio/mpeg" });
+            let share_id = freshAudio.shareId;
+            const now = Date.now();
+            
+            // 캐시된 shareId가 있고 만료기간(24시간)이 지나지 않았다면 재사용
+            if (share_id && freshAudio.shareExpiry && freshAudio.shareExpiry > now) {
+                showToast("공유 링크 준비 중...", "info");
+            } else {
+                showToast("서버에 업로드하여 공유 링크 생성 중...", "info");
+                
+                const audioBlob = freshAudio.audioData instanceof Blob
+                    ? freshAudio.audioData
+                    : new Blob([freshAudio.audioData], { type: "audio/mpeg" });
 
-            // 서버에 임시 업로드 (24시간 후 자동 삭제)
-            const formData = new FormData();
-            formData.append("audio", audioBlob, "audio.mp3");
-            formData.append("title", target.title);
-            formData.append("sentences", JSON.stringify(freshAudio.sentences || []));
+                // 서버에 임시 업로드 (24시간 후 자동 삭제)
+                const formData = new FormData();
+                formData.append("audio_file", audioBlob, "audio.mp3");
+                formData.append("title", target.title);
+                formData.append("sentences", JSON.stringify(freshAudio.sentences || []));
 
-            const response = await fetch("/api/share", { method: "POST", body: formData });
-            if (!response.ok) throw new Error("서버 업로드 실패");
+                const response = await fetch("/api/share", { method: "POST", body: formData });
+                if (!response.ok) throw new Error("서버 업로드 실패");
 
-            const { share_id } = await response.json();
+                const result = await response.json();
+                share_id = result.share_id;
+                
+                // DB에 shareId와 만료시간(약 23시간 50분) 업데이트
+                freshAudio.shareId = share_id;
+                freshAudio.shareExpiry = now + (23 * 60 * 60 * 1000) + (50 * 60 * 1000);
+                await saveAudiobookToDB(freshAudio);
+            }
+
             const shareUrl = `${window.location.origin}/share/${share_id}`;
 
             // 링크 공유
@@ -1035,7 +1050,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // --------------------------------------------------
     // 9. Shared Link Auto-Detection
     // --------------------------------------------------
-    function openSharedReaderMode(title, sentences, audioUrl) {
+    function openSharedReaderMode(title, sentences, audioUrl, shareId = null) {
         // 공유 링크로 접속한 수신자를 위한 Reader 모드
         currentReadingAudioId = null;
         currentAudioObject = null;
@@ -1070,7 +1085,9 @@ document.addEventListener("DOMContentLoaded", () => {
                         id,
                         title,
                         audioData: audioBlob,
-                        sentences
+                        sentences,
+                        shareId: shareId, // 다운로드한 파일도 shareId를 기억
+                        shareExpiry: Date.now() + (23 * 60 * 60 * 1000) // 만료시간 넉넉히 23시간으로 산정
                     });
                     
                     renderLibrary();
@@ -1216,7 +1233,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const data = await response.json();
             // 약간의 딜레이 후 Reader 열기 (UI 초기화 완료 대기)
             setTimeout(() => {
-                openSharedReaderMode(data.title, data.sentences, data.audio_url);
+                openSharedReaderMode(data.title, data.sentences, data.audio_url, shareId);
             }, 500);
         } catch (err) {
             console.error("Failed to load shared audiobook:", err);

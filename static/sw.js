@@ -1,4 +1,4 @@
-const CACHE_NAME = "2026.07.27.6";
+const CACHE_NAME = "2026.07.27.7";
 
 const ASSETS_TO_CACHE = [
   "/",
