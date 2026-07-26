@@ -1,0 +1,18 @@
+{
+  "name": "Audiobook Maker",
+  "short_name": "Audiobook",
+  "description": "FastAPI + Vanilla JS 오디오북 생성기 및 리더",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#faf7f2",
+  "theme_color": "#5d4b40",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/static/icon.jpg",
+      "sizes": "192x192 512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}
