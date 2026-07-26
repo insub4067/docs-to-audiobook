@@ -66,7 +66,7 @@ html {
 /* App Header Styling (Literary Bookshop vibe) */
 .app-header {
     text-align: center;
-    padding: 0 16px;
+    padding: calc(12px + env(safe-area-inset-top)) 16px 0;
 }
 
 .app-header .logo {
@@ -572,6 +572,7 @@ input[type="range"]::-webkit-slider-thumb:active {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    min-width: 0;
 }
 
 .audio-actions {
@@ -598,8 +599,29 @@ input[type="range"]::-webkit-slider-thumb:active {
 .btn-icon-round.btn-delete:hover {
     opacity: 1;
     background-color: rgba(179, 57, 57, 0.1);
+}
+
+.btn-icon-round.btn-more {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    opacity: 0.7;
+    touch-action: manipulation;
+}
+
+.btn-icon-round.btn-more:hover {
+    opacity: 1;
+    background-color: rgba(93, 75, 64, 0.08);
     border-radius: 50%;
 }
+
 
 /* Audio Player styling override */
 .audio-player-wrapper {
@@ -913,14 +935,12 @@ input[type="range"]::-webkit-slider-thumb:active {
 .reader-controls {
     flex-shrink: 0;
     z-index: 10;
-    /* 상단 여백을 12px로 줄이고, 하단 최소 여백도 10px로 축소 */
-    padding: 12px 24px max(10px, env(safe-area-inset-bottom));
+    padding: 12px 24px max(16px, env(safe-area-inset-bottom));
     border-top: 1px solid rgba(120, 90, 60, 0.1);
     background-color: rgba(250, 245, 230, 0.88);
     backdrop-filter: blur(24px) saturate(160%);
     -webkit-backdrop-filter: blur(24px) saturate(160%);
-    /* 컨테이너 최대 높이를 110px로 축소 */
-    max-height: 110px;
+    max-height: 120px;
     overflow: hidden;
     opacity: 1;
     transition: max-height 0.35s ease, opacity 0.25s ease, padding 0.35s ease;
@@ -1130,5 +1150,86 @@ input[type="range"]::-webkit-slider-thumb:active {
     padding: 20px 24px calc(20px + env(safe-area-inset-bottom));
     border-top: 1px solid var(--border-color);
     background-color: var(--card-bg-solid);
+}
+
+/* ===================== ActionSheet ===================== */
+.action-sheet-backdrop {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.35);
+    z-index: 2000;
+    display: none;
+    align-items: flex-end;
+    justify-content: center;
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+}
+
+.action-sheet-backdrop.show {
+    display: flex;
+}
+
+.action-sheet {
+    width: 100%;
+    max-width: 500px;
+    background: #fff;
+    border-radius: 16px 16px 0 0;
+    padding: 8px 0 calc(12px + env(safe-area-inset-bottom));
+    animation: slideUpSheet 0.3s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+@keyframes slideUpSheet {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+}
+
+.action-sheet-handle {
+    width: 36px;
+    height: 4px;
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 2px;
+    margin: 8px auto 12px;
+}
+
+.action-sheet-btn {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    padding: 16px 24px;
+    border: none;
+    background: none;
+    font-size: 1.05rem;
+    font-family: var(--font-sans);
+    color: var(--text-color);
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+    touch-action: manipulation;
+}
+
+.action-sheet-btn:hover,
+.action-sheet-btn:active {
+    background-color: rgba(0, 0, 0, 0.04);
+}
+
+.action-sheet-btn svg {
+    flex-shrink: 0;
+    color: var(--primary-color);
+}
+
+.action-sheet-btn-danger {
+    color: #c0392b;
+}
+
+.action-sheet-btn-danger svg {
+    color: #c0392b;
+}
+
+.action-sheet-btn-cancel {
+    justify-content: center;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-top: 4px;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
 

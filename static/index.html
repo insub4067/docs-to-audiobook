@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Paper & Voice - 아날로그 감성 오디오북 메이커</title>
+    <title>TextAudio - 문서를 오디오북으로</title>
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -29,7 +29,7 @@
         <header class="app-header">
             <div class="logo">
                 <i data-lucide="headphones" class="logo-icon"></i>
-                <h1>Audiobook <span>Maker</span></h1>
+                <h1>Text<span>Audio</span></h1>
             </div>
             <p class="subtitle">문서 파일을 자연스러운 음성 오디오북으로 변환하여 기기에 저장해 보세요.</p>
         </header>
@@ -195,8 +195,24 @@
         </div>
 
         <footer class="app-footer">
-            <p>&copy; 2026 Audiobook Maker. Powered by edge-tts & FastAPI.</p>
+            <p>&copy; 2026 TextAudio. Powered by edge-tts & FastAPI.</p>
         </footer>
+    </div>
+
+    <!-- ActionSheet Overlay -->
+    <div class="action-sheet-backdrop" id="actionSheetBackdrop">
+        <div class="action-sheet" id="actionSheet">
+            <div class="action-sheet-handle"></div>
+            <button class="action-sheet-btn" id="actionShareBtn">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+                공유
+            </button>
+            <button class="action-sheet-btn action-sheet-btn-danger" id="actionDeleteBtn">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                삭제
+            </button>
+            <button class="action-sheet-btn action-sheet-btn-cancel" id="actionCancelBtn">취소</button>
+        </div>
     </div>
 
     <!-- Scripts -->

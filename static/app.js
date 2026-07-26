@@ -650,16 +650,15 @@ document.addEventListener("DOMContentLoaded", () => {
                         <span class="audio-title" title="${audio.title}">${audio.title}</span>
                     </div>
                     <div class="audio-actions">
-                        <button class="btn-icon-round btn-delete" data-id="${audio.id}" title="삭제">
-                            <i data-lucide="trash-2"></i>
+                        <button class="btn-icon-round btn-more" data-id="${audio.id}" title="더보기">
+                            <i data-lucide="more-horizontal"></i>
                         </button>
                     </div>
                 `;
 
                 if (hasSentences) {
                     item.addEventListener("click", async (e) => {
-                        if (e.target.closest('.btn-delete')) return;
-                        // ✅ 캐시된 audio 재사용 금지, DB에서 매번 fresh하게 다시 읽기
+                        if (e.target.closest('.btn-more')) return;
                         const freshAudio = await getAudiobookFromDB(audio.id);
                         if (!freshAudio || !freshAudio.audioData) {
                             showToast("오디오 데이터를 불러올 수 없습니다. 다시 생성해 주세요.", "error");
@@ -669,9 +668,10 @@ document.addEventListener("DOMContentLoaded", () => {
                     });
                 }
 
-                item.querySelector(".btn-delete").addEventListener("click", async (e) => {
-                    const idToDelete = e.currentTarget.getAttribute("data-id");
-                    await deleteAudiobook(idToDelete);
+                // '...' 버튼 -> ActionSheet
+                item.querySelector(".btn-more").addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    openActionSheet(audio);
                 });
 
                 audioList.appendChild(item);
@@ -683,6 +683,55 @@ document.addEventListener("DOMContentLoaded", () => {
             showToast("도서관 오디오북을 불러올 수 없습니다.", "error");
         }
     }
+
+    // --- ActionSheet ---
+    const actionSheetBackdrop = document.getElementById("actionSheetBackdrop");
+    const actionShareBtn = document.getElementById("actionShareBtn");
+    const actionDeleteBtn = document.getElementById("actionDeleteBtn");
+    const actionCancelBtn = document.getElementById("actionCancelBtn");
+    let actionSheetTarget = null; // 현재 선택된 오디오북 객체
+
+    function openActionSheet(audio) {
+        actionSheetTarget = audio;
+        actionSheetBackdrop.classList.add("show");
+    }
+
+    function closeActionSheet() {
+        actionSheetBackdrop.classList.remove("show");
+        actionSheetTarget = null;
+    }
+
+    actionCancelBtn.addEventListener("click", closeActionSheet);
+    actionSheetBackdrop.addEventListener("click", (e) => {
+        if (e.target === actionSheetBackdrop) closeActionSheet();
+    });
+
+    actionShareBtn.addEventListener("click", async () => {
+        if (!actionSheetTarget) return;
+        closeActionSheet();
+        try {
+            if (navigator.share) {
+                await navigator.share({
+                    title: actionSheetTarget.title,
+                    text: `"${actionSheetTarget.title}" - TextAudio로 만든 오디오북`,
+                    url: window.location.href
+                });
+            } else {
+                // share API 없으면 URL 복사
+                await navigator.clipboard.writeText(window.location.href);
+                showToast("링크가 복사되었습니다.", "success");
+            }
+        } catch (err) {
+            console.log("Share cancelled or failed:", err);
+        }
+    });
+
+    actionDeleteBtn.addEventListener("click", async () => {
+        if (!actionSheetTarget) return;
+        const idToDelete = actionSheetTarget.id;
+        closeActionSheet();
+        await deleteAudiobook(idToDelete);
+    });
 
     async function deleteAudiobook(id) {
         try {
@@ -807,8 +856,15 @@ document.addEventListener("DOMContentLoaded", () => {
         readerAudio.load();
         readerAudio.play().catch(() => {});
 
+        // Play/Pause 토글 함수 (iOS 이중실행 방지)
+        let lastToggleTime = 0;
         function togglePlayPause(e) {
             if (e) { e.preventDefault(); e.stopPropagation(); }
+            // 300ms 내 이중 호출 방지
+            const now = Date.now();
+            if (now - lastToggleTime < 300) return;
+            lastToggleTime = now;
+            
             if (readerAudio.paused) {
                 readerAudio.play().catch(function(err) { console.log("Play failed:", err); });
             } else {
@@ -816,8 +872,9 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
         
-        // 터치 이벤트 충돌 방지 (onclick 하나만 유지)
+        // click + touchend 모두 바인드 (이중실행은 위의 debounce로 방지)
         readerPlayPauseBtn.onclick = togglePlayPause;
+        readerPlayPauseBtn.addEventListener("touchend", togglePlayPause, { passive: false });
         
         readerAudio.onplay = function() { showPauseIcon(); };
         readerAudio.onpause = function() { showPlayIcon(); };
@@ -883,6 +940,11 @@ document.addEventListener("DOMContentLoaded", () => {
                     
                     lastActiveSpan = activeSpan;
                 }
+            }
+            
+            // 재생 위치 주기적 저장 (5초마다)
+            if (currentAudioObject && Math.floor(currentSec) % 5 === 0 && currentSec > 0) {
+                updateAudiobookPosition(currentAudioObject.id, currentSec);
             }
         };
     }
