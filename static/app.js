@@ -710,7 +710,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!actionSheetTarget) return;
         const target = actionSheetTarget;
         closeActionSheet();
+        
         try {
+            showToast("공유 링크 생성 중...", "info");
+            
             // IndexedDB에서 오디오 데이터 가져오기
             const freshAudio = await getAudiobookFromDB(target.id);
             if (!freshAudio || !freshAudio.audioData) {
@@ -722,31 +725,28 @@ document.addEventListener("DOMContentLoaded", () => {
                 ? freshAudio.audioData
                 : new Blob([freshAudio.audioData], { type: "audio/mpeg" });
 
-            const safeName = target.title.replace(/[^a-zA-Z0-9가-힣\s]/g, "").trim() || "audiobook";
-            const audioFile = new File([audioBlob], `${safeName}.mp3`, { type: "audio/mpeg" });
+            // 서버에 임시 업로드 (24시간 후 자동 삭제)
+            const formData = new FormData();
+            formData.append("audio", audioBlob, "audio.mp3");
+            formData.append("title", target.title);
+            formData.append("sentences", JSON.stringify(freshAudio.sentences || []));
 
-            if (navigator.canShare && navigator.canShare({ files: [audioFile] })) {
+            const response = await fetch("/api/share", { method: "POST", body: formData });
+            if (!response.ok) throw new Error("서버 업로드 실패");
+
+            const { share_id } = await response.json();
+            const shareUrl = `${window.location.origin}/share/${share_id}`;
+
+            // 링크 공유
+            if (navigator.share) {
                 await navigator.share({
                     title: target.title,
-                    text: `"${target.title}" - TextAudio로 만든 오디오북`,
-                    files: [audioFile]
-                });
-            } else if (navigator.share) {
-                // 파일 공유 미지원 시 URL만 공유
-                await navigator.share({
-                    title: target.title,
-                    text: `"${target.title}" - TextAudio로 만든 오디오북`,
-                    url: window.location.href
+                    text: `"${target.title}" - TextAudio 오디오북을 들어보세요`,
+                    url: shareUrl
                 });
             } else {
-                // 공유 API 미지원 → 파일 다운로드로 대체
-                const url = URL.createObjectURL(audioBlob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `${safeName}.mp3`;
-                a.click();
-                URL.revokeObjectURL(url);
-                showToast("오디오 파일이 다운로드됩니다.", "success");
+                await navigator.clipboard.writeText(shareUrl);
+                showToast("공유 링크가 복사되었습니다! (24시간 유효)", "success");
             }
         } catch (err) {
             if (err.name !== "AbortError") {
@@ -1024,7 +1024,165 @@ document.addEventListener("DOMContentLoaded", () => {
     readerAudio.onerror = () => {
         const err = readerAudio.error;
         console.error("Audio load error:", err ? err.code : "unknown");
-        console.error("Blob size at failure:", audio.audioData ? audio.audioData.size : "no audioData");
         showToast(`오디오 로드 실패 (code: ${err ? err.code : '?'})`, "error");
     };
+
+    // --------------------------------------------------
+    // 9. Shared Link Auto-Detection
+    // --------------------------------------------------
+    function openSharedReaderMode(title, sentences, audioUrl) {
+        // 공유 링크로 접속한 수신자를 위한 Reader 모드
+        currentReadingAudioId = null;
+        currentAudioObject = null;
+
+        readerBookTitle.textContent = title;
+        showPlayIcon();
+        readerCurrentTime.textContent = "00:00";
+        readerDuration.textContent = "00:00";
+        readerProgressFill.style.width = "0%";
+        readerContent.innerHTML = "";
+        lastActiveSpan = null;
+
+        // 문장 렌더링
+        sentences.forEach((s, index) => {
+            const span = document.createElement("span");
+            span.className = "reader-sentence";
+            span.id = `sent-${index}`;
+            span.textContent = s.text + " ";
+
+            span.addEventListener("click", () => {
+                readerAudio.currentTime = s.start / 1000;
+                readerAudio.play().catch(function(err) { console.log("Play failed:", err); });
+                showPauseIcon();
+            });
+
+            readerContent.appendChild(span);
+        });
+
+        readerOverlay.classList.add("show");
+        resetReaderUiTimeout();
+
+        const initAudioState = () => {
+            if (readerAudio.duration && !isNaN(readerAudio.duration)) {
+                readerDuration.textContent = formatTime(readerAudio.duration);
+            }
+            readerAudio.play().catch(function(err) { console.log("Autoplay blocked:", err); });
+            showPauseIcon();
+        };
+
+        readerAudio.onerror = () => {
+            console.error("Shared audio load error:", readerAudio.error ? readerAudio.error.code : "unknown");
+            showToast("공유 오디오를 불러올 수 없습니다.", "error");
+        };
+
+        readerAudio.onloadedmetadata = initAudioState;
+        readerAudio.src = audioUrl;
+        readerAudio.load();
+
+        let lastToggleTime = 0;
+        function togglePlayPause(e) {
+            if (e) { e.preventDefault(); e.stopPropagation(); }
+            const now = Date.now();
+            if (now - lastToggleTime < 300) return;
+            lastToggleTime = now;
+            if (readerAudio.paused) {
+                readerAudio.play().catch(function(err) { console.log("Play failed:", err); });
+            } else {
+                readerAudio.pause();
+            }
+        }
+
+        readerPlayPauseBtn.onclick = togglePlayPause;
+        readerPlayPauseBtn.addEventListener("touchend", togglePlayPause, { passive: false });
+
+        readerAudio.onplay = function() { showPauseIcon(); };
+        readerAudio.onpause = function() { showPlayIcon(); };
+
+        readerProgressBar.onclick = (e) => {
+            const rect = readerProgressBar.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const width = rect.width;
+            if (width > 0 && readerAudio.duration) {
+                readerAudio.currentTime = (clickX / width) * readerAudio.duration;
+            }
+        };
+
+        readerAudio.ontimeupdate = () => {
+            const currentSec = readerAudio.currentTime;
+            const currentMs = currentSec * 1000;
+            const duration = readerAudio.duration || 0;
+
+            readerCurrentTime.textContent = formatTime(currentSec);
+            if (duration > 0) {
+                readerProgressFill.style.width = `${(currentSec / duration) * 100}%`;
+            }
+
+            let activeIndex = -1;
+            for (let i = 0; i < sentences.length; i++) {
+                if (currentMs >= sentences[i].start && currentMs <= sentences[i].end) {
+                    activeIndex = i;
+                    break;
+                }
+            }
+            if (activeIndex === -1 && sentences.length > 0) {
+                if (currentMs < sentences[0].start) {
+                    activeIndex = 0;
+                } else {
+                    for (let i = sentences.length - 1; i >= 0; i--) {
+                        if (currentMs >= sentences[i].start) {
+                            activeIndex = i;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (activeIndex !== -1) {
+                const activeSpan = document.getElementById(`sent-${activeIndex}`);
+                if (activeSpan && activeSpan !== lastActiveSpan) {
+                    if (lastActiveSpan) lastActiveSpan.classList.remove("highlight");
+                    activeSpan.classList.add("highlight");
+
+                    isAutoScrolling = true;
+                    const spanTop = activeSpan.offsetTop;
+                    const containerHeight = readerContent.clientHeight;
+                    const targetScroll = spanTop - containerHeight / 2 + activeSpan.clientHeight / 2;
+                    readerContent.scrollTo({ top: targetScroll, behavior: "smooth" });
+                    setTimeout(() => { isAutoScrolling = false; }, 800);
+
+                    lastActiveSpan = activeSpan;
+                }
+            }
+        };
+    }
+
+    // 페이지 로드 시 /share/{id} URL 감지
+    async function checkSharedLink() {
+        const match = window.location.pathname.match(/^\/share\/([a-zA-Z0-9\-]+)$/);
+        if (!match) return;
+
+        const shareId = match[1];
+        try {
+            showToast("공유된 오디오북을 불러오는 중...", "info");
+            const response = await fetch(`/api/share/${shareId}`);
+            if (!response.ok) {
+                if (response.status === 404) {
+                    showToast("공유 링크가 만료되었거나 존재하지 않습니다.", "error");
+                } else {
+                    showToast("오디오북을 불러올 수 없습니다.", "error");
+                }
+                return;
+            }
+            const data = await response.json();
+            // 약간의 딜레이 후 Reader 열기 (UI 초기화 완료 대기)
+            setTimeout(() => {
+                openSharedReaderMode(data.title, data.sentences, data.audio_url);
+            }, 500);
+        } catch (err) {
+            console.error("Failed to load shared audiobook:", err);
+            showToast("공유 오디오북 로드에 실패했습니다.", "error");
+        }
+    }
+
+    checkSharedLink();
 });

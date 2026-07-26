@@ -6,6 +6,8 @@ import asyncio
 import html
 import time
 import re
+import json
+import shutil
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Response, BackgroundTasks
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -30,9 +32,11 @@ app.add_middleware(
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 STATIC_DIR = os.path.join(BASE_DIR, "static")
+SHARED_DIR = os.path.join(BASE_DIR, "shared")
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(STATIC_DIR, exist_ok=True)
+os.makedirs(SHARED_DIR, exist_ok=True)
 
 # App build ID: generated once at server startup.
 # Changes on every redeploy (new process start), used by client to detect updates.
@@ -306,6 +310,69 @@ async def read_index():
         return FileResponse(index_path)
     return JSONResponse(status_code=404, content={"message": "Frontend static file index.html not found. Build the frontend first."})
 
+# --------------------------------------------------
+# Share Feature: 24-hour temporary server storage
+# --------------------------------------------------
+
+@app.post("/api/share")
+async def create_share(
+    audio: UploadFile = File(...),
+    title: str = Form(...),
+    sentences: str = Form(...)
+):
+    """클라이언트가 오디오북을 공유할 때 서버에 임시 저장 (24시간 후 자동 삭제)"""
+    share_id = str(uuid.uuid4())[:12]
+    share_dir = os.path.join(SHARED_DIR, share_id)
+    os.makedirs(share_dir, exist_ok=True)
+
+    # Save audio file
+    audio_path = os.path.join(share_dir, "audio.mp3")
+    with open(audio_path, "wb") as f:
+        content = await audio.read()
+        f.write(content)
+
+    # Save metadata
+    meta = {
+        "title": title,
+        "sentences": json.loads(sentences),
+        "created_at": time.time()
+    }
+    meta_path = os.path.join(share_dir, "meta.json")
+    with open(meta_path, "w", encoding="utf-8") as f:
+        json.dump(meta, f, ensure_ascii=False)
+
+    return {"share_id": share_id}
+
+@app.get("/api/share/{share_id}")
+async def get_share_meta(share_id: str):
+    """공유된 오디오북의 메타데이터 (제목 + 문장 타이밍) 반환"""
+    meta_path = os.path.join(SHARED_DIR, share_id, "meta.json")
+    if not os.path.exists(meta_path):
+        raise HTTPException(status_code=404, detail="공유 링크가 만료되었거나 존재하지 않습니다.")
+    with open(meta_path, "r", encoding="utf-8") as f:
+        meta = json.load(f)
+    return {
+        "title": meta["title"],
+        "sentences": meta["sentences"],
+        "audio_url": f"/api/share/{share_id}/audio"
+    }
+
+@app.get("/api/share/{share_id}/audio")
+async def get_share_audio(share_id: str):
+    """공유된 오디오 MP3 스트리밍"""
+    audio_path = os.path.join(SHARED_DIR, share_id, "audio.mp3")
+    if not os.path.exists(audio_path):
+        raise HTTPException(status_code=404, detail="공유 오디오가 만료되었거나 존재하지 않습니다.")
+    return FileResponse(audio_path, media_type="audio/mpeg", filename="audiobook.mp3")
+
+@app.get("/share/{share_id}")
+async def serve_shared_page(share_id: str):
+    """공유 링크로 접속 시 동일한 index.html 서빙 (JS가 URL을 파싱하여 Reader 모드 자동 진입)"""
+    index_path = os.path.join(STATIC_DIR, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    raise HTTPException(status_code=404, detail="Page not found")
+
 async def cleanup_expired_files_loop():
     while True:
         try:
@@ -318,10 +385,25 @@ async def cleanup_expired_files_loop():
                     expired_keys.append(key)
             for key in expired_keys:
                 text_storage.pop(key, None)
+
+            # 2. Clean shared audiobooks (older than 24 hours)
+            if os.path.exists(SHARED_DIR):
+                for share_id in os.listdir(SHARED_DIR):
+                    share_dir = os.path.join(SHARED_DIR, share_id)
+                    meta_path = os.path.join(share_dir, "meta.json")
+                    if os.path.isdir(share_dir) and os.path.exists(meta_path):
+                        try:
+                            with open(meta_path, "r") as f:
+                                meta = json.load(f)
+                            if now - meta.get("created_at", 0) > 86400:  # 24 hours
+                                shutil.rmtree(share_dir)
+                                print(f"Cleaned expired share: {share_id}")
+                        except Exception:
+                            pass
         except Exception as e:
             print(f"Error in cleanup background task: {e}")
         
-        await asyncio.sleep(600) # Every 10 minutes
+        await asyncio.sleep(600)  # Every 10 minutes
 
 @app.on_event("startup")
 async def startup_event():
