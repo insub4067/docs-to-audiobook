@@ -572,12 +572,13 @@ document.addEventListener("DOMContentLoaded", () => {
             // Parse char count from badge text (e.g. "1,234 자" -> 1234)
             const rawChars = charCountBadge.textContent.replace(/[^0-9]/g, "");
             const charCount = parseInt(rawChars) || 0;
+            const audioArrayBuffer = await audioBlob.arrayBuffer();
 
             const entry = {
                 id: audioId,
                 title: audioFilename,
-                audioData: audioBlob, // Save in local IndexedDB
-                sentences: sentences, // Synced reader metadata
+                audioData: audioArrayBuffer,
+                sentences: sentences, 
                 timestamp: Date.now(),
                 dateString: new Date().toLocaleDateString("ko-KR", {
                     year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
@@ -612,6 +613,16 @@ document.addEventListener("DOMContentLoaded", () => {
             showToast(error.message, "error");
         }
     });
+
+    function getAudiobookFromDB(id) {
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(["audiobooks"], "readonly");
+            const store = transaction.objectStore("audiobooks");
+            const request = store.get(id);
+            request.onsuccess = (e) => resolve(e.target.result);
+            request.onerror = (e) => reject(e.target.error);
+        });
+    }
 
     // ----------------------------------------------------
     // 5. Audiobook Library Management (IndexedDB Powered)
@@ -648,10 +659,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 `;
 
                 if (hasSentences) {
-                    item.addEventListener("click", (e) => {
+                    item.addEventListener("click", async (e) => {
                         if (e.target.closest('.btn-delete')) return;
-                        // localUrl을 캐시해서 넘기지 않고, audio 객체(실제 Blob 보유)만 전달
-                        openReaderMode(audio);
+                        const freshAudio = await getAudiobookFromDB(audio.id);
+                        if (!freshAudio || !freshAudio.audioData) {
+                            showToast("오디오 데이터를 불러올 수 없습니다. 다시 생성해 주세요.", "error");
+                            return;
+                        }
+                        openReaderMode(freshAudio);
                     });
                 }
 
@@ -729,15 +744,16 @@ document.addEventListener("DOMContentLoaded", () => {
             currentReaderObjectUrl = null;
         }
 
-        // ⚠️ 핵심 수정: 캐싱된 URL 재사용 금지.
-        // iOS/iPadOS Safari는 백그라운드 전환 등으로 기존 blob URL을
-        // 내부적으로 무효화시키는 경우가 있어, 열 때마다 Blob 원본
-        // (audio.audioData)으로부터 새로 생성해야 안정적으로 동작한다.
-        const localUrl = URL.createObjectURL(audio.audioData);
+        // ArrayBuffer(신규 저장분) 또는 Blob(기존 저장분) 둘 다 대응
+        const audioBlob = audio.audioData instanceof Blob
+            ? audio.audioData
+            : new Blob([audio.audioData], { type: "audio/mpeg" });
+
+        const localUrl = URL.createObjectURL(audioBlob);
         currentReaderObjectUrl = localUrl;
 
         currentReadingAudioId = audio.id;
-        currentAudioObject = audio; 
+        currentAudioObject = audio;
         
         // UI 리셋
         readerBookTitle.textContent = audio.title.replace(/\.[^/.]+$/, "");
@@ -910,4 +926,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const secs = Math.floor(seconds % 60);
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }
+
+    readerAudio.onerror = () => {
+        const err = readerAudio.error;
+        console.error("Audio load error:", err ? err.code : "unknown", err ? err.message : "");
+        showToast(`오디오 로드 실패 (code: ${err ? err.code : '?'})`, "error");
+    };
 });
