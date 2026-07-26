@@ -168,8 +168,8 @@
             <div class="reader-container">
                 <header class="reader-header">
                     <h3 id="readerBookTitle" class="reader-book-title">책 제목</h3>
-                    <button class="btn-reader-close" id="closeReaderBtn" title="독서 모드 종료">
-                        <i data-lucide="x"></i>
+                    <button class="btn-reader-close" id="closeReaderBtn" title="독서 모드 종료" type="button">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                     </button>
                 </header>
                 <div class="reader-content" id="readerContent">
@@ -178,8 +178,9 @@
                 <footer class="reader-controls">
                     <audio id="readerAudio"></audio>
                     <div class="reader-player-ui">
-                        <button class="btn-player-play" id="readerPlayPauseBtn" title="재생/일시정지">
-                            <i data-lucide="play" id="readerPlayIcon"></i>
+                        <button class="btn-player-play" id="readerPlayPauseBtn" title="재생/일시정지" type="button">
+                            <svg id="playIconSvg" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                            <svg id="pauseIconSvg" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="display:none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
                         </button>
                         <div class="reader-progress-wrapper">
                             <span class="player-time" id="readerCurrentTime">00:00</span>

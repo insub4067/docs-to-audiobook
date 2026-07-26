@@ -44,12 +44,23 @@ document.addEventListener("DOMContentLoaded", () => {
     const readerContent = document.getElementById("readerContent");
     const readerAudio = document.getElementById("readerAudio");
     const readerPlayPauseBtn = document.getElementById("readerPlayPauseBtn");
-    const readerPlayIcon = document.getElementById("readerPlayIcon");
+    const playIconSvg = document.getElementById("playIconSvg");
+    const pauseIconSvg = document.getElementById("pauseIconSvg");
     const readerCurrentTime = document.getElementById("readerCurrentTime");
     const readerDuration = document.getElementById("readerDuration");
     const readerProgressBar = document.getElementById("readerProgressBar");
     const readerProgressFill = document.getElementById("readerProgressFill");
     const readerContainer = readerOverlay.querySelector(".reader-container");
+
+    // Play/Pause icon toggle helpers (no innerHTML, no lucide.createIcons)
+    function showPlayIcon() {
+        if (playIconSvg) playIconSvg.style.display = "";
+        if (pauseIconSvg) pauseIconSvg.style.display = "none";
+    }
+    function showPauseIcon() {
+        if (playIconSvg) playIconSvg.style.display = "none";
+        if (pauseIconSvg) pauseIconSvg.style.display = "";
+    }
 
     // Reader Mode UI Interaction State
     let readerUiTimeout = null;
@@ -127,7 +138,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!res.ok) return null;
             const data = await res.json();
             return data.build_id || null;
-        } catch {
+        } catch (e) {
             return null; // 네트워크 오프라인이면 조용히 무시
         }
     }
@@ -725,8 +736,7 @@ document.addEventListener("DOMContentLoaded", () => {
         readerAudio.src = localUrl;
         
         // Reset player UI
-        readerPlayPauseBtn.innerHTML = '<i data-lucide="play"></i>';
-        lucide.createIcons();
+        showPlayIcon();
         readerCurrentTime.textContent = "00:00";
         readerDuration.textContent = "00:00";
         readerProgressFill.style.width = "0%";
@@ -761,30 +771,20 @@ document.addEventListener("DOMContentLoaded", () => {
         };
         
         // Custom Play/Pause Button handler
-        readerPlayPauseBtn.onclick = () => {
+        function togglePlayPause(e) {
+            if (e) { e.preventDefault(); e.stopPropagation(); }
             if (readerAudio.paused) {
-                readerAudio.play().catch(err => console.log("Play failed:", err));
-                // switch to pause icon
-                readerPlayPauseBtn.innerHTML = '<i data-lucide="pause"></i>';
-                lucide.createIcons();
+                readerAudio.play().catch(function(err) { console.log("Play failed:", err); });
             } else {
                 readerAudio.pause();
-                // switch to play icon
-                readerPlayPauseBtn.innerHTML = '<i data-lucide="play"></i>';
-                lucide.createIcons();
             }
-        };
+        }
+        readerPlayPauseBtn.onclick = togglePlayPause;
+        readerPlayPauseBtn.addEventListener("touchend", togglePlayPause, { passive: false });
         
         // Handle audio events to toggle custom icon state
-        readerAudio.onplay = () => {
-            readerPlayPauseBtn.innerHTML = '<i data-lucide="pause"></i>';
-            lucide.createIcons();
-        };
-        
-        readerAudio.onpause = () => {
-            readerPlayPauseBtn.innerHTML = '<i data-lucide="play"></i>';
-            lucide.createIcons();
-        };
+        readerAudio.onplay = function() { showPauseIcon(); };
+        readerAudio.onpause = function() { showPlayIcon(); };
         
         // Handle click on progress bar to seek
         readerProgressBar.onclick = (e) => {
@@ -859,16 +859,15 @@ document.addEventListener("DOMContentLoaded", () => {
         if (audio.lastPosition > 0) {
             readerAudio.currentTime = audio.lastPosition;
             // User requested it to be PAUSED if resuming from cache
-            readerPlayPauseBtn.innerHTML = '<i data-lucide="play"></i>';
-            lucide.createIcons();
+            showPlayIcon();
         } else {
-            readerAudio.play().catch(err => console.log("Autoplay blocked:", err));
+            readerAudio.play().catch(function(err) { console.log("Autoplay blocked:", err); });
         }
     }
     
-    // Close button (ensure event stops propagation)
-    closeReaderBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
+    // Close reader - shared handler for both click and touch
+    function closeReader(e) {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
         // Save current position before closing
         if (currentReadingAudioId && readerAudio.currentTime > 0) {
             updateAudiobookPosition(currentReadingAudioId, readerAudio.currentTime);
@@ -887,12 +886,16 @@ document.addEventListener("DOMContentLoaded", () => {
         readerOverlay.classList.remove("show");
         clearTimeout(readerUiTimeout);
         if (readerContainer) readerContainer.classList.remove("hide-ui");
+        // Reset icon
+        showPlayIcon();
         // Remove highlight
         if (lastActiveSpan) {
             lastActiveSpan.classList.remove("highlight");
             lastActiveSpan = null;
         }
-    });
+    }
+    closeReaderBtn.addEventListener("click", closeReader);
+    closeReaderBtn.addEventListener("touchend", closeReader, { passive: false });
 
     // Time Formatter (seconds to MM:SS)
     function formatTime(seconds) {

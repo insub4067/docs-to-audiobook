@@ -845,6 +845,11 @@ input[type="range"]::-webkit-slider-thumb:active {
     align-items: center;
     justify-content: center;
     transition: all 0.2s ease;
+    position: relative;
+    z-index: 20;
+    touch-action: manipulation; /* iOS: 300ms 탭 딜레이 제거 */
+    -webkit-user-select: none;
+    user-select: none;
 }
 
 .btn-reader-close:hover {
@@ -942,6 +947,11 @@ input[type="range"]::-webkit-slider-thumb:active {
     box-shadow: 0 4px 10px rgba(93, 75, 64, 0.15);
     transition: all 0.2s ease;
     flex-shrink: 0;
+    position: relative;
+    z-index: 20;
+    touch-action: manipulation; /* iOS: 300ms 탭 딜레이 제거 */
+    -webkit-user-select: none;
+    user-select: none;
 }
 
 .btn-player-play:hover {
