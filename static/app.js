@@ -785,11 +785,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // 아래와 같이 onclick 하나만 연결하고, 기존에 추가했던 ontouchend 관련 코드는 모두 지워주세요.
         readerPlayPauseBtn.onclick = togglePlayPause;
-
-        // 기존 addEventListener를 제거하고 ontouchend에 직접 할당
-        readerPlayPauseBtn.ontouchend = function(e) {
-            togglePlayPause(e);
-        };        
+  
         // Handle audio events to toggle custom icon state
         readerAudio.onplay = function() { showPauseIcon(); };
         readerAudio.onpause = function() { showPlayIcon(); };
@@ -884,11 +880,7 @@ document.addEventListener("DOMContentLoaded", () => {
             currentAudioObject.lastPosition = readerAudio.currentTime;
         }
         
-        // 오디오 정리 (src = "" 부분을 반드시 삭제해야 합니다!)
         readerAudio.pause();
-        // readerAudio.src = ""; <--- 이 줄을 무조건 지우세요! (iOS 재생 먹통의 주범)
-        readerAudio.removeAttribute('src'); // src를 비우는 대신 안전하게 속성을 제거
-        readerAudio.load(); // 오디오 객체 상태 리셋
         
         readerAudio.onplay = null;
         readerAudio.onpause = null;
