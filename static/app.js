@@ -8,7 +8,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const fileDetails = document.getElementById("fileDetails");
     const fileName = document.getElementById("fileName");
     const fileSize = document.getElementById("fileSize");
-    const removeFileBtn = document.getElementById("removeFileBtn");
+    const removeFileBtn = document.getElementById("removeFileBtn"); // may be null if UI simplified
     
     const voiceSelect = document.getElementById("voiceSelect");
     const voiceDesc = document.getElementById("voiceDesc");
@@ -18,7 +18,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const pitchVal = document.getElementById("pitchVal");
     
     const generateBtn = document.getElementById("generateBtn");
-    const previewPlaceholder = document.getElementById("previewPlaceholder");
+    const previewPlaceholder = document.getElementById("previewPlaceholder"); // may be null if UI simplified
     const previewText = document.getElementById("previewText");
     const charCountBadge = document.getElementById("charCountBadge");
     
@@ -378,35 +378,36 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         uploadedFile = file;
-        fileName.textContent = file.name;
-        fileSize.textContent = formatBytes(file.size);
-        fileDetails.style.display = "block";
-        dropzone.style.display = "none";
+        if (fileName) fileName.textContent = file.name;
+        if (fileSize) fileSize.textContent = formatBytes(file.size);
+        if (fileDetails) fileDetails.style.display = "block";
         
         await uploadFile(file);
     }
 
-    removeFileBtn.addEventListener("click", () => {
-        currentTextId = null;
-        uploadedFile = null;
-        fileInput.value = "";
-        
-        fileDetails.style.display = "none";
-        dropzone.style.display = "flex";
-        
-        previewText.textContent = "";
-        previewText.style.display = "none";
-        previewPlaceholder.style.display = "flex";
-        
-        charCountBadge.style.display = "none";
-        charCountBadge.textContent = "0 자";
-        
-        generateBtn.disabled = true;
-    });
+    if (removeFileBtn) {
+        removeFileBtn.addEventListener("click", () => {
+            currentTextId = null;
+            uploadedFile = null;
+            fileInput.value = "";
+            
+            if (fileDetails) fileDetails.style.display = "none";
+            dropzone.style.display = "flex";
+            
+            previewText.textContent = "";
+            previewText.style.display = "none";
+            if (previewPlaceholder) previewPlaceholder.style.display = "flex";
+            
+            charCountBadge.style.display = "none";
+            charCountBadge.textContent = "0 자";
+            
+            generateBtn.disabled = true;
+        });
+    }
 
     // Upload to Server for High-Speed Parsing
     async function uploadFile(file) {
-        previewPlaceholder.style.display = "none";
+        if (previewPlaceholder) previewPlaceholder.style.display = "none";
         previewText.style.display = "block";
         previewText.innerHTML = '<div style="color: var(--text-muted); text-align: center; margin-top: 40px;"><div class="spinner-container" style="width: 30px; height: 30px; margin: 0 auto 10px;"><div class="double-bounce1"></div><div class="double-bounce2"></div></div>서버에서 고속 문서 해독 중...</div>';
         
@@ -442,7 +443,7 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (error) {
             console.error(error);
             showToast(error.message, "error");
-            removeFileBtn.click();
+            if (removeFileBtn) removeFileBtn.click();
         }
     }
 
