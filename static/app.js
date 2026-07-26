@@ -782,8 +782,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 readerAudio.pause();
             }
         }
-            
+
+        // 아래와 같이 onclick 하나만 연결하고, 기존에 추가했던 ontouchend 관련 코드는 모두 지워주세요.
         readerPlayPauseBtn.onclick = togglePlayPause;
+
         // 기존 addEventListener를 제거하고 ontouchend에 직접 할당
         readerPlayPauseBtn.ontouchend = function(e) {
             togglePlayPause(e);
@@ -875,35 +877,41 @@ document.addEventListener("DOMContentLoaded", () => {
     // Close reader - shared handler for both click and touch
     function closeReader(e) {
         if (e) { e.preventDefault(); e.stopPropagation(); }
-     
+        
+        // 재생 위치 저장
         if (currentAudioObject && readerAudio.currentTime > 0) {
             updateAudiobookPosition(currentAudioObject.id, readerAudio.currentTime);
-            currentAudioObject.lastPosition = readerAudio.currentTime; // in-memory 객체 업데이트
+            currentAudioObject.lastPosition = readerAudio.currentTime;
         }
         
-        // Clean up audio
+        // 오디오 정리 (src = "" 부분을 반드시 삭제해야 합니다!)
         readerAudio.pause();
-        readerAudio.src = "";
+        // readerAudio.src = ""; <--- 이 줄을 무조건 지우세요! (iOS 재생 먹통의 주범)
+        readerAudio.removeAttribute('src'); // src를 비우는 대신 안전하게 속성을 제거
+        readerAudio.load(); // 오디오 객체 상태 리셋
+        
         readerAudio.onplay = null;
         readerAudio.onpause = null;
         readerAudio.ontimeupdate = null;
         readerAudio.onloadedmetadata = null;
-        // Remove UI handlers
+
+        // UI 핸들러 정리
         readerPlayPauseBtn.onclick = null;
-        readerPlayPauseBtn.ontouchend = null; // 터치 이벤트 찌꺼기도 확실하게 초기화
         readerProgressBar.onclick = null;
-        // Hide overlay
+        
+        // 화면 닫기 및 UI 초기화
         readerOverlay.classList.remove("show");
         clearTimeout(readerUiTimeout);
         if (readerContainer) readerContainer.classList.remove("hide-ui");
-        // Reset icon
+        
         showPlayIcon();
-        // Remove highlight
+        
         if (lastActiveSpan) {
             lastActiveSpan.classList.remove("highlight");
             lastActiveSpan = null;
         }
-    }
+    }    
+
     closeReaderBtn.addEventListener("click", closeReader);
     closeReaderBtn.addEventListener("touchend", closeReader, { passive: false });
 
