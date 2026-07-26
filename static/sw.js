@@ -34,14 +34,19 @@ self.addEventListener("activate", (e) => {
   );
 });
 
-// Fetch Event (Network-First strategy to ensure latest updates)
 self.addEventListener("fetch", (e) => {
-  // Ignore non-GET requests (e.g. POST to /api/synthesize or /api/upload)
   if (e.request.method !== "GET") {
     return;
   }
-  
-  // Also bypass API requests for voices list
+
+  // ✅ 핵심 수정: blob: URL 요청은 절대 가로채지 않는다.
+  // iOS/iPadOS Safari는 blob: 요청도 fetch 이벤트로 넘기는데,
+  // blob:은 네트워크 리소스가 아니라서 fetch(e.request)로 재요청하면 무조건 실패하고,
+  // 이게 <audio>/<video>에서 MEDIA_ERR_SRC_NOT_SUPPORTED(code 4)로 나타난다.
+  if (e.request.url.startsWith("blob:")) {
+    return;
+  }
+
   const url = new URL(e.request.url);
   if (url.pathname.startsWith("/api/")) {
     return;
@@ -50,7 +55,6 @@ self.addEventListener("fetch", (e) => {
   e.respondWith(
     fetch(e.request)
       .then((networkResponse) => {
-        // If network request succeeds, update the cache with latest
         if (networkResponse.status === 200 && e.request.url.startsWith(self.location.origin)) {
           const responseClone = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
@@ -60,12 +64,10 @@ self.addEventListener("fetch", (e) => {
         return networkResponse;
       })
       .catch(() => {
-        // If network fails (e.g., offline), fallback to cache
         return caches.match(e.request).then((cachedResponse) => {
           if (cachedResponse) {
             return cachedResponse;
           }
-          // Fallback to home if navigation request fails and not in cache
           if (e.request.mode === "navigate") {
             return caches.match("/");
           }
