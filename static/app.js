@@ -304,13 +304,6 @@ document.addEventListener("DOMContentLoaded", () => {
             generateBtn.disabled = false;
             showToast("문서 분석이 완료되었습니다.", "success");
             
-            // Mobile UX: Scroll to preview section
-            if (window.innerWidth <= 768) {
-                setTimeout(() => {
-                    document.querySelector(".preview-section").scrollIntoView({ behavior: "smooth" });
-                }, 400);
-            }
-            
             // Prompt for immediate generation
             setTimeout(() => {
                 if (confirm("문서 업로드가 완료되었습니다.\n지금 바로 오디오북을 생성하시겠습니까?")) {
@@ -365,7 +358,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         loadingOverlay.classList.add("show");
         progressBarFill.style.width = "0%";
-        loadingStatus.textContent = "오디오 데이터를 실시간 생성 중...";
+        loadingStatus.textContent = "오디오북 생성 중...";
 
         let simulatedProgress = 0;
         const progressInterval = setInterval(() => {
@@ -468,6 +461,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 renderLibrary();
                 
                 if (window.innerWidth <= 768) {
+                    setTimeout(() => {
+                        document.querySelector(".library-section").scrollIntoView({ behavior: "smooth" });
+                    }, 300);
+                } else {
                     setTimeout(() => {
                         document.querySelector(".library-section").scrollIntoView({ behavior: "smooth" });
                     }, 300);
