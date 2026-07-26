@@ -1,23 +1,23 @@
 /* Paper & Voice - Apple Native Modern Theme & iOS Safari Web Optimization */
 
 :root {
-    /* Apple Native Theme Colors (iOS System Colors) */
-    --bg-color: #F2F2F7; /* iOS System Gray 6 */
-    --card-bg: rgba(255, 255, 255, 0.7); /* Translucent White for liquid glass */
+    /* Warm, papyrus‑like theme */
+    --bg-color: #FAF5E6; /* Light papyrus background */
+    --card-bg: rgba(255, 255, 255, 0.8);
     --card-bg-solid: #FFFFFF;
-    --text-color: #000000;
-    --text-muted: #8E8E93; /* iOS System Gray */
-    --primary-color: #007AFF; /* iOS System Blue */
-    --primary-hover: #0056b3;
-    --accent-color: #5AC8FA;
-    --border-color: rgba(60, 60, 67, 0.1); /* iOS Separator */
-    --border-hover: rgba(60, 60, 67, 0.2);
+    --text-color: #3B2F2F;
+    --text-muted: #8E7C71; /* Warm gray */
+    --primary-color: #A67C52; /* Warm brown accent */
+    --primary-hover: #8B5E33;
+    --accent-color: #C5A981; /* Light brown */
+    --border-color: rgba(120, 100, 90, 0.2);
+    --border-hover: rgba(120, 100, 90, 0.35);
     
     /* Native Shadows */
     --card-shadow: 0 4px 14px rgba(0, 0, 0, 0.04), 0 1px 4px rgba(0,0,0,0.02);
     --inner-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.05);
     
-    /* Font families - SF Pro Native */
+    /* Font families */
     --font-serif: "New York", "Playfair Display", Georgia, serif;
     --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
 }

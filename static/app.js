@@ -713,8 +713,14 @@ document.addEventListener("DOMContentLoaded", () => {
         readerPlayPauseBtn.onclick = () => {
             if (readerAudio.paused) {
                 readerAudio.play().catch(err => console.log("Play failed:", err));
+                // switch to pause icon
+                readerPlayPauseBtn.innerHTML = '<i data-lucide="pause"></i>';
+                lucide.createIcons();
             } else {
                 readerAudio.pause();
+                // switch to play icon
+                readerPlayPauseBtn.innerHTML = '<i data-lucide="play"></i>';
+                lucide.createIcons();
             }
         };
         
@@ -805,26 +811,28 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
     
-    // Close button
-    closeReaderBtn.addEventListener("click", () => {
+    // Close button (ensure event stops propagation)
+    closeReaderBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
         // Save current position before closing
         if (currentReadingAudioId && readerAudio.currentTime > 0) {
             updateAudiobookPosition(currentReadingAudioId, readerAudio.currentTime);
         }
-        
+        // Clean up audio
         readerAudio.pause();
         readerAudio.src = "";
         readerAudio.onplay = null;
         readerAudio.onpause = null;
         readerAudio.ontimeupdate = null;
         readerAudio.onloadedmetadata = null;
+        // Remove UI handlers
         readerPlayPauseBtn.onclick = null;
         readerProgressBar.onclick = null;
-        
+        // Hide overlay
         readerOverlay.classList.remove("show");
         clearTimeout(readerUiTimeout);
         if (readerContainer) readerContainer.classList.remove("hide-ui");
-        
+        // Remove highlight
         if (lastActiveSpan) {
             lastActiveSpan.classList.remove("highlight");
             lastActiveSpan = null;
