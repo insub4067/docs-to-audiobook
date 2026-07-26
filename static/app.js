@@ -1008,6 +1008,11 @@ document.addEventListener("DOMContentLoaded", () => {
             lastActiveSpan.classList.remove("highlight");
             lastActiveSpan = null;
         }
+
+        const saveSharedBtn = document.getElementById("saveSharedBtn");
+        if (saveSharedBtn) {
+            saveSharedBtn.style.display = "none";
+        }
     }
 
     closeReaderBtn.addEventListener("click", closeReader);
@@ -1042,6 +1047,41 @@ document.addEventListener("DOMContentLoaded", () => {
         readerProgressFill.style.width = "0%";
         readerContent.innerHTML = "";
         lastActiveSpan = null;
+
+        // Save Button Logic
+        const saveSharedBtn = document.getElementById("saveSharedBtn");
+        if (saveSharedBtn) {
+            saveSharedBtn.style.display = "flex";
+            
+            // Clean up previous event listeners by cloning
+            const newBtn = saveSharedBtn.cloneNode(true);
+            saveSharedBtn.parentNode.replaceChild(newBtn, saveSharedBtn);
+            
+            newBtn.addEventListener("click", async () => {
+                try {
+                    showToast("오디오북을 내 서재에 저장하는 중...", "info");
+                    
+                    const response = await fetch(audioUrl);
+                    if (!response.ok) throw new Error("Audio fetch failed");
+                    const audioBlob = await response.blob();
+                    
+                    const id = Date.now().toString();
+                    await saveAudiobookToDB({
+                        id,
+                        title,
+                        audioData: audioBlob,
+                        sentences
+                    });
+                    
+                    renderLibrary();
+                    newBtn.style.display = "none";
+                    showToast("내 오디오북에 저장되었습니다!", "success");
+                } catch (err) {
+                    console.error("Save shared audiobook error:", err);
+                    showToast("저장에 실패했습니다.", "error");
+                }
+            });
+        }
 
         // 문장 렌더링
         sentences.forEach((s, index) => {

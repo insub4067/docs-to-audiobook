@@ -66,7 +66,7 @@ html {
 /* App Header Styling (Literary Bookshop vibe) */
 .app-header {
     text-align: center;
-    padding: calc(12px + env(safe-area-inset-top)) 16px 0;
+    padding: calc(40px + env(safe-area-inset-top)) 16px 0;
 }
 
 .app-header .logo {
@@ -573,6 +573,7 @@ input[type="range"]::-webkit-slider-thumb:active {
     overflow: hidden;
     text-overflow: ellipsis;
     min-width: 0;
+    flex: 1;
 }
 
 .audio-actions {
