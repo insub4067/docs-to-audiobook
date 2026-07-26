@@ -116,12 +116,14 @@ html {
     word-break: keep-all; /* Prevent awkward syllable-level line breaks on mobile */
 }
 
-/* Grid Layout */
-.app-grid {
-    display: grid;
-    grid-template-columns: 1.2fr 1fr;
-    gap: 28px;
-    align-items: start;
+/* Main Layout */
+.app-main {
+    max-width: 680px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    width: 100%;
 }
 
 /* Cards (Analog glassmorphism: Eco-friendly/Recycled card feel) */
@@ -524,96 +526,76 @@ input[type="range"]::-webkit-slider-thumb:active {
     opacity: 0.4;
 }
 
-/* Audiobook Item Card */
+/* Audiobook Item Card (iOS List Tile Style) */
 .audio-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
     background-color: var(--card-bg-solid);
-    border: 1px solid var(--border-color);
-    border-radius: 16px;
-    padding: 18px;
-    box-shadow: 0 4px 12px rgba(44, 37, 32, 0.01);
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
 }
 
 .audio-item:hover {
-    border-color: var(--border-hover);
-    box-shadow: 0 6px 18px rgba(44, 37, 32, 0.03);
+    background-color: rgba(93, 75, 64, 0.03);
 }
 
-.audio-item-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
+.audio-item:last-child {
+    border-bottom: none;
 }
 
 .audio-title-group {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 14px;
+    flex-grow: 1;
     overflow: hidden;
 }
 
 .audio-title-group i {
-    width: 18px;
-    height: 18px;
+    width: 24px;
+    height: 24px;
     color: var(--primary-color);
     flex-shrink: 0;
 }
 
 .audio-title {
     font-family: var(--font-serif);
-    font-size: 0.95rem;
-    font-weight: 700;
+    font-size: 1.05rem;
+    font-weight: 600;
     color: var(--text-color);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 180px;
 }
 
 .audio-actions {
     display: flex;
+    align-items: center;
     gap: 8px;
+    flex-shrink: 0;
 }
 
-.btn-icon-round {
+.btn-icon-round.btn-delete {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
-    background-color: var(--bg-color);
-    border: 1px solid var(--border-color);
-    border-radius: 50%;
-    color: var(--text-color);
+    width: 32px;
+    height: 32px;
+    background: transparent;
+    border: none;
+    color: #b33939;
     cursor: pointer;
-    text-decoration: none;
     transition: all 0.2s ease;
-}
-
-.btn-icon-round:hover {
-    background-color: var(--primary-color);
-    border-color: var(--primary-color);
-    color: #ffffff;
+    opacity: 0.6;
 }
 
 .btn-icon-round.btn-delete:hover {
-    background-color: #b33939;
-    border-color: #b33939;
-}
-
-.audio-meta {
-    display: flex;
-    gap: 14px;
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    margin-bottom: 14px;
-}
-
-.audio-meta span {
-    display: flex;
-    align-items: center;
-    gap: 4px;
+    opacity: 1;
+    background-color: rgba(179, 57, 57, 0.1);
+    border-radius: 50%;
 }
 
 /* Audio Player styling override */
@@ -770,12 +752,6 @@ input[type="range"]::-webkit-slider-thumb:active {
 }
 
 /* Responsive breakpoints & iOS Mobile padding fixes */
-@media (max-width: 900px) {
-    .app-grid {
-        grid-template-columns: 1fr;
-        gap: 24px;
-    }
-}
 
 @media (max-width: 480px) {
     .app-container {
@@ -1016,5 +992,107 @@ input[type="range"]::-webkit-slider-thumb:active {
         font-size: 1.12rem;
         line-height: 1.8;
     }
+}
+
+/* Generation Modal Overlay */
+.generation-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(44, 37, 32, 0.6);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 2000;
+    display: flex;
+    justify-content: center;
+    align-items: flex-end; /* Bottom sheet style on mobile */
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.generation-modal.show {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.generation-modal .modal-content {
+    width: 100%;
+    max-width: 680px;
+    max-height: 90vh;
+    background-color: var(--card-bg);
+    border-radius: 24px 24px 0 0; /* Rounded top corners */
+    display: flex;
+    flex-direction: column;
+    transform: translateY(100%);
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 -10px 40px rgba(0,0,0,0.1);
+    padding: 0; /* Reset glass-card padding */
+}
+
+.generation-modal.show .modal-content {
+    transform: translateY(0);
+}
+
+@media (min-width: 768px) {
+    .generation-modal {
+        align-items: center; /* Center on desktop */
+    }
+    .generation-modal .modal-content {
+        border-radius: 24px;
+        max-height: 85vh;
+        transform: translateY(20px) scale(0.95);
+    }
+    .generation-modal.show .modal-content {
+        transform: translateY(0) scale(1);
+    }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.modal-header h2 {
+    font-size: 1.25rem;
+    color: var(--primary-color);
+    font-family: var(--font-serif);
+    margin: 0;
+}
+
+.modal-scroll-area {
+    padding: 24px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+}
+
+.modal-section {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.modal-section .section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-color);
+}
+
+.modal-footer {
+    padding: 20px 24px calc(20px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--border-color);
+    background-color: var(--card-bg-solid);
 }
 

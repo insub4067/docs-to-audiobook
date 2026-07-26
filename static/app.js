@@ -25,6 +25,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const libraryEmpty = document.getElementById("libraryEmpty");
     const audioList = document.getElementById("audioList");
     
+    // Generation Modal
+    const generationModal = document.getElementById("generationModal");
+    const closeModalBtn = document.getElementById("closeModalBtn");
+    
     const loadingOverlay = document.getElementById("loadingOverlay");
     const progressBarFill = document.querySelector(".progress-bar-fill");
     const loadingStatus = document.querySelector(".loading-status");
@@ -60,6 +64,11 @@ document.addEventListener("DOMContentLoaded", () => {
             readerContainer.classList.add("hide-ui");
         }, 3000);
     }
+    
+    // Close generation modal
+    closeModalBtn.addEventListener("click", () => {
+        generationModal.classList.remove("show");
+    });
     
     // Listen for scroll and touch/click on the reader content to show UI
     readerContent.addEventListener("scroll", resetReaderUiTimeout, { passive: true });
@@ -343,12 +352,10 @@ document.addEventListener("DOMContentLoaded", () => {
             generateBtn.disabled = false;
             showToast("문서 분석이 완료되었습니다.", "success");
             
-            // Prompt for immediate generation
+            // Show generation modal instead of confirm alert
             setTimeout(() => {
-                if (confirm("문서 업로드가 완료되었습니다.\n지금 바로 오디오북을 생성하시겠습니까?")) {
-                    generateBtn.click();
-                }
-            }, 600);
+                generationModal.classList.add("show");
+            }, 300);
         } catch (error) {
             console.error(error);
             showToast(error.message, "error");
@@ -390,6 +397,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // ----------------------------------------------------
     generateBtn.addEventListener("click", async () => {
         if (!currentTextId) return;
+        
+        generationModal.classList.remove("show");
 
         const voice = voiceSelect.value;
         const rate = getFormattedSpeed(parseInt(speedSlider.value));
@@ -548,38 +557,23 @@ document.addEventListener("DOMContentLoaded", () => {
                 
                 const hasSentences = audio.sentences && audio.sentences.length > 0;
                 
+                // Click the whole item to open reader mode, except when clicking delete
                 item.innerHTML = `
-                    <div class="audio-item-header">
-                        <div class="audio-title-group">
-                            <i data-lucide="headphones"></i>
-                            <span class="audio-title" title="${audio.title}">${audio.title}</span>
-                        </div>
-                        <div class="audio-actions">
-                            ${hasSentences ? `
-                            <button class="btn-icon-round btn-reader" data-id="${audio.id}" title="독서 모드">
-                                <i data-lucide="book-open"></i>
-                            </button>
-                            ` : ''}
-                            <a href="${localUrl}" download="${audio.title}" class="btn-icon-round btn-download" title="다운로드">
-                                <i data-lucide="download"></i>
-                            </a>
-                            <button class="btn-icon-round btn-delete" data-id="${audio.id}" title="삭제">
-                                <i data-lucide="trash-2"></i>
-                            </button>
-                        </div>
+                    <div class="audio-title-group">
+                        <i data-lucide="play-circle"></i>
+                        <span class="audio-title" title="${audio.title}">${audio.title}</span>
                     </div>
-                    <div class="audio-meta">
-                        <span><i data-lucide="calendar" style="width:12px;height:12px;vertical-align:middle;margin-right:4px;"></i>${audio.dateString}</span>
-                        <span><i data-lucide="file-text" style="width:12px;height:12px;vertical-align:middle;margin-right:4px;"></i>${audio.charCount.toLocaleString()} 자</span>
-                        <span><i data-lucide="database" style="width:12px;height:12px;vertical-align:middle;margin-right:4px;"></i>${formatBytes(audio.sizeBytes)}</span>
-                    </div>
-                    <div class="audio-player-wrapper">
-                        <audio src="${localUrl}" controls></audio>
+                    <div class="audio-actions">
+                        <button class="btn-icon-round btn-delete" data-id="${audio.id}" title="삭제">
+                            <i data-lucide="trash-2"></i>
+                        </button>
                     </div>
                 `;
                 
                 if (hasSentences) {
-                    item.querySelector(".btn-reader").addEventListener("click", () => {
+                    item.addEventListener("click", (e) => {
+                        // Prevent opening reader if delete button was clicked
+                        if (e.target.closest('.btn-delete')) return;
                         openReaderMode(audio, localUrl);
                     });
                 }

@@ -34,136 +34,112 @@
             <p class="subtitle">문서 파일을 자연스러운 음성 오디오북으로 변환하여 기기에 저장해 보세요.</p>
         </header>
 
-        <!-- Main Content Grid -->
-        <main class="app-grid">
+        <!-- Main Content -->
+        <main class="app-main">
             
-            <!-- Left Side: Controls & Upload -->
-            <div class="grid-left">
-                <!-- Upload Section -->
-                <section class="glass-card upload-section">
-                    <div class="card-header">
-                        <i data-lucide="file-up" class="header-icon"></i>
-                        <h2>문서 업로드</h2>
+            <!-- Upload Section -->
+            <section class="glass-card upload-section">
+                <div class="card-header">
+                    <i data-lucide="file-up" class="header-icon"></i>
+                    <h2>문서 업로드</h2>
+                </div>
+                
+                <div class="upload-dropzone" id="dropzone">
+                    <input type="file" id="fileInput" accept=".docx,.pdf,.txt" style="display: none;">
+                    <i data-lucide="upload-cloud" class="dropzone-icon"></i>
+                    <p class="dropzone-text">파일을 이곳에 끌어다 놓거나 터치하세요</p>
+                    <p class="dropzone-hint">지원 파일: DOCX, PDF, TXT (최대 10MB)</p>
+                </div>
+            </section>
+
+            <!-- Audiobook Library Section -->
+            <section class="glass-card library-section">
+                <div class="card-header">
+                    <i data-lucide="folder-heart" class="header-icon"></i>
+                    <h2>내 오디오북</h2>
+                </div>
+                
+                <div class="library-container">
+                    <div class="library-empty" id="libraryEmpty">
+                        <i data-lucide="music"></i>
+                        <p>아직 생성된 책이 없습니다.</p>
+                        <span>새로운 문서를 업로드해 보세요.</span>
                     </div>
                     
-                    <div class="upload-dropzone" id="dropzone">
-                        <input type="file" id="fileInput" accept=".docx,.pdf,.txt" style="display: none;">
-                        <i data-lucide="upload-cloud" class="dropzone-icon"></i>
-                        <p class="dropzone-text">파일을 이곳에 끌어다 놓거나 클릭하여 선택하세요</p>
-                        <p class="dropzone-hint">지원 파일: DOCX, PDF, TXT (최대 10MB)</p>
+                    <div class="audio-list" id="audioList">
+                        <!-- Dynamically populated audiobooks will go here -->
                     </div>
-
-                    <div class="file-details" id="fileDetails" style="display: none;">
-                        <div class="file-info-row">
-                            <i data-lucide="file-text" class="file-icon"></i>
-                            <div class="file-meta">
-                                <span class="file-name" id="fileName">document.docx</span>
-                                <span class="file-size" id="fileSize">1.2 MB</span>
-                            </div>
-                            <button class="btn-icon remove-file-btn" id="removeFileBtn" title="파일 제거">
-                                <i data-lucide="x"></i>
-                            </button>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Voice Settings Section -->
-                <section class="glass-card settings-section">
-                    <div class="card-header">
-                        <i data-lucide="sliders" class="header-icon"></i>
-                        <h2>음성 설정</h2>
-                    </div>
-
-                    <div class="settings-form">
-                        <!-- Voice Selector -->
-                        <div class="form-group">
-                            <label for="voiceSelect">목소리 선택</label>
-                            <div class="select-wrapper">
-                                <select id="voiceSelect">
-                                    <option value="" disabled selected>목소리 불러오는 중...</option>
-                                </select>
-                                <i data-lucide="chevron-down" class="select-arrow"></i>
-                            </div>
-                            <div class="voice-desc" id="voiceDesc">선택한 음성의 상세 특징이 표시됩니다.</div>
-                        </div>
-
-                        <!-- Speed/Rate Slider -->
-                        <div class="form-group">
-                            <div class="label-with-val">
-                                <label for="speedSlider">읽기 속도</label>
-                                <span class="slider-val" id="speedVal">보통 (1.0x)</span>
-                            </div>
-                            <input type="range" id="speedSlider" min="-50" max="100" step="5" value="0">
-                            <div class="slider-labels">
-                                <span>느림</span>
-                                <span>보통</span>
-                                <span>빠름</span>
-                            </div>
-                        </div>
-
-                        <!-- Pitch Slider -->
-                        <div class="form-group">
-                            <div class="label-with-val">
-                                <label for="pitchSlider">목소리 톤 (피치)</label>
-                                <span class="slider-val" id="pitchVal">기본 (0Hz)</span>
-                            </div>
-                            <input type="range" id="pitchSlider" min="-50" max="50" step="2" value="0">
-                            <div class="slider-labels">
-                                <span>낮음</span>
-                                <span>기본</span>
-                                <span>높음</span>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Convert Action -->
-                <button class="btn btn-primary btn-generate" id="generateBtn" disabled>
-                    <i data-lucide="sparkles"></i>
-                    <span>오디오북 만들기</span>
-                </button>
-            </div>
-
-            <!-- Right Side: Preview & Library -->
-            <div class="grid-right">
-                <!-- Text Preview Section -->
-                <section class="glass-card preview-section">
-                    <div class="card-header">
-                        <i data-lucide="eye" class="header-icon"></i>
-                        <h2>문서 텍스트 미리보기</h2>
-                        <span class="char-badge" id="charCountBadge" style="display: none;">0 자</span>
-                    </div>
-                    <div class="preview-content-wrapper">
-                        <div class="preview-placeholder" id="previewPlaceholder">
-                            <i data-lucide="book-open"></i>
-                            <p>문서를 업로드하면 여기에 텍스트 미리보기가 표시됩니다.</p>
-                        </div>
-                        <div class="preview-text" id="previewText" style="display: none;"></div>
-                    </div>
-                </section>
-
-                <!-- Audiobook List Section -->
-                <section class="glass-card library-section">
-                    <div class="card-header">
-                        <i data-lucide="folder-heart" class="header-icon"></i>
-                        <h2>생성된 오디오북</h2>
-                    </div>
-                    
-                    <div class="library-container">
-                        <div class="library-empty" id="libraryEmpty">
-                            <i data-lucide="music"></i>
-                            <p>아직 생성된 오디오북이 없습니다.</p>
-                            <span>상단에서 문서를 변환하여 오디오북을 만들어보세요.</span>
-                        </div>
-                        
-                        <div class="audio-list" id="audioList">
-                            <!-- Dynamically populated audiobooks will go here -->
-                        </div>
-                    </div>
-                </section>
-            </div>
-            
+                </div>
+            </section>
         </main>
+
+        <!-- Generation Modal (Bottom Sheet style) -->
+        <div class="generation-modal" id="generationModal">
+            <div class="modal-content glass-card">
+                <header class="modal-header">
+                    <h2>오디오북 설정 및 미리보기</h2>
+                    <button class="btn-icon" id="closeModalBtn" title="닫기">
+                        <i data-lucide="x"></i>
+                    </button>
+                </header>
+                
+                <div class="modal-scroll-area">
+                    <!-- Text Preview -->
+                    <div class="modal-section">
+                        <div class="section-title">
+                            <i data-lucide="eye" class="header-icon"></i> 텍스트 확인
+                            <span class="char-badge" id="charCountBadge" style="display: none;">0 자</span>
+                        </div>
+                        <div class="preview-text" id="previewText">
+                            <!-- Preview content loaded via JS -->
+                        </div>
+                    </div>
+
+                    <!-- Voice Settings -->
+                    <div class="modal-section">
+                        <div class="section-title">
+                            <i data-lucide="sliders" class="header-icon"></i> 음성 설정
+                        </div>
+                        <div class="settings-form">
+                            <!-- Voice Selector -->
+                            <div class="form-group">
+                                <label for="voiceSelect">낭독자 목소리</label>
+                                <div class="select-wrapper">
+                                    <select id="voiceSelect">
+                                        <option value="" disabled selected>불러오는 중...</option>
+                                    </select>
+                                    <i data-lucide="chevron-down" class="select-arrow"></i>
+                                </div>
+                                <div class="voice-desc" id="voiceDesc">음성 특징이 표시됩니다.</div>
+                            </div>
+                            <!-- Speed/Rate Slider -->
+                            <div class="form-group">
+                                <div class="label-with-val">
+                                    <label for="speedSlider">읽기 속도</label>
+                                    <span class="slider-val" id="speedVal">보통 (1.0x)</span>
+                                </div>
+                                <input type="range" id="speedSlider" min="-50" max="100" step="5" value="0">
+                            </div>
+                            <!-- Pitch Slider -->
+                            <div class="form-group">
+                                <div class="label-with-val">
+                                    <label for="pitchSlider">목소리 높낮이</label>
+                                    <span class="slider-val" id="pitchVal">기본 (0Hz)</span>
+                                </div>
+                                <input type="range" id="pitchSlider" min="-50" max="50" step="2" value="0">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button class="btn btn-primary btn-generate" id="generateBtn">
+                        <i data-lucide="sparkles"></i>
+                        <span>오디오북 만들기</span>
+                    </button>
+                </div>
+            </div>
+        </div>
 
         <!-- Global Toast Notification -->
         <div id="toast" class="toast">
