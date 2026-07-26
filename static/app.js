@@ -782,9 +782,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 readerAudio.pause();
             }
         }
+            
         readerPlayPauseBtn.onclick = togglePlayPause;
-        readerPlayPauseBtn.addEventListener("touchend", togglePlayPause, { passive: false });
-        
+        // 기존 addEventListener를 제거하고 ontouchend에 직접 할당
+        readerPlayPauseBtn.ontouchend = function(e) {
+            togglePlayPause(e);
+        };        
         // Handle audio events to toggle custom icon state
         readerAudio.onplay = function() { showPauseIcon(); };
         readerAudio.onpause = function() { showPlayIcon(); };
@@ -887,6 +890,7 @@ document.addEventListener("DOMContentLoaded", () => {
         readerAudio.onloadedmetadata = null;
         // Remove UI handlers
         readerPlayPauseBtn.onclick = null;
+        readerPlayPauseBtn.ontouchend = null; // 터치 이벤트 찌꺼기도 확실하게 초기화
         readerProgressBar.onclick = null;
         // Hide overlay
         readerOverlay.classList.remove("show");
