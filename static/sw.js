@@ -1,4 +1,5 @@
-const CACHE_NAME = "audiobook-maker-v1";
+const CACHE_NAME = "2026.07.27.1";
+
 const ASSETS_TO_CACHE = [
   "/",
   "/static/style.css",
@@ -25,7 +26,6 @@ self.addEventListener("activate", (e) => {
       return Promise.all(
         keys.map((key) => {
           if (key !== CACHE_NAME) {
-            console.log("Removing old cache:", key);
             return caches.delete(key);
           }
         })
@@ -39,10 +39,9 @@ self.addEventListener("fetch", (e) => {
     return;
   }
 
-  // ✅ 핵심 수정: blob: URL 요청은 절대 가로채지 않는다.
-  // iOS/iPadOS Safari는 blob: 요청도 fetch 이벤트로 넘기는데,
-  // blob:은 네트워크 리소스가 아니라서 fetch(e.request)로 재요청하면 무조건 실패하고,
-  // 이게 <audio>/<video>에서 MEDIA_ERR_SRC_NOT_SUPPORTED(code 4)로 나타난다.
+  // ✅ blob: 요청은 Service Worker가 절대 건드리지 않는다.
+  // iOS WebKit에서 blob: 요청까지 fetch 이벤트로 넘어오는데,
+  // blob:은 네트워크 리소스가 아니라 fetch(e.request)로 재요청하면 무조건 실패한다.
   if (e.request.url.startsWith("blob:")) {
     return;
   }
