@@ -11,6 +11,9 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import edge_tts
+import mimetypes
+mimetypes.add_type("text/css", ".css")
+mimetypes.add_type("application/javascript", ".js")
 
 app = FastAPI(title="Docs to Audiobook Converter - Hybrid")
 
