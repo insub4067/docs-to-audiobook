@@ -119,6 +119,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let objectUrls = {}; // Store generated object URLs to clean them up later
     let lastActiveSpan = null;
     let currentReadingAudioId = null;
+    let currentAudioObject = null;
 
     // Initialize Database and App
     initDB().then(() => {
@@ -731,6 +732,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // ----------------------------------------------------
     function openReaderMode(audio, localUrl) {
         currentReadingAudioId = audio.id;
+        currentAudioObject = audio; // 현재 오디오 객체 참조 저장
         
         // Remove file extension for display title
         readerBookTitle.textContent = audio.title.replace(/\.[^/.]+$/, "");
@@ -856,11 +858,12 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         };
         
-        // Resume from cached position if available
         if (audio.lastPosition > 0) {
             readerAudio.currentTime = audio.lastPosition;
-            // User requested it to be PAUSED if resuming from cache
-            showPlayIcon();
+            // 기존: showPlayIcon(); 만 호출하여 일시정지 상태로 대기
+            // 변경: 설정된 시간부터 즉시 오디오를 재생하고 일시정지 아이콘 표시
+            readerAudio.play().catch(function(err) { console.log("Autoplay blocked:", err); });
+            showPauseIcon();
         } else {
             readerAudio.play().catch(function(err) { console.log("Autoplay blocked:", err); });
         }
@@ -869,10 +872,12 @@ document.addEventListener("DOMContentLoaded", () => {
     // Close reader - shared handler for both click and touch
     function closeReader(e) {
         if (e) { e.preventDefault(); e.stopPropagation(); }
-        // Save current position before closing
-        if (currentReadingAudioId && readerAudio.currentTime > 0) {
-            updateAudiobookPosition(currentReadingAudioId, readerAudio.currentTime);
+     
+        if (currentAudioObject && readerAudio.currentTime > 0) {
+            updateAudiobookPosition(currentAudioObject.id, readerAudio.currentTime);
+            currentAudioObject.lastPosition = readerAudio.currentTime; // in-memory 객체 업데이트
         }
+        
         // Clean up audio
         readerAudio.pause();
         readerAudio.src = "";
