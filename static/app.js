@@ -51,18 +51,22 @@ document.addEventListener("DOMContentLoaded", () => {
     const readerProgressFill = document.getElementById("readerProgressFill");
     const readerContainer = readerOverlay.querySelector(".reader-container");
 
-    // Auto-hide UI in reader mode
+    // Reader Mode UI Interaction State
     let readerUiTimeout = null;
-    function resetReaderUiTimeout() {
+    let lastScrollTop = 0;
+    let isAutoScrolling = false;
+
+    function showReaderUi() {
         if (!readerContainer) return;
         readerContainer.classList.remove("hide-ui");
-        clearTimeout(readerUiTimeout);
         
-        // Hide UI after 3 seconds of inactivity
+        clearTimeout(readerUiTimeout);
+        // Auto-hide UI after 4 seconds of inactivity if we are playing
         readerUiTimeout = setTimeout(() => {
-            // Only auto-hide if audio is playing, optional UX tweak
-            readerContainer.classList.add("hide-ui");
-        }, 3000);
+            if (!readerAudio.paused) {
+                readerContainer.classList.add("hide-ui");
+            }
+        }, 4000);
     }
     
     // Close generation modal
@@ -70,10 +74,27 @@ document.addEventListener("DOMContentLoaded", () => {
         generationModal.classList.remove("show");
     });
     
-    // Listen for scroll and touch/click on the reader content to show UI
-    readerContent.addEventListener("scroll", resetReaderUiTimeout, { passive: true });
-    readerContent.addEventListener("click", resetReaderUiTimeout);
-    readerContent.addEventListener("touchstart", resetReaderUiTimeout, { passive: true });
+    // Listen for scroll on the reader content
+    readerContent.addEventListener("scroll", () => {
+        if (isAutoScrolling) return; // Ignore automated scrolling (e.g. following text)
+        
+        const currentScrollTop = readerContent.scrollTop;
+        
+        if (currentScrollTop > lastScrollTop + 5) {
+            // Scrolling down -> Hide UI
+            readerContainer.classList.add("hide-ui");
+            clearTimeout(readerUiTimeout);
+        } else if (currentScrollTop < lastScrollTop - 5) {
+            // Scrolling up -> Show UI
+            showReaderUi();
+        }
+        
+        lastScrollTop = Math.max(0, currentScrollTop);
+    }, { passive: true });
+    
+    // Touch/Click explicitly shows the UI
+    readerContent.addEventListener("click", showReaderUi);
+    readerContent.addEventListener("touchstart", showReaderUi, { passive: true });
 
     // App State
     let currentTextId = null;
@@ -764,8 +785,10 @@ document.addEventListener("DOMContentLoaded", () => {
                     }
                     activeSpan.classList.add("highlight");
                     
-                    // Smoothly center the reading sentence inside the scrollable container
+                    isAutoScrolling = true;
                     activeSpan.scrollIntoView({ behavior: "smooth", block: "center" });
+                    setTimeout(() => { isAutoScrolling = false; }, 800);
+                    
                     lastActiveSpan = activeSpan;
                 }
             }

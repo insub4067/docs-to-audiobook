@@ -1,25 +1,25 @@
-/* Paper & Voice - Analog Library Modern Theme & iOS Safari Web Optimization */
+/* Paper & Voice - Apple Native Modern Theme & iOS Safari Web Optimization */
 
 :root {
-    /* Analog Paper Color System (Oatmeal & Deep Mocha) */
-    --bg-color: #faf7f2;
-    --card-bg: rgba(254, 253, 251, 0.85);
-    --card-bg-solid: #fdfcfb;
-    --text-color: #2c2520;
-    --text-muted: #85786f;
-    --primary-color: #5d4b40;
-    --primary-hover: #4a3b32;
-    --accent-color: #a78b75;
-    --border-color: #eae3d8;
-    --border-hover: #d3c7b6;
+    /* Apple Native Theme Colors (iOS System Colors) */
+    --bg-color: #F2F2F7; /* iOS System Gray 6 */
+    --card-bg: rgba(255, 255, 255, 0.7); /* Translucent White for liquid glass */
+    --card-bg-solid: #FFFFFF;
+    --text-color: #000000;
+    --text-muted: #8E8E93; /* iOS System Gray */
+    --primary-color: #007AFF; /* iOS System Blue */
+    --primary-hover: #0056b3;
+    --accent-color: #5AC8FA;
+    --border-color: rgba(60, 60, 67, 0.1); /* iOS Separator */
+    --border-hover: rgba(60, 60, 67, 0.2);
     
-    /* Modern minimalist shadows */
-    --card-shadow: 0 10px 30px rgba(44, 37, 32, 0.03);
-    --inner-shadow: inset 0 2px 4px rgba(44, 37, 32, 0.01);
+    /* Native Shadows */
+    --card-shadow: 0 4px 14px rgba(0, 0, 0, 0.04), 0 1px 4px rgba(0,0,0,0.02);
+    --inner-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.05);
     
-    /* Font families */
-    --font-serif: "Playfair Display", "Noto Serif KR", Georgia, serif;
-    --font-sans: "Outfit", "Noto Sans KR", -apple-system, BlinkMacSystemFont, sans-serif;
+    /* Font families - SF Pro Native */
+    --font-serif: "New York", "Playfair Display", Georgia, serif;
+    --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
 }
 
 /* Reset & General Styles */
@@ -47,18 +47,9 @@ html {
     height: -webkit-fill-available;
 }
 
-/* Soothing analog ambient background lighting (Not Neon/Space-like) */
+/* Background Decor - Removed for flat iOS look */
 .background-decor {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: -1;
-    overflow: hidden;
-    background: radial-gradient(circle at 10% 20%, #f5f0e3 0%, transparent 60%),
-                radial-gradient(circle at 90% 80%, #ebe0ce 0%, transparent 60%);
-    opacity: 0.9;
+    display: none;
 }
 
 /* App Container Layout */
@@ -126,21 +117,17 @@ html {
     width: 100%;
 }
 
-/* Cards (Analog glassmorphism: Eco-friendly/Recycled card feel) */
+/* Cards (iOS Module Style) */
 .glass-card {
-    background-color: var(--card-bg);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid var(--border-color);
-    border-radius: 20px; /* Squircle form */
-    padding: 40px;
+    background-color: var(--card-bg-solid);
+    border-radius: 20px; /* iOS Settings Grouped list radius */
+    padding: 32px;
     box-shadow: var(--card-shadow);
-    transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .glass-card:hover {
-    border-color: var(--border-hover);
-    box-shadow: 0 12px 36px rgba(44, 37, 32, 0.05);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
 }
 
 /* Card Headers */
@@ -148,9 +135,9 @@ html {
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-bottom: 22px;
-    padding-bottom: 12px;
-    border-bottom: 1px dashed var(--border-color);
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .header-icon {
@@ -166,20 +153,20 @@ html {
     color: var(--primary-color);
 }
 
-/* Dropzone (Dashed paper texture box) */
+/* Dropzone */
 .upload-dropzone {
-    border: 2px dashed var(--border-color);
+    border: 2px dashed rgba(60, 60, 67, 0.15);
     border-radius: 16px;
-    padding: 60px 30px;
+    padding: 50px 24px;
     text-align: center;
     cursor: pointer;
-    background-color: rgba(254, 253, 251, 0.3);
-    transition: all 0.3s ease;
+    background-color: #F9F9FB;
+    transition: all 0.2s ease;
 }
 
 .upload-dropzone:hover, .upload-dropzone.dragover {
     border-color: var(--primary-color);
-    background-color: rgba(93, 75, 64, 0.02);
+    background-color: rgba(0, 122, 255, 0.03);
 }
 
 .dropzone-icon {
@@ -355,27 +342,28 @@ input[type="range"] {
     -webkit-appearance: none;
     width: 100%;
     height: 6px;
-    background: var(--border-color);
+    background: rgba(60, 60, 67, 0.1);
     border-radius: 3px;
     outline: none;
     margin: 8px 0;
 }
 
-/* iOS-optimized slider thumbs for touch precision */
+/* iOS-optimized slider thumbs */
 input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 22px;
-    height: 22px;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
-    background: var(--primary-color);
+    background: #FFFFFF;
+    border: 0.5px solid rgba(0, 0, 0, 0.04);
     cursor: pointer;
-    box-shadow: 0 2px 6px rgba(44, 37, 32, 0.15);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 1px rgba(0,0,0,0.16), 0 3px 1px rgba(0,0,0,0.1);
     transition: transform 0.1s ease;
 }
 
 input[type="range"]::-webkit-slider-thumb:active {
-    transform: scale(1.2);
+    transform: scale(1.1);
 }
 
 .slider-labels {
@@ -394,32 +382,30 @@ input[type="range"]::-webkit-slider-thumb:active {
     justify-content: center;
     gap: 10px;
     width: 100%;
-    font-size: 16px; /* Anti-zoom Safari */
+    font-size: 17px; /* Anti-zoom Safari, standard iOS button text size */
     font-weight: 600;
     color: #ffffff;
     background-color: var(--primary-color);
     border: none;
-    border-radius: 14px;
-    padding: 15px;
+    border-radius: 14px; /* iOS standard corner radius for large buttons */
+    padding: 16px;
     cursor: pointer;
     transition: all 0.2s ease;
-    box-shadow: 0 4px 12px rgba(93, 75, 64, 0.12);
 }
 
 .btn-primary:hover:not(:disabled) {
     background-color: var(--primary-hover);
-    box-shadow: 0 6px 16px rgba(93, 75, 64, 0.18);
 }
 
 .btn-primary:active:not(:disabled) {
-    transform: scale(0.98);
+    transform: scale(0.97);
+    opacity: 0.8;
 }
 
 .btn-primary:disabled {
-    background-color: var(--border-color);
-    color: var(--text-muted);
+    background-color: rgba(60, 60, 67, 0.1);
+    color: rgba(60, 60, 67, 0.3);
     cursor: not-allowed;
-    box-shadow: none;
 }
 
 /* Right Side: Preview & Library */
@@ -809,22 +795,30 @@ input[type="range"]::-webkit-slider-thumb:active {
     width: 100%;
     max-width: 760px;
     height: 100%;
+    position: relative;
     display: flex;
     flex-direction: column;
     background-color: var(--card-bg-solid);
     border-left: 1px solid var(--border-color);
     border-right: 1px solid var(--border-color);
-    padding-bottom: env(safe-area-inset-bottom);
+    overflow: hidden;
 }
 
 /* Header */
 .reader-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: calc(18px + env(safe-area-inset-top)) 24px 18px;
-    border-bottom: 1px solid var(--border-color);
-    background-color: var(--card-bg-solid);
+    border-bottom: 1px solid rgba(44, 37, 32, 0.08);
+    background-color: rgba(254, 253, 251, 0.7);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
     transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -861,7 +855,7 @@ input[type="range"]::-webkit-slider-thumb:active {
 .reader-content {
     flex-grow: 1;
     overflow-y: auto;
-    padding: 40px 32px;
+    padding: calc(90px + env(safe-area-inset-top)) 32px calc(110px + env(safe-area-inset-bottom)) 32px;
     font-family: var(--font-serif);
     font-size: 1.2rem;
     line-height: 1.9;
@@ -895,9 +889,16 @@ input[type="range"]::-webkit-slider-thumb:active {
 
 /* Controls */
 .reader-controls {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
     padding: 20px 24px calc(20px + env(safe-area-inset-bottom));
-    border-top: 1px solid var(--border-color);
-    background-color: var(--card-bg-solid);
+    border-top: 1px solid rgba(44, 37, 32, 0.08);
+    background-color: rgba(254, 253, 251, 0.7);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
     transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
