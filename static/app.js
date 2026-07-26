@@ -734,13 +734,12 @@ document.addEventListener("DOMContentLoaded", () => {
         currentReadingAudioId = audio.id;
         currentAudioObject = audio; 
         
-        // UI 초기화
+        // UI 리셋
         readerBookTitle.textContent = audio.title.replace(/\.[^/.]+$/, "");
         showPlayIcon();
         readerCurrentTime.textContent = "00:00";
         readerDuration.textContent = "00:00";
         readerProgressFill.style.width = "0%";
-        
         readerContent.innerHTML = "";
         lastActiveSpan = null;
         
@@ -754,6 +753,7 @@ document.addEventListener("DOMContentLoaded", () => {
             span.addEventListener("click", () => {
                 readerAudio.currentTime = s.start / 1000;
                 readerAudio.play().catch(err => console.log("Play failed:", err));
+                showPauseIcon();
             });
             
             readerContent.appendChild(span);
@@ -761,23 +761,38 @@ document.addEventListener("DOMContentLoaded", () => {
         
         readerOverlay.classList.add("show");
         resetReaderUiTimeout();
+
+        // ==========================================
+        // 🚨 iOS Safari 오디오 생명주기 완벽 해결 로직
+        // ==========================================
         
-        // [해결 1] 동일 Blob URL이라도 WebKit 미디어 엔진을 강제로 새로고침
-        readerAudio.src = localUrl;
-        readerAudio.load(); 
-        
-        // [해결 2] 오디오 메타데이터가 준비된 이후에만 시간 설정 및 자동 재생 실행
-        readerAudio.onloadedmetadata = () => {
+        // 1. 메타데이터 로드 완료 시 실행할 초기화 함수 분리
+        const initAudioState = () => {
             if (readerAudio.duration && !isNaN(readerAudio.duration)) {
                 readerDuration.textContent = formatTime(readerAudio.duration);
             }
-            
             if (audio.lastPosition > 0) {
                 readerAudio.currentTime = audio.lastPosition;
             }
             readerAudio.play().catch(err => console.log("Autoplay blocked:", err));
             showPauseIcon();
         };
+
+        // 2. 이벤트 누락을 막기 위해 소스 할당 '전'에 무조건 먼저 등록
+        readerAudio.onloadedmetadata = initAudioState;
+
+        // 3. 소스 할당
+        readerAudio.src = localUrl;
+
+        // 4. [핵심] 이미 로딩이 완료된 상태(재진입 시)라면 이벤트를 기다리지 않고 즉시 실행
+        if (readerAudio.readyState >= 1) { // 1 = HAVE_METADATA 상태
+            initAudioState();
+        } else {
+            // iOS 미디어 세션 권한 우회를 위해 터치 직후 play()를 강제로 한 번 던짐
+            readerAudio.play().catch(() => {}); 
+        }
+
+        // ==========================================
         
         function togglePlayPause(e) {
             if (e) { e.preventDefault(); e.stopPropagation(); }
@@ -788,7 +803,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
         
-        // 터치 이벤트 충돌 원천 차단 (onclick만 사용)
+        // 터치 이벤트 충돌 방지 (onclick 하나만 유지)
         readerPlayPauseBtn.onclick = togglePlayPause;
         
         readerAudio.onplay = function() { showPauseIcon(); };
@@ -804,6 +819,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         };
         
+        // (이하 하이라이트 및 자동 스크롤 로직 유지)
         readerAudio.ontimeupdate = () => {
             const currentSec = readerAudio.currentTime;
             const currentMs = currentSec * 1000;
@@ -867,16 +883,15 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         
         // src 비우기 절대 금지, pause 및 currentTime만 초기화
+        // closeReader 내부의 이벤트 초기화 부분
         readerAudio.pause();
-        readerAudio.currentTime = 0;
-        
+
         readerAudio.onplay = null;
         readerAudio.onpause = null;
         readerAudio.ontimeupdate = null;
         readerAudio.onloadedmetadata = null;
-        
+
         readerPlayPauseBtn.onclick = null;
-        readerPlayPauseBtn.ontouchend = null; // 혹시 남아있을 속성 제거
         readerProgressBar.onclick = null;
         
         readerOverlay.classList.remove("show");
