@@ -376,21 +376,47 @@ document.addEventListener("DOMContentLoaded", () => {
             formData.append("rate", rate);
             formData.append("pitch", pitch);
 
-            // Fetch the stream as a JSON containing base64 audio and sentence metadata
+            // 1. Request Job ID from server (Returns immediately)
             const response = await fetch("/api/synthesize", {
                 method: "POST",
                 body: formData
             });
 
-            clearInterval(progressInterval);
-
             if (!response.ok) {
-                throw new Error("오디오북 실시간 합성 실패. 서버 연결을 확인하세요.");
+                clearInterval(progressInterval);
+                throw new Error("오디오북 변환 요청 실패. 서버 연결을 확인하세요.");
             }
 
             const resData = await response.json();
-            const audioBase64 = resData.audio;
-            const sentences = resData.sentences;
+            const jobId = resData.job_id;
+            
+            // 2. Poll job status until completed
+            const pollJobStatus = async (id) => {
+                const pollRes = await fetch(`/api/job/${id}`);
+                if (!pollRes.ok) throw new Error("작업 상태 통신 실패");
+                
+                const jobData = await pollRes.json();
+                
+                if (jobData.status === "processing") {
+                    // Wait 2 seconds and check again
+                    return new Promise(resolve => {
+                        setTimeout(() => resolve(pollJobStatus(id)), 2000);
+                    });
+                } else if (jobData.status === "completed") {
+                    return jobData;
+                } else if (jobData.status === "error") {
+                    throw new Error(jobData.error || "서버 오디오 변환 에러 발생");
+                } else {
+                    throw new Error("알 수 없는 작업 상태입니다.");
+                }
+            };
+            
+            const completedJobData = await pollJobStatus(jobId);
+            
+            clearInterval(progressInterval);
+
+            const audioBase64 = completedJobData.audio;
+            const sentences = completedJobData.sentences;
 
             // Decode base64 to binary Blob
             const byteCharacters = atob(audioBase64);

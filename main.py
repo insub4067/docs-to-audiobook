@@ -6,7 +6,7 @@ import asyncio
 import html
 import time
 import re
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Response
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Response, BackgroundTasks
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,6 +37,10 @@ os.makedirs(STATIC_DIR, exist_ok=True)
 # In-memory storage for extracted texts
 # Keeps text temporarily for 30 minutes. Auto-expired by background task.
 text_storage = {}
+
+# In-memory storage for synthesis jobs
+# Tracks the status of background edge-tts generation tasks
+jobs = {}
 
 VOICE_METADATA = {
     "ko-KR-SunHiNeural": {
@@ -194,8 +198,44 @@ async def get_voices():
             {"name": "Microsoft Server Speech Text to Speech Voice (ko-KR, JiMinNeural)", "short_name": "ko-KR-JiMinNeural", "gender": "Female", "locale": "ko-KR", "friendly_name": "지민 (밝고 상냥한 동화/안내 - 여성)", "description": "밝고 친근하며, 동화책 낭독이나 상냥한 안내 멘트에 잘 어울립니다."}
         ]
 
+async def process_synthesis_task(job_id: str, text: str, voice: str, rate: str, pitch: str):
+    try:
+        communicate = edge_tts.Communicate(text, voice=voice, rate=rate, pitch=pitch)
+        audio_data = b""
+        all_sentences = []
+        
+        async for msg in communicate.stream():
+            if msg.get("type") == "audio":
+                audio_data += msg.get("data")
+            elif msg.get("type") == "SentenceBoundary":
+                offset_ms = msg.get("offset", 0) // 10000
+                duration_ms = msg.get("duration", 0) // 10000
+                all_sentences.append({
+                    "text": msg.get("text", ""),
+                    "start": offset_ms,
+                    "end": offset_ms + duration_ms
+                })
+                
+        if not audio_data:
+            jobs[job_id]["status"] = "error"
+            jobs[job_id]["error"] = "음성 합성 결과가 비어 있습니다."
+            return
+            
+        import base64
+        audio_base64 = base64.b64encode(audio_data).decode("utf-8")
+        
+        jobs[job_id]["audio"] = audio_base64
+        jobs[job_id]["sentences"] = all_sentences
+        jobs[job_id]["status"] = "completed"
+        
+    except Exception as e:
+        jobs[job_id]["status"] = "error"
+        jobs[job_id]["error"] = str(e)
+
+
 @app.post("/api/synthesize")
 async def synthesize_text(
+    background_tasks: BackgroundTasks,
     text_id: str = Form(...),
     voice: str = Form("ko-KR-SunHiNeural"),
     rate: str = Form("+0%"),
@@ -206,37 +246,37 @@ async def synthesize_text(
     
     data = text_storage[text_id]
     text = data["text"]
+    
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = {
+        "status": "processing",
+        "audio": None,
+        "sentences": [],
+        "error": None
+    }
+    
+    background_tasks.add_task(process_synthesis_task, job_id, text, voice, rate, pitch)
+    
+    return {"job_id": job_id}
+
+@app.get("/api/job/{job_id}")
+async def get_job_status(job_id: str):
+    if job_id not in jobs:
+        raise HTTPException(status_code=404, detail="해당 작업을 찾을 수 없습니다.")
         
-    try:
-        communicate = edge_tts.Communicate(text, voice=voice, rate=rate, pitch=pitch)
-        audio_data = b""
-        all_sentences = []
+    job = jobs[job_id]
+    
+    if job["status"] == "completed":
+        # Return data and free memory
+        response = {
+            "status": "completed",
+            "audio": job["audio"],
+            "sentences": job["sentences"]
+        }
+        del jobs[job_id]
+        return JSONResponse(content=response)
         
-        async for msg in communicate.stream():
-            if msg.get("type") == "audio":
-                audio_data += msg.get("data")
-            elif msg.get("type") == "SentenceBoundary":
-                # offset and duration in 100ns ticks. 1 tick = 100ns = 0.0001ms
-                offset_ms = msg.get("offset", 0) // 10000
-                duration_ms = msg.get("duration", 0) // 10000
-                all_sentences.append({
-                    "text": msg.get("text", ""),
-                    "start": offset_ms,
-                    "end": offset_ms + duration_ms
-                })
-                
-        if not audio_data:
-            raise HTTPException(status_code=500, detail="음성 합성 결과가 비어 있습니다.")
-            
-        import base64
-        audio_base64 = base64.b64encode(audio_data).decode("utf-8")
-        
-        return JSONResponse(content={
-            "audio": audio_base64,
-            "sentences": all_sentences
-        })
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"TTS 오디오 생성 실패: {str(e)}")
+    return JSONResponse(content={"status": job["status"], "error": job.get("error")})
 
 # Serve static files (HTML, CSS, JS)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
