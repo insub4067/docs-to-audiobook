@@ -588,7 +588,7 @@ document.addEventListener("DOMContentLoaded", () => {
         readerAudio.src = localUrl;
         
         // Reset player UI
-        readerPlayIcon.setAttribute("data-lucide", "play");
+        readerPlayPauseBtn.innerHTML = '<i data-lucide="play"></i>';
         lucide.createIcons();
         readerCurrentTime.textContent = "00:00";
         readerDuration.textContent = "00:00";
@@ -633,12 +633,12 @@ document.addEventListener("DOMContentLoaded", () => {
         
         // Handle audio events to toggle custom icon state
         readerAudio.onplay = () => {
-            readerPlayIcon.setAttribute("data-lucide", "pause");
+            readerPlayPauseBtn.innerHTML = '<i data-lucide="pause"></i>';
             lucide.createIcons();
         };
         
         readerAudio.onpause = () => {
-            readerPlayIcon.setAttribute("data-lucide", "play");
+            readerPlayPauseBtn.innerHTML = '<i data-lucide="play"></i>';
             lucide.createIcons();
         };
         
