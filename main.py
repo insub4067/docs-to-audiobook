@@ -136,21 +136,58 @@ def chunk_text(text: str, max_chars: int = 800) -> list:
         
     return chunks
 
-async def synthesize_chunk(chunk: str, voice: str, rate: str, pitch: str, semaphore: asyncio.Semaphore) -> bytes:
+def assemble_sentences(word_boundaries: list[dict]) -> list[dict]:
+    sentences = []
+    current_words = []
+    start_time = None
+    
+    # Sentence termination pattern: ends with . ! ? and optional quote
+    sentence_end_pattern = re.compile(r'[.!?]["\']?$')
+    
+    for w in word_boundaries:
+        if start_time is None:
+            start_time = w["start"]
+        current_words.append(w["text"])
+        end_time = w["end"]
+        
+        # Trigger sentence grouping at termination character or list end
+        if sentence_end_pattern.search(w["text"]) or w == word_boundaries[-1]:
+            sentence_text = " ".join(current_words)
+            sentences.append({
+                "text": sentence_text,
+                "start": start_time,
+                "end": end_time
+            })
+            current_words = []
+            start_time = None
+            
+    return sentences
+
+async def synthesize_chunk(chunk: str, voice: str, rate: str, pitch: str, semaphore: asyncio.Semaphore) -> tuple[bytes, list[dict]]:
     async with semaphore:
         for attempt in range(3):
             try:
                 communicate = edge_tts.Communicate(chunk, voice=voice, rate=rate, pitch=pitch)
                 audio_data = b""
+                boundaries = []
                 async for msg in communicate.stream():
                     if msg.get("type") == "audio":
                         audio_data += msg.get("data")
+                    elif msg.get("type") == "WordBoundary":
+                        # offset and duration in 100ns ticks. 1 tick = 100ns = 0.0001ms
+                        offset_ms = msg.get("offset", 0) // 10000
+                        duration_ms = msg.get("duration", 0) // 10000
+                        boundaries.append({
+                            "text": msg.get("text", ""),
+                            "start": offset_ms,
+                            "end": offset_ms + duration_ms
+                        })
                 if audio_data:
-                    return audio_data
+                    return audio_data, boundaries
             except Exception as e:
                 print(f"Error in synthesize_chunk (attempt {attempt}): {e}")
                 await asyncio.sleep(1)
-        return b""
+        return b"", []
 
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...)):
@@ -266,7 +303,33 @@ async def synthesize_text(
         tasks = [synthesize_chunk(chunk, voice, rate, pitch, semaphore) for chunk in chunks]
         
         # 4. Concurrently run synthesis tasks maintaining order
-        audio_chunks = await asyncio.gather(*tasks)
+        results = await asyncio.gather(*tasks)
+        
+        audio_chunks = []
+        all_sentences = []
+        cumulative_time = 0
+        
+        for audio_bytes, word_boundaries in results:
+            if not audio_bytes:
+                continue
+            audio_chunks.append(audio_bytes)
+            
+            # Assemble words into sentences for this chunk
+            chunk_sentences = assemble_sentences(word_boundaries)
+            
+            # Shift timestamps by cumulative offset
+            for s in chunk_sentences:
+                s["start"] += cumulative_time
+                s["end"] += cumulative_time
+                all_sentences.append(s)
+                
+            # Update cumulative duration using last word's end timestamp
+            if word_boundaries:
+                chunk_duration = word_boundaries[-1]["end"]
+                cumulative_time += chunk_duration
+            else:
+                chunk_duration = int((len(audio_bytes) / 16000) * 1000)
+                cumulative_time += chunk_duration
         
         # 5. Merge all audio segments
         audio_data = b"".join(audio_chunks)
@@ -274,7 +337,13 @@ async def synthesize_text(
         if not audio_data:
             raise HTTPException(status_code=500, detail="음성 합성 결과가 비어 있습니다.")
             
-        return Response(content=audio_data, media_type="audio/mpeg")
+        import base64
+        audio_base64 = base64.b64encode(audio_data).decode("utf-8")
+        
+        return JSONResponse(content={
+            "audio": audio_base64,
+            "sentences": all_sentences
+        })
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"TTS 오디오 생성 실패: {str(e)}")
 

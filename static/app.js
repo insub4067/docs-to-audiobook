@@ -32,6 +32,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const toast = document.getElementById("toast");
     const toastIcon = document.getElementById("toastIcon");
     const toastMessage = document.getElementById("toastMessage");
+    
+    // Synced Reader DOM Elements
+    const readerOverlay = document.getElementById("readerOverlay");
+    const readerBookTitle = document.getElementById("readerBookTitle");
+    const closeReaderBtn = document.getElementById("closeReaderBtn");
+    const readerContent = document.getElementById("readerContent");
+    const readerAudio = document.getElementById("readerAudio");
 
     // App State
     let currentTextId = null;
@@ -39,6 +46,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let availableVoices = [];
     let db = null;
     let objectUrls = {}; // Store generated object URLs to clean them up later
+    let lastActiveSpan = null;
 
     // Initialize Database and App
     initDB().then(() => {
@@ -362,7 +370,7 @@ document.addEventListener("DOMContentLoaded", () => {
             formData.append("rate", rate);
             formData.append("pitch", pitch);
 
-            // Fetch the stream as a Blob
+            // Fetch the stream as a JSON containing base64 audio and sentence metadata
             const response = await fetch("/api/synthesize", {
                 method: "POST",
                 body: formData
@@ -374,7 +382,18 @@ document.addEventListener("DOMContentLoaded", () => {
                 throw new Error("오디오북 실시간 합성 실패. 서버 연결을 확인하세요.");
             }
 
-            const audioBlob = await response.blob();
+            const resData = await response.json();
+            const audioBase64 = resData.audio;
+            const sentences = resData.sentences;
+
+            // Decode base64 to binary Blob
+            const byteCharacters = atob(audioBase64);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            const audioBlob = new Blob([byteArray], { type: "audio/mpeg" });
             
             progressBarFill.style.width = "100%";
             loadingStatus.textContent = "생성 및 로컬 DB 저장 중...";
@@ -392,6 +411,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 id: audioId,
                 title: audioFilename,
                 audioData: audioBlob, // Save in local IndexedDB
+                sentences: sentences, // Synced reader metadata
                 timestamp: Date.now(),
                 dateString: new Date().toLocaleDateString("ko-KR", {
                     year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
@@ -450,6 +470,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 
                 const item = document.createElement("div");
                 item.className = "audio-item";
+                
+                const hasSentences = audio.sentences && audio.sentences.length > 0;
+                
                 item.innerHTML = `
                     <div class="audio-item-header">
                         <div class="audio-title-group">
@@ -457,6 +480,11 @@ document.addEventListener("DOMContentLoaded", () => {
                             <span class="audio-title" title="${audio.title}">${audio.title}</span>
                         </div>
                         <div class="audio-actions">
+                            ${hasSentences ? `
+                            <button class="btn-icon-round btn-reader" data-id="${audio.id}" title="독서 모드">
+                                <i data-lucide="book-open"></i>
+                            </button>
+                            ` : ''}
                             <a href="${localUrl}" download="${audio.title}" class="btn-icon-round btn-download" title="다운로드">
                                 <i data-lucide="download"></i>
                             </a>
@@ -474,6 +502,12 @@ document.addEventListener("DOMContentLoaded", () => {
                         <audio src="${localUrl}" controls></audio>
                     </div>
                 `;
+                
+                if (hasSentences) {
+                    item.querySelector(".btn-reader").addEventListener("click", () => {
+                        openReaderMode(audio, localUrl);
+                    });
+                }
                 
                 item.querySelector(".btn-delete").addEventListener("click", async (e) => {
                     const idToDelete = e.currentTarget.getAttribute("data-id");
@@ -538,4 +572,92 @@ document.addEventListener("DOMContentLoaded", () => {
             toast.classList.remove("show");
         }, 3500);
     }
+
+    // ----------------------------------------------------
+    // 7. Synced Reader Mode Implementation
+    // ----------------------------------------------------
+    function openReaderMode(audio, localUrl) {
+        // Remove file extension for display title
+        readerBookTitle.textContent = audio.title.replace(/\.[^/.]+$/, "");
+        readerAudio.src = localUrl;
+        
+        // Reset container
+        readerContent.innerHTML = "";
+        lastActiveSpan = null;
+        
+        // Render sentences
+        audio.sentences.forEach((s, index) => {
+            const span = document.createElement("span");
+            span.className = "reader-sentence";
+            span.id = `sent-${index}`;
+            span.textContent = s.text + " ";
+            
+            // Allow clicking sentence to skip audio playback directly
+            span.addEventListener("click", () => {
+                readerAudio.currentTime = s.start / 1000;
+                readerAudio.play().catch(err => console.log("Play failed:", err));
+            });
+            
+            readerContent.appendChild(span);
+        });
+        
+        // Show Reader screen
+        readerOverlay.classList.add("show");
+        
+        // Listen to timeupdate to sync highlighting & scrolling
+        readerAudio.ontimeupdate = () => {
+            const currentMs = readerAudio.currentTime * 1000;
+            let activeIndex = -1;
+            
+            // Find current sentence index
+            for (let i = 0; i < audio.sentences.length; i++) {
+                const s = audio.sentences[i];
+                if (currentMs >= s.start && currentMs <= s.end) {
+                    activeIndex = i;
+                    break;
+                }
+            }
+            
+            // Find closest sentence if boundary gap occurs
+            if (activeIndex === -1 && audio.sentences.length > 0) {
+                if (currentMs < audio.sentences[0].start) {
+                    activeIndex = 0;
+                } else {
+                    for (let i = audio.sentences.length - 1; i >= 0; i--) {
+                        if (currentMs >= audio.sentences[i].start) {
+                            activeIndex = i;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            if (activeIndex !== -1) {
+                const activeSpan = document.getElementById(`sent-${activeIndex}`);
+                if (activeSpan && activeSpan !== lastActiveSpan) {
+                    if (lastActiveSpan) {
+                        lastActiveSpan.classList.remove("highlight");
+                    }
+                    activeSpan.classList.add("highlight");
+                    
+                    // Smoothly center the reading sentence inside the scrollable container
+                    activeSpan.scrollIntoView({ behavior: "smooth", block: "center" });
+                    lastActiveSpan = activeSpan;
+                }
+            }
+        };
+        
+        readerAudio.play().catch(err => console.log("Autoplay blocked:", err));
+    }
+    
+    // Close button
+    closeReaderBtn.addEventListener("click", () => {
+        readerAudio.pause();
+        readerAudio.src = "";
+        readerOverlay.classList.remove("show");
+        if (lastActiveSpan) {
+            lastActiveSpan.classList.remove("highlight");
+            lastActiveSpan = null;
+        }
+    });
 });
