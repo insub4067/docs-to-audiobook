@@ -784,15 +784,10 @@ document.addEventListener("DOMContentLoaded", () => {
         // 3. 소스 할당
         readerAudio.src = localUrl;
 
-        // 4. [핵심] 이미 로딩이 완료된 상태(재진입 시)라면 이벤트를 기다리지 않고 즉시 실행
-        if (readerAudio.readyState >= 1) { // 1 = HAVE_METADATA 상태
-            initAudioState();
-        } else {
-            // iOS 미디어 세션 권한 우회를 위해 터치 직후 play()를 강제로 한 번 던짐
-            readerAudio.play().catch(() => {}); 
-        }
+        readerAudio.load();
 
-        // ==========================================
+        // iOS 제스처 언락: 재진입 시에도 클릭 핸들러의 동기 컨텍스트 안에서 매번 play() 시도 필요
+        readerAudio.play().catch(() => {});
         
         function togglePlayPause(e) {
             if (e) { e.preventDefault(); e.stopPropagation(); }
@@ -882,7 +877,6 @@ document.addEventListener("DOMContentLoaded", () => {
             currentAudioObject.lastPosition = readerAudio.currentTime;
         }
         
-        // src 비우기 절대 금지, pause 및 currentTime만 초기화
         // closeReader 내부의 이벤트 초기화 부분
         readerAudio.pause();
 
