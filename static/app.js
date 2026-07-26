@@ -310,6 +310,13 @@ document.addEventListener("DOMContentLoaded", () => {
                     document.querySelector(".preview-section").scrollIntoView({ behavior: "smooth" });
                 }, 400);
             }
+            
+            // Prompt for immediate generation
+            setTimeout(() => {
+                if (confirm("문서 업로드가 완료되었습니다.\n지금 바로 오디오북을 생성하시겠습니까?")) {
+                    generateBtn.click();
+                }
+            }, 600);
         } catch (error) {
             console.error(error);
             showToast(error.message, "error");
