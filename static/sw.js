@@ -34,7 +34,7 @@ self.addEventListener("activate", (e) => {
   );
 });
 
-// Fetch Event (Cache-First strategy for static assets)
+// Fetch Event (Network-First strategy to ensure latest updates)
 self.addEventListener("fetch", (e) => {
   // Ignore non-GET requests (e.g. POST to /api/synthesize or /api/upload)
   if (e.request.method !== "GET") {
@@ -48,12 +48,9 @@ self.addEventListener("fetch", (e) => {
   }
 
   e.respondWith(
-    caches.match(e.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      return fetch(e.request).then((networkResponse) => {
-        // Cache newly requested local static assets dynamically
+    fetch(e.request)
+      .then((networkResponse) => {
+        // If network request succeeds, update the cache with latest
         if (networkResponse.status === 200 && e.request.url.startsWith(self.location.origin)) {
           const responseClone = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
@@ -61,11 +58,18 @@ self.addEventListener("fetch", (e) => {
           });
         }
         return networkResponse;
-      }).catch(() => {
-        if (e.request.mode === "navigate") {
-          return caches.match("/");
-        }
-      });
-    })
+      })
+      .catch(() => {
+        // If network fails (e.g., offline), fallback to cache
+        return caches.match(e.request).then((cachedResponse) => {
+          if (cachedResponse) {
+            return cachedResponse;
+          }
+          // Fallback to home if navigation request fails and not in cache
+          if (e.request.mode === "navigate") {
+            return caches.match("/");
+          }
+        });
+      })
   );
 });
