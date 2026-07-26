@@ -572,13 +572,13 @@ document.addEventListener("DOMContentLoaded", () => {
             // Parse char count from badge text (e.g. "1,234 자" -> 1234)
             const rawChars = charCountBadge.textContent.replace(/[^0-9]/g, "");
             const charCount = parseInt(rawChars) || 0;
-            const audioArrayBuffer = await audioBlob.arrayBuffer();
+            const audioArrayBuffer = await audioBlob.arrayBuffer(); // ✅ 추가
 
             const entry = {
                 id: audioId,
                 title: audioFilename,
-                audioData: audioArrayBuffer,
-                sentences: sentences, 
+                audioData: audioArrayBuffer, 
+                sentences: sentences,
                 timestamp: Date.now(),
                 dateString: new Date().toLocaleDateString("ko-KR", {
                     year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
@@ -586,8 +586,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 sizeBytes: audioBlob.size,
                 charCount: charCount
             };
-            
-            // Save to IndexedDB
+
             await saveAudiobookToDB(entry);
 
             setTimeout(() => {
@@ -643,7 +642,6 @@ document.addEventListener("DOMContentLoaded", () => {
             list.forEach(audio => {
                 const item = document.createElement("div");
                 item.className = "audio-item";
-
                 const hasSentences = audio.sentences && audio.sentences.length > 0;
 
                 item.innerHTML = `
@@ -661,6 +659,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (hasSentences) {
                     item.addEventListener("click", async (e) => {
                         if (e.target.closest('.btn-delete')) return;
+                        // ✅ 캐시된 audio 재사용 금지, DB에서 매번 fresh하게 다시 읽기
                         const freshAudio = await getAudiobookFromDB(audio.id);
                         if (!freshAudio || !freshAudio.audioData) {
                             showToast("오디오 데이터를 불러올 수 없습니다. 다시 생성해 주세요.", "error");
@@ -738,13 +737,12 @@ document.addEventListener("DOMContentLoaded", () => {
     // 7. Synced Reader Mode Implementation
     // ----------------------------------------------------
     function openReaderMode(audio) {
-
         if (currentReaderObjectUrl) {
             URL.revokeObjectURL(currentReaderObjectUrl);
             currentReaderObjectUrl = null;
         }
 
-        // ArrayBuffer(신규 저장분) 또는 Blob(기존 저장분) 둘 다 대응
+        // ArrayBuffer(신규)든 Blob(구버전 호환)이든 항상 새 Blob으로 재구성
         const audioBlob = audio.audioData instanceof Blob
             ? audio.audioData
             : new Blob([audio.audioData], { type: "audio/mpeg" });
@@ -754,7 +752,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         currentReadingAudioId = audio.id;
         currentAudioObject = audio;
-        
+
         // UI 리셋
         readerBookTitle.textContent = audio.title.replace(/\.[^/.]+$/, "");
         showPlayIcon();
@@ -799,12 +797,16 @@ document.addEventListener("DOMContentLoaded", () => {
             showPauseIcon();
         };
 
+        readerAudio.onerror = () => {
+            console.error("Audio load error:", readerAudio.error ? readerAudio.error.code : "unknown");
+            showToast(`오디오 로드 실패 (code: ${readerAudio.error ? readerAudio.error.code : '?'})`, "error");
+        };
+
         readerAudio.onloadedmetadata = initAudioState;
         readerAudio.src = localUrl;
         readerAudio.load();
         readerAudio.play().catch(() => {});
 
-        
         function togglePlayPause(e) {
             if (e) { e.preventDefault(); e.stopPropagation(); }
             if (readerAudio.paused) {
@@ -929,7 +931,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     readerAudio.onerror = () => {
         const err = readerAudio.error;
-        console.error("Audio load error:", err ? err.code : "unknown", err ? err.message : "");
+        console.error("Audio load error:", err ? err.code : "unknown");
+        console.error("Blob size at failure:", audio.audioData ? audio.audioData.size : "no audioData");
         showToast(`오디오 로드 실패 (code: ${err ? err.code : '?'})`, "error");
     };
 });
