@@ -45,6 +45,26 @@ document.addEventListener("DOMContentLoaded", () => {
     const readerDuration = document.getElementById("readerDuration");
     const readerProgressBar = document.getElementById("readerProgressBar");
     const readerProgressFill = document.getElementById("readerProgressFill");
+    const readerContainer = readerOverlay.querySelector(".reader-container");
+
+    // Auto-hide UI in reader mode
+    let readerUiTimeout = null;
+    function resetReaderUiTimeout() {
+        if (!readerContainer) return;
+        readerContainer.classList.remove("hide-ui");
+        clearTimeout(readerUiTimeout);
+        
+        // Hide UI after 3 seconds of inactivity
+        readerUiTimeout = setTimeout(() => {
+            // Only auto-hide if audio is playing, optional UX tweak
+            readerContainer.classList.add("hide-ui");
+        }, 3000);
+    }
+    
+    // Listen for scroll and touch/click on the reader content to show UI
+    readerContent.addEventListener("scroll", resetReaderUiTimeout, { passive: true });
+    readerContent.addEventListener("click", resetReaderUiTimeout);
+    readerContent.addEventListener("touchstart", resetReaderUiTimeout, { passive: true });
 
     // App State
     let currentTextId = null;
@@ -646,6 +666,7 @@ document.addEventListener("DOMContentLoaded", () => {
         
         // Show Reader screen
         readerOverlay.classList.add("show");
+        resetReaderUiTimeout();
         
         // Load metadata (audio duration)
         readerAudio.onloadedmetadata = () => {
@@ -750,6 +771,9 @@ document.addEventListener("DOMContentLoaded", () => {
         readerProgressBar.onclick = null;
         
         readerOverlay.classList.remove("show");
+        clearTimeout(readerUiTimeout);
+        if (readerContainer) readerContainer.classList.remove("hide-ui");
+        
         if (lastActiveSpan) {
             lastActiveSpan.classList.remove("highlight");
             lastActiveSpan = null;

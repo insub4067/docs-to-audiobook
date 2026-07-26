@@ -846,9 +846,10 @@ input[type="range"]::-webkit-slider-thumb:active {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 18px 24px;
+    padding: calc(18px + env(safe-area-inset-top)) 24px 18px;
     border-bottom: 1px solid var(--border-color);
     background-color: var(--card-bg-solid);
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .reader-book-title {
@@ -918,9 +919,19 @@ input[type="range"]::-webkit-slider-thumb:active {
 
 /* Controls */
 .reader-controls {
-    padding: 20px 24px;
+    padding: 20px 24px calc(20px + env(safe-area-inset-bottom));
     border-top: 1px solid var(--border-color);
     background-color: var(--card-bg-solid);
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Auto-hide UI states */
+.reader-container.hide-ui .reader-header {
+    transform: translateY(-100%);
+}
+
+.reader-container.hide-ui .reader-controls {
+    transform: translateY(100%);
 }
 
 .reader-player-ui {
