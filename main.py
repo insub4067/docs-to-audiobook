@@ -293,13 +293,10 @@ async def synthesize_text(
                 s["end"] += cumulative_time
                 all_sentences.append(s)
                 
-            # Update cumulative duration using last sentence's end timestamp
-            if sentence_boundaries:
-                chunk_duration = sentence_boundaries[-1]["end"]
-                cumulative_time += chunk_duration
-            else:
-                chunk_duration = int((len(audio_bytes) / 16000) * 1000)
-                cumulative_time += chunk_duration
+            # Update cumulative duration using exact audio file size calculation (48kbps CBR MP3)
+            # 1 ms of audio = 5.726 bytes. So duration_ms = len(audio_bytes) / 5.726
+            chunk_duration = int(len(audio_bytes) / 5.726)
+            cumulative_time += chunk_duration
         
         # 5. Merge all audio segments
         audio_data = b"".join(audio_chunks)

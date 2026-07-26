@@ -39,6 +39,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const closeReaderBtn = document.getElementById("closeReaderBtn");
     const readerContent = document.getElementById("readerContent");
     const readerAudio = document.getElementById("readerAudio");
+    const readerPlayPauseBtn = document.getElementById("readerPlayPauseBtn");
+    const readerPlayIcon = document.getElementById("readerPlayIcon");
+    const readerCurrentTime = document.getElementById("readerCurrentTime");
+    const readerDuration = document.getElementById("readerDuration");
+    const readerProgressBar = document.getElementById("readerProgressBar");
+    const readerProgressFill = document.getElementById("readerProgressFill");
 
     // App State
     let currentTextId = null;
@@ -581,6 +587,13 @@ document.addEventListener("DOMContentLoaded", () => {
         readerBookTitle.textContent = audio.title.replace(/\.[^/.]+$/, "");
         readerAudio.src = localUrl;
         
+        // Reset player UI
+        readerPlayIcon.setAttribute("data-lucide", "play");
+        lucide.createIcons();
+        readerCurrentTime.textContent = "00:00";
+        readerDuration.textContent = "00:00";
+        readerProgressFill.style.width = "0%";
+        
         // Reset container
         readerContent.innerHTML = "";
         lastActiveSpan = null;
@@ -604,9 +617,54 @@ document.addEventListener("DOMContentLoaded", () => {
         // Show Reader screen
         readerOverlay.classList.add("show");
         
-        // Listen to timeupdate to sync highlighting & scrolling
+        // Load metadata (audio duration)
+        readerAudio.onloadedmetadata = () => {
+            readerDuration.textContent = formatTime(readerAudio.duration);
+        };
+        
+        // Custom Play/Pause Button handler
+        readerPlayPauseBtn.onclick = () => {
+            if (readerAudio.paused) {
+                readerAudio.play().catch(err => console.log("Play failed:", err));
+            } else {
+                readerAudio.pause();
+            }
+        };
+        
+        // Handle audio events to toggle custom icon state
+        readerAudio.onplay = () => {
+            readerPlayIcon.setAttribute("data-lucide", "pause");
+            lucide.createIcons();
+        };
+        
+        readerAudio.onpause = () => {
+            readerPlayIcon.setAttribute("data-lucide", "play");
+            lucide.createIcons();
+        };
+        
+        // Handle click on progress bar to seek
+        readerProgressBar.onclick = (e) => {
+            const rect = readerProgressBar.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const width = rect.width;
+            if (width > 0 && readerAudio.duration) {
+                const seekRatio = clickX / width;
+                readerAudio.currentTime = seekRatio * readerAudio.duration;
+            }
+        };
+        
+        // Listen to timeupdate to sync highlighting & scrolling & progress fill
         readerAudio.ontimeupdate = () => {
-            const currentMs = readerAudio.currentTime * 1000;
+            const currentSec = readerAudio.currentTime;
+            const currentMs = currentSec * 1000;
+            const duration = readerAudio.duration || 0;
+            
+            // Update custom player progress bar UI
+            readerCurrentTime.textContent = formatTime(currentSec);
+            if (duration > 0) {
+                readerProgressFill.style.width = `${(currentSec / duration) * 100}%`;
+            }
+            
             let activeIndex = -1;
             
             // Find current sentence index
@@ -654,10 +712,25 @@ document.addEventListener("DOMContentLoaded", () => {
     closeReaderBtn.addEventListener("click", () => {
         readerAudio.pause();
         readerAudio.src = "";
+        readerAudio.onplay = null;
+        readerAudio.onpause = null;
+        readerAudio.ontimeupdate = null;
+        readerAudio.onloadedmetadata = null;
+        readerPlayPauseBtn.onclick = null;
+        readerProgressBar.onclick = null;
+        
         readerOverlay.classList.remove("show");
         if (lastActiveSpan) {
             lastActiveSpan.classList.remove("highlight");
             lastActiveSpan = null;
         }
     });
+
+    // Time Formatter (seconds to MM:SS)
+    function formatTime(seconds) {
+        if (isNaN(seconds) || seconds === Infinity) return "00:00";
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
 });

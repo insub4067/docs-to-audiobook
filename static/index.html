@@ -197,8 +197,18 @@
                     <!-- Synced sentences will go here -->
                 </div>
                 <footer class="reader-controls">
-                    <div class="reader-audio-wrapper">
-                        <audio id="readerAudio" controls></audio>
+                    <audio id="readerAudio"></audio>
+                    <div class="reader-player-ui">
+                        <button class="btn-player-play" id="readerPlayPauseBtn" title="재생/일시정지">
+                            <i data-lucide="play" id="readerPlayIcon"></i>
+                        </button>
+                        <div class="reader-progress-wrapper">
+                            <span class="player-time" id="readerCurrentTime">00:00</span>
+                            <div class="player-progress-bar" id="readerProgressBar">
+                                <div class="player-progress-fill" id="readerProgressFill"></div>
+                            </div>
+                            <span class="player-time" id="readerDuration">00:00</span>
+                        </div>
                     </div>
                 </footer>
             </div>

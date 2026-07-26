@@ -923,16 +923,75 @@ input[type="range"]::-webkit-slider-thumb:active {
     background-color: var(--card-bg-solid);
 }
 
-.reader-audio-wrapper {
+.reader-player-ui {
+    display: flex;
+    align-items: center;
+    gap: 16px;
     width: 100%;
 }
 
-.reader-audio-wrapper audio {
-    width: 100%;
-    height: 40px;
-    border-radius: 20px;
-    outline: none;
-    background-color: var(--bg-color);
+.btn-player-play {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    background-color: var(--primary-color);
+    color: #ffffff;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(93, 75, 64, 0.15);
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.btn-player-play:hover {
+    background-color: var(--primary-hover);
+    transform: scale(1.05);
+}
+
+.btn-player-play:active {
+    transform: scale(0.95);
+}
+
+.btn-player-play i {
+    width: 20px;
+    height: 20px;
+}
+
+.reader-progress-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-grow: 1;
+}
+
+.player-time {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    min-width: 40px;
+    text-align: center;
+}
+
+.player-progress-bar {
+    flex-grow: 1;
+    height: 6px;
+    background-color: var(--border-color);
+    border-radius: 3px;
+    position: relative;
+    cursor: pointer;
+}
+
+.player-progress-fill {
+    width: 0%;
+    height: 100%;
+    background-color: var(--accent-color);
+    border-radius: 3px;
+    position: absolute;
+    top: 0;
+    left: 0;
 }
 
 @media (max-width: 480px) {
