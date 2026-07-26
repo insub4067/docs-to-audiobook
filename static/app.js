@@ -68,6 +68,10 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }, 4000);
     }
+
+    function resetReaderUiTimeout() {
+        showReaderUi();
+    }
     
     // Close generation modal
     closeModalBtn.addEventListener("click", () => {
@@ -792,7 +796,11 @@ document.addEventListener("DOMContentLoaded", () => {
                     activeSpan.classList.add("highlight");
                     
                     isAutoScrolling = true;
-                    activeSpan.scrollIntoView({ behavior: "smooth", block: "center" });
+                    // Scroll within readerContent container (not whole page)
+                    const spanTop = activeSpan.offsetTop;
+                    const containerHeight = readerContent.clientHeight;
+                    const targetScroll = spanTop - containerHeight / 2 + activeSpan.clientHeight / 2;
+                    readerContent.scrollTo({ top: targetScroll, behavior: "smooth" });
                     setTimeout(() => { isAutoScrolling = false; }, 800);
                     
                     lastActiveSpan = activeSpan;
