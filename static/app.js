@@ -116,10 +116,11 @@ document.addEventListener("DOMContentLoaded", () => {
     let uploadedFile = null;
     let availableVoices = [];
     let db = null;
-    let objectUrls = {}; // Store generated object URLs to clean them up later
+    let objectUrls = {}; 
     let lastActiveSpan = null;
     let currentReadingAudioId = null;
     let currentAudioObject = null;
+    let currentReaderObjectUrl = null; 
 
     // Initialize Database and App
     initDB().then(() => {
@@ -617,32 +618,23 @@ document.addEventListener("DOMContentLoaded", () => {
     // ----------------------------------------------------
     async function renderLibrary() {
         audioList.innerHTML = "";
-        
-        // Clean up old object URLs from memory to prevent memory leaks
-        Object.values(objectUrls).forEach(url => URL.revokeObjectURL(url));
-        objectUrls = {};
-        
+
         try {
             const list = await getAllAudiobooksFromDB();
-            
+
             if (list.length === 0) {
                 libraryEmpty.style.display = "flex";
                 return;
             }
-            
+
             libraryEmpty.style.display = "none";
-            
+
             list.forEach(audio => {
-                // Generate a temporary local URL for the Blob
-                const localUrl = URL.createObjectURL(audio.audioData);
-                objectUrls[audio.id] = localUrl; // cache it to revoke later
-                
                 const item = document.createElement("div");
                 item.className = "audio-item";
-                
+
                 const hasSentences = audio.sentences && audio.sentences.length > 0;
-                
-                // Click the whole item to open reader mode, except when clicking delete
+
                 item.innerHTML = `
                     <div class="audio-title-group">
                         <i data-lucide="play-circle"></i>
@@ -654,20 +646,20 @@ document.addEventListener("DOMContentLoaded", () => {
                         </button>
                     </div>
                 `;
-                
+
                 if (hasSentences) {
                     item.addEventListener("click", (e) => {
-                        // Prevent opening reader if delete button was clicked
                         if (e.target.closest('.btn-delete')) return;
-                        openReaderMode(audio, localUrl);
+                        // localUrl을 캐시해서 넘기지 않고, audio 객체(실제 Blob 보유)만 전달
+                        openReaderMode(audio);
                     });
                 }
-                
+
                 item.querySelector(".btn-delete").addEventListener("click", async (e) => {
                     const idToDelete = e.currentTarget.getAttribute("data-id");
                     await deleteAudiobook(idToDelete);
                 });
-                
+
                 audioList.appendChild(item);
             });
 
@@ -730,7 +722,20 @@ document.addEventListener("DOMContentLoaded", () => {
     // ----------------------------------------------------
     // 7. Synced Reader Mode Implementation
     // ----------------------------------------------------
-    function openReaderMode(audio, localUrl) {
+    function openReaderMode(audio) {
+
+        if (currentReaderObjectUrl) {
+            URL.revokeObjectURL(currentReaderObjectUrl);
+            currentReaderObjectUrl = null;
+        }
+
+        // ⚠️ 핵심 수정: 캐싱된 URL 재사용 금지.
+        // iOS/iPadOS Safari는 백그라운드 전환 등으로 기존 blob URL을
+        // 내부적으로 무효화시키는 경우가 있어, 열 때마다 Blob 원본
+        // (audio.audioData)으로부터 새로 생성해야 안정적으로 동작한다.
+        const localUrl = URL.createObjectURL(audio.audioData);
+        currentReaderObjectUrl = localUrl;
+
         currentReadingAudioId = audio.id;
         currentAudioObject = audio; 
         
@@ -778,16 +783,11 @@ document.addEventListener("DOMContentLoaded", () => {
             showPauseIcon();
         };
 
-        // 2. 이벤트 누락을 막기 위해 소스 할당 '전'에 무조건 먼저 등록
         readerAudio.onloadedmetadata = initAudioState;
-
-        // 3. 소스 할당
         readerAudio.src = localUrl;
-
         readerAudio.load();
-
-        // iOS 제스처 언락: 재진입 시에도 클릭 핸들러의 동기 컨텍스트 안에서 매번 play() 시도 필요
         readerAudio.play().catch(() => {});
+
         
         function togglePlayPause(e) {
             if (e) { e.preventDefault(); e.stopPropagation(); }
