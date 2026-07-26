@@ -105,134 +105,6 @@ def preprocess_text(text: str) -> str:
         
     return cleaned_text.strip()
 
-def chunk_text(text: str, max_chars: int = 800) -> list:
-    cleaned = preprocess_text(text)
-    raw_sentences = re.split(r'(?<=[.!?])\s+', cleaned)
-    
-    chunks = []
-    current_chunk = ""
-    
-    for sentence in raw_sentences:
-        if not sentence:
-            continue
-        if len(current_chunk) + len(sentence) + 1 <= max_chars:
-            if current_chunk:
-                current_chunk += " " + sentence
-            else:
-                current_chunk = sentence
-        else:
-            if current_chunk:
-                chunks.append(current_chunk)
-            
-            if len(sentence) > max_chars:
-                for i in range(0, len(sentence), max_chars):
-                    chunks.append(sentence[i:i+max_chars])
-                current_chunk = ""
-            else:
-                current_chunk = sentence
-                
-    if current_chunk:
-        chunks.append(current_chunk)
-        
-    return chunks
-
-def get_mp3_duration_ms(data: bytes) -> int:
-    bitrates_v1_l3 = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0]
-    bitrates_v2_l3 = [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0]
-    
-    samplerates_v1 = [44100, 48000, 32000, 0]
-    samplerates_v2 = [22050, 24000, 16000, 0]
-    samplerates_v25 = [11025, 12000, 8000, 0]
-    
-    total_ms = 0
-    i = 0
-    n = len(data)
-    
-    # ID3v2 header skip
-    if data.startswith(b"ID3"):
-        if n >= 10:
-            size = ((data[6] & 0x7F) << 21) | ((data[7] & 0x7F) << 14) | ((data[8] & 0x7F) << 7) | (data[9] & 0x7F)
-            i = 10 + size
-            
-    while i < n - 4:
-        if data[i] == 0xFF and (data[i+1] & 0xE0) == 0xE0:
-            header = data[i:i+4]
-            version = (header[1] >> 3) & 0x03
-            layer = (header[1] >> 1) & 0x03
-            bitrate_idx = (header[2] >> 4) & 0x0F
-            samplerate_idx = (header[2] >> 2) & 0x03
-            padding = (header[2] >> 1) & 0x01
-            
-            # Layer III check (layer == 1)
-            if layer == 1 and bitrate_idx > 0 and bitrate_idx < 15 and samplerate_idx < 3:
-                # Determine samplerate
-                if version == 3: # MPEG-1
-                    samplerate = samplerates_v1[samplerate_idx]
-                    bitrate = bitrates_v1_l3[bitrate_idx] * 1000
-                    samples_per_frame = 1152
-                elif version == 2: # MPEG-2
-                    samplerate = samplerates_v2[samplerate_idx]
-                    bitrate = bitrates_v2_l3[bitrate_idx] * 1000
-                    samples_per_frame = 576
-                elif version == 0: # MPEG-2.5
-                    samplerate = samplerates_v25[samplerate_idx]
-                    bitrate = bitrates_v2_l3[bitrate_idx] * 1000
-                    samples_per_frame = 576
-                else:
-                    i += 1
-                    continue
-                
-                # Duration of this frame in ms
-                frame_duration_ms = (samples_per_frame / samplerate) * 1000
-                
-                # Frame size formula for Layer III
-                if version == 3:
-                    frame_size = int(144 * bitrate / samplerate) + padding
-                else:
-                    frame_size = int(72 * bitrate / samplerate) + padding
-                
-                if frame_size <= 0:
-                    i += 1
-                    continue
-                    
-                total_ms += frame_duration_ms
-                i += frame_size
-            else:
-                i += 1
-        else:
-            i += 1
-            
-    # Fallback to estimate if parsing yielded 0
-    if total_ms == 0:
-        return int(n / 5.726)
-        
-    return int(total_ms)
-
-async def synthesize_chunk(chunk: str, voice: str, rate: str, pitch: str, semaphore: asyncio.Semaphore) -> tuple[bytes, list[dict]]:
-    async with semaphore:
-        for attempt in range(3):
-            try:
-                communicate = edge_tts.Communicate(chunk, voice=voice, rate=rate, pitch=pitch)
-                audio_data = b""
-                boundaries = []
-                async for msg in communicate.stream():
-                    if msg.get("type") == "audio":
-                        audio_data += msg.get("data")
-                    elif msg.get("type") == "SentenceBoundary":
-                        # offset and duration in 100ns ticks. 1 tick = 100ns = 0.0001ms
-                        offset_ms = msg.get("offset", 0) // 10000
-                        duration_ms = msg.get("duration", 0) // 10000
-                        boundaries.append({
-                            "text": msg.get("text", ""),
-                            "start": offset_ms,
-                            "end": offset_ms + duration_ms
-                        })
-                if audio_data:
-                    return audio_data, boundaries
-            except Exception as e:
-                print(f"Error in synthesize_chunk (attempt {attempt}): {e}")
-                await asyncio.sleep(1)
-        return b"", []
 
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...)):
@@ -336,42 +208,22 @@ async def synthesize_text(
     text = data["text"]
         
     try:
-        # 1. Split text into optimized chunks (800 chars limit)
-        chunks = chunk_text(text, max_chars=800)
-        if not chunks:
-            raise HTTPException(status_code=400, detail="합성할 유효한 텍스트가 없습니다.")
-            
-        # 2. Semaphore to limit concurrent WSS connections to Microsoft (max 3)
-        semaphore = asyncio.Semaphore(3)
-        
-        # 3. Create async tasks for each chunk
-        tasks = [synthesize_chunk(chunk, voice, rate, pitch, semaphore) for chunk in chunks]
-        
-        # 4. Concurrently run synthesis tasks maintaining order
-        results = await asyncio.gather(*tasks)
-        
-        audio_chunks = []
+        communicate = edge_tts.Communicate(text, voice=voice, rate=rate, pitch=pitch)
+        audio_data = b""
         all_sentences = []
-        cumulative_time = 0
         
-        for audio_bytes, sentence_boundaries in results:
-            if not audio_bytes:
-                continue
-            audio_chunks.append(audio_bytes)
-            
-            # Shift timestamps by cumulative offset
-            for s in sentence_boundaries:
-                s["start"] += cumulative_time
-                s["end"] += cumulative_time
-                all_sentences.append(s)
-                
-            # Update cumulative duration using exact audio file size calculation (48kbps CBR MP3)
-            # 1 ms of audio = 5.726 bytes. So duration_ms = len(audio_bytes) / 5.726
-            chunk_duration = int(len(audio_bytes) / 5.726)
-            cumulative_time += chunk_duration
-        
-        # 5. Merge all audio segments
-        audio_data = b"".join(audio_chunks)
+        async for msg in communicate.stream():
+            if msg.get("type") == "audio":
+                audio_data += msg.get("data")
+            elif msg.get("type") == "SentenceBoundary":
+                # offset and duration in 100ns ticks. 1 tick = 100ns = 0.0001ms
+                offset_ms = msg.get("offset", 0) // 10000
+                duration_ms = msg.get("duration", 0) // 10000
+                all_sentences.append({
+                    "text": msg.get("text", ""),
+                    "start": offset_ms,
+                    "end": offset_ms + duration_ms
+                })
                 
         if not audio_data:
             raise HTTPException(status_code=500, detail="음성 합성 결과가 비어 있습니다.")
