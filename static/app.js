@@ -708,16 +708,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
     actionShareBtn.addEventListener("click", async () => {
         if (!actionSheetTarget) return;
+        const target = actionSheetTarget;
         closeActionSheet();
         try {
             if (navigator.share) {
                 await navigator.share({
-                    title: actionSheetTarget.title,
-                    text: `"${actionSheetTarget.title}" - TextAudio로 만든 오디오북`,
+                    title: target.title,
+                    text: `"${target.title}" - TextAudio로 만든 오디오북`,
                     url: window.location.href
                 });
             } else {
-                // share API 없으면 URL 복사
                 await navigator.clipboard.writeText(window.location.href);
                 showToast("링크가 복사되었습니다.", "success");
             }
