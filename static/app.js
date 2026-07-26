@@ -711,18 +711,48 @@ document.addEventListener("DOMContentLoaded", () => {
         const target = actionSheetTarget;
         closeActionSheet();
         try {
-            if (navigator.share) {
+            // IndexedDB에서 오디오 데이터 가져오기
+            const freshAudio = await getAudiobookFromDB(target.id);
+            if (!freshAudio || !freshAudio.audioData) {
+                showToast("오디오 데이터를 찾을 수 없습니다.", "error");
+                return;
+            }
+
+            const audioBlob = freshAudio.audioData instanceof Blob
+                ? freshAudio.audioData
+                : new Blob([freshAudio.audioData], { type: "audio/mpeg" });
+
+            const safeName = target.title.replace(/[^a-zA-Z0-9가-힣\s]/g, "").trim() || "audiobook";
+            const audioFile = new File([audioBlob], `${safeName}.mp3`, { type: "audio/mpeg" });
+
+            if (navigator.canShare && navigator.canShare({ files: [audioFile] })) {
+                await navigator.share({
+                    title: target.title,
+                    text: `"${target.title}" - TextAudio로 만든 오디오북`,
+                    files: [audioFile]
+                });
+            } else if (navigator.share) {
+                // 파일 공유 미지원 시 URL만 공유
                 await navigator.share({
                     title: target.title,
                     text: `"${target.title}" - TextAudio로 만든 오디오북`,
                     url: window.location.href
                 });
             } else {
-                await navigator.clipboard.writeText(window.location.href);
-                showToast("링크가 복사되었습니다.", "success");
+                // 공유 API 미지원 → 파일 다운로드로 대체
+                const url = URL.createObjectURL(audioBlob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `${safeName}.mp3`;
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast("오디오 파일이 다운로드됩니다.", "success");
             }
         } catch (err) {
-            console.log("Share cancelled or failed:", err);
+            if (err.name !== "AbortError") {
+                console.log("Share failed:", err);
+                showToast("공유에 실패했습니다.", "error");
+            }
         }
     });
 
