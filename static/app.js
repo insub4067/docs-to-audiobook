@@ -25,6 +25,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const libraryEmpty = document.getElementById("libraryEmpty");
     const audioList = document.getElementById("audioList");
     const importLinkBtn = document.getElementById("importLinkBtn");
+    const appVersionDisplay = document.getElementById("appVersionDisplay");
     
     // Generation Modal
     const generationModal = document.getElementById("generationModal");
@@ -315,6 +316,21 @@ document.addEventListener("DOMContentLoaded", () => {
             };
             request.onerror = (e) => reject(e.target.error);
         });
+    }
+
+    // ----------------------------------------------------
+    // Fetch and display Service Worker version
+    // ----------------------------------------------------
+    if (appVersionDisplay) {
+        fetch("/sw.js", { cache: "no-store" })
+            .then(res => res.text())
+            .then(text => {
+                const match = text.match(/CACHE_NAME\s*=\s*["']([^"']+)["']/);
+                if (match && match[1]) {
+                    appVersionDisplay.textContent = `v ${match[1]}`;
+                }
+            })
+            .catch(err => console.log("Failed to fetch sw version", err));
     }
 
     // ----------------------------------------------------
