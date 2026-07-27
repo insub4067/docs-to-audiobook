@@ -165,8 +165,8 @@ def preprocess_text(text: str) -> str:
     lines = cleaned_text.split('\n')
     for i in range(len(lines)):
         line = lines[i].strip()
-        # If the line is a markdown heading, ensure it ends with a period so TTS treats it as a separate sentence
-        if re.match(r'^(#{1,6}|\*\*|__)', line) and not line.endswith('.'):
+        # If the line is a markdown heading or numbered/Roman heading, ensure it ends with a period so TTS treats it as a separate sentence
+        if re.match(r'^(#{1,6}|\*\*|__|\d+[\.\s]|[IVXLCDM]+\.\s|[A-Z]\.\s)', line) and not line.endswith('.'):
             lines[i] = line + "."
     cleaned_text = '\n'.join(lines)
 
@@ -214,6 +214,19 @@ def extract_markdown_headings(raw_text: str) -> list:
                     "cleaned_text": cleaned,
                     "display_text": display,
                     "level": 2
+                })
+            continue
+
+        # Match numbered or Roman headings: e.g. "1. Title", "I. Title", "**1. Title**"
+        m = re.match(r'^(\*\*|__)?((\d+[\.\s]+|[IVXLCDM]+\.\s+|[A-Z]\.\s+)(.+?))\1?$', stripped)
+        if m and len(stripped) < 80:
+            display = m.group(2).strip()
+            cleaned = clean_tts_text(display)
+            if cleaned:
+                headings.append({
+                    "cleaned_text": cleaned,
+                    "display_text": display,
+                    "level": 3
                 })
             continue
     return headings
