@@ -246,15 +246,18 @@ def annotate_sentences_with_headings(sentences: list, headings: list) -> tuple:
         # Only check the next 3 headings to maintain order and allow for at most 2 skipped headings
         for h in remaining_headings[:3]:
             h_text = h["cleaned_text"].strip()
-            s_clean = s_text.replace(" ", "")
-            h_clean = h_text.replace(" ", "")
+            
+            # Remove all punctuation and spaces for a super robust match.
+            # This handles cases where TTS splits "1. Title" into "1" and "Title".
+            s_super_clean = re.sub(r'[^\w가-힣]', '', s_text)
+            h_super_clean = re.sub(r'[^\w가-힣]', '', h_text)
 
             is_match = False
-            if s_clean == h_clean:
+            if s_super_clean == h_super_clean:
                 is_match = True
-            elif h_clean in s_clean:
+            elif h_super_clean in s_super_clean:
                 is_match = True
-            elif s_clean in h_clean and len(s_clean) >= len(h_clean) * 0.5:
+            elif s_super_clean in h_super_clean and len(s_super_clean) >= len(h_super_clean) * 0.5:
                 # If s_text is a substring of the heading, it must be at least half its length 
                 # to prevent short random words/punctuation from stealing the heading.
                 is_match = True
