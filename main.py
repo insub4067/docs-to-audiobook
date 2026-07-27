@@ -170,6 +170,78 @@ def preprocess_text(text: str) -> str:
     return cleaned_text.strip()
 
 
+def extract_markdown_headings(raw_text: str) -> list:
+    """Parse markdown headings from original text before TTS cleaning.
+    Returns a list of {cleaned_text, level, display_text} dicts.
+    """
+    headings = []
+    for line in raw_text.split('\n'):
+        stripped = line.strip()
+        if not stripped:
+            continue
+
+        # Match # Heading, ## Heading, ### Heading
+        m = re.match(r'^(#{1,3})\s+(.+)$', stripped)
+        if m:
+            level = len(m.group(1))
+            display = re.sub(r'[*_~`\\]', '', m.group(2)).strip()
+            cleaned = clean_tts_text(m.group(2))
+            if cleaned:
+                headings.append({
+                    "cleaned_text": cleaned,
+                    "display_text": display,
+                    "level": level
+                })
+            continue
+
+        # Match standalone bold line:  **Title** or __Title__  (short lines only)
+        m = re.match(r'^(\*\*|__)(.+?)\1$', stripped)
+        if m and len(stripped) < 80:
+            display = m.group(2).strip()
+            cleaned = clean_tts_text(display)
+            if cleaned:
+                headings.append({
+                    "cleaned_text": cleaned,
+                    "display_text": display,
+                    "level": 2
+                })
+            continue
+    return headings
+
+
+def annotate_sentences_with_headings(sentences: list, headings: list) -> tuple:
+    """Match TTS sentences to extracted headings and annotate them.
+    Returns (annotated_sentences, matched_headings_for_index).
+    """
+    heading_index = []
+    remaining_headings = list(headings)  # copy so we can consume matches
+
+    for i, s in enumerate(sentences):
+        s_text = s["text"].strip()
+        matched = False
+
+        for h in remaining_headings:
+            # Match if the sentence text starts with or contains the heading's cleaned text
+            if h["cleaned_text"] in s_text or s_text in h["cleaned_text"]:
+                s["type"] = "heading"
+                s["level"] = h["level"]
+                s["display"] = h["display_text"]
+                heading_index.append({
+                    "text": h["display_text"],
+                    "level": h["level"],
+                    "sentIndex": i,
+                    "startMs": s["start"]
+                })
+                remaining_headings.remove(h)
+                matched = True
+                break
+
+        if not matched:
+            s["type"] = "text"
+
+    return sentences, heading_index
+
+
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...)):
     if not file.filename:
@@ -294,8 +366,14 @@ async def synthesize_chunk(chunk_index: int, text_chunk: str, voice: str, rate: 
             })
     return chunk_index, audio_data, sentences
 
-async def process_synthesis_task(job_id: str, text: str, voice: str, rate: str, pitch: str):
+async def process_synthesis_task(job_id: str, raw_text: str, voice: str, rate: str, pitch: str):
     try:
+        # Extract heading metadata from original text (before preprocessing strips newlines)
+        headings = extract_markdown_headings(raw_text)
+
+        # Preprocess text for TTS (merge lines, clean spacing)
+        text = preprocess_text(raw_text)
+
         # Split text into chunks (~800 chars per chunk for optimal parallel TTS generation)
         paragraphs = text.split(". ")
         chunks = []
@@ -352,8 +430,14 @@ async def process_synthesis_task(job_id: str, text: str, voice: str, rate: str, 
         import base64
         audio_base64 = base64.b64encode(combined_audio).decode("utf-8")
 
+        # Annotate sentences with heading metadata
+        annotated_sentences, heading_index = annotate_sentences_with_headings(
+            combined_sentences, headings
+        )
+
         jobs[job_id]["audio"] = audio_base64
-        jobs[job_id]["sentences"] = combined_sentences
+        jobs[job_id]["sentences"] = annotated_sentences
+        jobs[job_id]["headings"] = heading_index
         jobs[job_id]["status"] = "completed"
 
     except Exception as e:
@@ -373,17 +457,19 @@ async def synthesize_text(
         raise HTTPException(status_code=404, detail="요청한 텍스트 데이터를 찾을 수 없거나 만료되었습니다.")
     
     data = text_storage[text_id]
-    text = data["text"]
+    raw_text = data["text"]
     
     job_id = str(uuid.uuid4())
     jobs[job_id] = {
         "status": "processing",
         "audio": None,
         "sentences": [],
+        "headings": [],
         "error": None
     }
     
-    background_tasks.add_task(process_synthesis_task, job_id, text, voice, rate, pitch)
+    # Pass raw text — process_synthesis_task handles preprocessing internally
+    background_tasks.add_task(process_synthesis_task, job_id, raw_text, voice, rate, pitch)
     
     return {"job_id": job_id}
 
@@ -399,7 +485,8 @@ async def get_job_status(job_id: str):
         response = {
             "status": "completed",
             "audio": job["audio"],
-            "sentences": job["sentences"]
+            "sentences": job["sentences"],
+            "headings": job.get("headings", [])
         }
         del jobs[job_id]
         return JSONResponse(content=response)
@@ -438,7 +525,8 @@ async def read_index():
 async def create_share(
     audio: UploadFile = File(...),
     title: str = Form(...),
-    sentences: str = Form(...)
+    sentences: str = Form(...),
+    headings: str = Form("[]")
 ):
     """클라이언트가 오디오북을 공유할 때 서버에 임시 저장 (24시간 후 자동 삭제)"""
     share_id = str(uuid.uuid4())[:12]
@@ -455,6 +543,7 @@ async def create_share(
     meta = {
         "title": title,
         "sentences": json.loads(sentences),
+        "headings": json.loads(headings),
         "created_at": time.time()
     }
     meta_path = os.path.join(share_dir, "meta.json")
@@ -474,6 +563,7 @@ async def get_share_meta(share_id: str):
     return {
         "title": meta["title"],
         "sentences": meta["sentences"],
+        "headings": meta.get("headings", []),
         "audio_url": f"/api/share/{share_id}/audio"
     }
 

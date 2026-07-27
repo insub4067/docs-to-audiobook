@@ -113,7 +113,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
                 
                 const data = await response.json();
-                openSharedReaderMode(data.title, data.sentences, data.audio_url, shareId);
+                openSharedReaderMode(data.title, data.sentences, data.audio_url, shareId, data.headings || []);
             } catch (err) {
                 console.error(err);
                 showToast(err.message || "공유 링크 불러오기에 실패했습니다.", "error");
@@ -624,6 +624,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const audioBase64 = completedJobData.audio;
             const sentences = completedJobData.sentences;
+            const headings = completedJobData.headings || [];
 
             // Decode base64 to binary Blob
             const byteCharacters = atob(audioBase64);
@@ -650,6 +651,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 title: audioFilename,
                 audioData: audioArrayBuffer, 
                 sentences: sentences,
+                headings: headings,
                 timestamp: Date.now(),
                 dateString: new Date().toLocaleDateString("ko-KR", {
                     year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
@@ -868,6 +870,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 formData.append("audio", audioBlob, "audio.mp3");
                 formData.append("title", target.title);
                 formData.append("sentences", JSON.stringify(freshAudio.sentences || []));
+                formData.append("headings", JSON.stringify(freshAudio.headings || []));
 
                 const response = await fetch("/api/share", { method: "POST", body: formData });
                 if (!response.ok) throw new Error("서버 업로드 실패");
@@ -1053,50 +1056,27 @@ document.addEventListener("DOMContentLoaded", () => {
         readerContent.innerHTML = "";
         lastActiveSpan = null;
         
-        // 문장 및 헤더 렌더링 & Index(목차) 데이터 구성
-        const indexHeadings = [];
-        let hasMarkdownHeadings = false;
+        // 문장 및 헤더 렌더링 — 서버에서 추출한 heading 메타데이터 사용
+        const serverHeadings = audio.headings || [];
 
         function cleanDisplayText(text) {
+            // 마크다운 기호만 제거, 괄호 내용은 보존 (표시용)
             let t = text.replace(/[*_~`\\]/g, '');
             t = t.replace(/^#+\s*/, '');
             return t.trim();
         }
 
         audio.sentences.forEach((s, index) => {
-            const rawText = s.text.trim();
-            // 1) 마크다운 # 헤더 또는 2) **굵은글씨**로 이루어진 단독 제목 또는 3) **1\. 숫자목록 제목 감지
-            const mdHeadingMatch = rawText.match(/^(#{1,3})\s+(.+)$/);
-            const boldHeadingMatch = rawText.match(/^(\*\*|__)(.+?)\1$/);
-            const numberHeadingMatch = rawText.match(/^(\*\*|__)?(\d+[\.\\\s]+.+?)\1?$/);
+            if (s.type === "heading" && s.display) {
+                const level = s.level || 2;
+                const titleText = s.display;
 
-            let isHeading = false;
-            let level = 2;
-            let titleText = "";
-
-            if (mdHeadingMatch) {
-                isHeading = true;
-                level = mdHeadingMatch[1].length;
-                titleText = cleanDisplayText(mdHeadingMatch[2]);
-            } else if (boldHeadingMatch && rawText.length < 60) {
-                isHeading = true;
-                level = 2;
-                titleText = cleanDisplayText(boldHeadingMatch[2]);
-            } else if (numberHeadingMatch && rawText.length < 40) {
-                isHeading = true;
-                level = 3;
-                titleText = cleanDisplayText(rawText);
-            }
-
-            if (isHeading && titleText) {
-                hasMarkdownHeadings = true;
-
-                const headingEl = document.createElement(`h${level}`);
-                headingEl.className = `reader-heading h${level}`;
+                const headingEl = document.createElement("h" + level);
+                headingEl.className = "reader-heading h" + level;
 
                 const span = document.createElement("span");
                 span.className = "reader-sentence";
-                span.id = `sent-${index}`;
+                span.id = "sent-" + index;
                 span.textContent = titleText;
 
                 span.addEventListener("click", () => {
@@ -1107,17 +1087,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 headingEl.appendChild(span);
                 readerContent.appendChild(headingEl);
-
-                indexHeadings.push({
-                    text: titleText,
-                    level: level,
-                    sentIndex: index,
-                    startMs: s.start
-                });
             } else {
                 const span = document.createElement("span");
                 span.className = "reader-sentence";
-                span.id = `sent-${index}`;
+                span.id = "sent-" + index;
                 span.textContent = cleanDisplayText(s.text) + " ";
 
                 span.addEventListener("click", () => {
@@ -1130,12 +1103,12 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
-        // 목차(Index) 버튼 표시 제어
+        // 목차(Index) 버튼 표시 제어 — 서버 제공 headings 배열 사용
         const readerIndexBtn = document.getElementById("readerIndexBtn");
         if (readerIndexBtn) {
-            if (hasMarkdownHeadings && indexHeadings.length > 0) {
+            if (serverHeadings.length > 0) {
                 readerIndexBtn.style.display = "flex";
-                readerIndexBtn.onclick = () => openIndexSheet(indexHeadings);
+                readerIndexBtn.onclick = () => openIndexSheet(serverHeadings);
             } else {
                 readerIndexBtn.style.display = "none";
             }
@@ -1319,7 +1292,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // --------------------------------------------------
     // 9. Shared Link Auto-Detection
     // --------------------------------------------------
-    function openSharedReaderMode(title, sentences, audioUrl, shareId = null) {
+    function openSharedReaderMode(title, sentences, audioUrl, shareId = null, headings = []) {
         // 공유 링크로 접속한 수신자를 위한 Reader 모드
         currentReadingAudioId = null;
         currentAudioObject = null;
@@ -1356,6 +1329,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         title,
                         audioData: audioBlob,
                         sentences,
+                        headings,
                         shareId: shareId, // 다운로드한 파일도 shareId를 기억
                         shareExpiry: Date.now() + (23 * 60 * 60 * 1000) // 만료시간 넉넉히 23시간으로 산정
                     });
@@ -1370,49 +1344,27 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         }
 
-        // 문장 및 헤더 렌더링 & Index(목차) 데이터 구성
-        const indexHeadings = [];
-        let hasMarkdownHeadings = false;
+        // 문장 및 헤더 렌더링 — 서버에서 추출한 heading 메타데이터 사용
+        const serverHeadings = headings || [];
 
         function cleanDisplayText(text) {
+            // 마크다운 기호만 제거, 괄호 내용은 보존 (표시용)
             let t = text.replace(/[*_~`\\]/g, '');
             t = t.replace(/^#+\s*/, '');
             return t.trim();
         }
 
         sentences.forEach((s, index) => {
-            const rawText = s.text.trim();
-            const mdHeadingMatch = rawText.match(/^(#{1,3})\s+(.+)$/);
-            const boldHeadingMatch = rawText.match(/^(\*\*|__)(.+?)\1$/);
-            const numberHeadingMatch = rawText.match(/^(\*\*|__)?(\d+[\.\\\s]+.+?)\1?$/);
+            if (s.type === "heading" && s.display) {
+                const level = s.level || 2;
+                const titleText = s.display;
 
-            let isHeading = false;
-            let level = 2;
-            let titleText = "";
-
-            if (mdHeadingMatch) {
-                isHeading = true;
-                level = mdHeadingMatch[1].length;
-                titleText = cleanDisplayText(mdHeadingMatch[2]);
-            } else if (boldHeadingMatch && rawText.length < 60) {
-                isHeading = true;
-                level = 2;
-                titleText = cleanDisplayText(boldHeadingMatch[2]);
-            } else if (numberHeadingMatch && rawText.length < 40) {
-                isHeading = true;
-                level = 3;
-                titleText = cleanDisplayText(rawText);
-            }
-
-            if (isHeading && titleText) {
-                hasMarkdownHeadings = true;
-
-                const headingEl = document.createElement(`h${level}`);
-                headingEl.className = `reader-heading h${level}`;
+                const headingEl = document.createElement("h" + level);
+                headingEl.className = "reader-heading h" + level;
 
                 const span = document.createElement("span");
                 span.className = "reader-sentence";
-                span.id = `sent-${index}`;
+                span.id = "sent-" + index;
                 span.textContent = titleText;
 
                 span.addEventListener("click", () => {
@@ -1423,17 +1375,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 headingEl.appendChild(span);
                 readerContent.appendChild(headingEl);
-
-                indexHeadings.push({
-                    text: titleText,
-                    level: level,
-                    sentIndex: index,
-                    startMs: s.start
-                });
             } else {
                 const span = document.createElement("span");
                 span.className = "reader-sentence";
-                span.id = `sent-${index}`;
+                span.id = "sent-" + index;
                 span.textContent = cleanDisplayText(s.text) + " ";
 
                 span.addEventListener("click", () => {
@@ -1446,12 +1391,12 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
-        // 목차(Index) 버튼 표시 제어
+        // 목차(Index) 버튼 표시 제어 — 서버 제공 headings 배열 사용
         const readerIndexBtn = document.getElementById("readerIndexBtn");
         if (readerIndexBtn) {
-            if (hasMarkdownHeadings && indexHeadings.length > 0) {
+            if (serverHeadings.length > 0) {
                 readerIndexBtn.style.display = "flex";
-                readerIndexBtn.onclick = () => openIndexSheet(indexHeadings);
+                readerIndexBtn.onclick = () => openIndexSheet(serverHeadings);
             } else {
                 readerIndexBtn.style.display = "none";
             }
@@ -1575,7 +1520,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const data = await response.json();
             // 약간의 딜레이 후 Reader 열기 (UI 초기화 완료 대기)
             setTimeout(() => {
-                openSharedReaderMode(data.title, data.sentences, data.audio_url, shareId);
+                openSharedReaderMode(data.title, data.sentences, data.audio_url, shareId, data.headings || []);
             }, 500);
         } catch (err) {
             console.error("Failed to load shared audiobook:", err);
