@@ -608,19 +608,18 @@ input[type="range"]::-webkit-slider-thumb:active {
     justify-content: center;
     width: 32px;
     height: 32px;
-    background: transparent;
+    background: rgba(93, 75, 64, 0.06);
+    border-radius: 50%;
     border: none;
     color: var(--text-muted);
     cursor: pointer;
     transition: all 0.2s ease;
-    opacity: 0.7;
     touch-action: manipulation;
 }
 
 .btn-icon-round.btn-more:hover {
     opacity: 1;
-    background-color: rgba(93, 75, 64, 0.08);
-    border-radius: 50%;
+    background-color: rgba(93, 75, 64, 0.12);
 }
 
 
