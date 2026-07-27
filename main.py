@@ -81,6 +81,52 @@ VOICE_METADATA = {
     }
 }
 
+import olefile
+import zlib
+import struct
+
+def extract_hwp_text(filepath: str) -> str:
+    try:
+        f = olefile.OleFileIO(filepath)
+        dirs = f.listdir()
+        if ['FileHeader'] not in dirs:
+            return ""
+        header = f.openstream('FileHeader').read()
+        is_compressed = (header[36] & 1) != 0
+
+        sections = [d for d in dirs if d[0] == 'BodyText']
+        text_chunks = []
+        for sec in sections:
+            stream = f.openstream(sec).read()
+            if is_compressed:
+                stream = zlib.decompress(stream, -15)
+            
+            i = 0
+            while i < len(stream):
+                if i + 4 > len(stream):
+                    break
+                header_val = struct.unpack('<I', stream[i:i+4])[0]
+                rec_type = header_val & 0x3FF
+                rec_len = (header_val >> 20) & 0xFFF
+                if rec_len == 0xFFF:
+                    if i + 8 > len(stream):
+                        break
+                    rec_len = struct.unpack('<I', stream[i+4:i+8])[0]
+                    i += 8
+                else:
+                    i += 4
+                
+                if rec_type == 67:  # HWPTAG_PARA_TEXT
+                    data = stream[i:i+rec_len]
+                    text = data.decode('utf-16le', errors='ignore')
+                    # Remove HWP control characters / inline objects
+                    clean_chars = [c for c in text if ord(c) >= 32 or c in ('\n', '\r', '\t')]
+                    text_chunks.append("".join(clean_chars))
+                i += rec_len
+        return "\n".join(text_chunks)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"HWP 파일 해석 실패: {str(e)}")
+
 def extract_text(file_path: str, filename: str) -> str:
     ext = os.path.splitext(filename)[1].lower()
     if ext == ".docx":
@@ -94,16 +140,26 @@ def extract_text(file_path: str, filename: str) -> str:
             if t:
                 text_list.append(t)
         return "\n".join(text_list)
-    elif ext == ".txt":
+    elif ext in [".txt", ".md", ".markdown"]:
         for encoding in ["utf-8", "cp949", "euc-kr", "utf-16", "latin-1"]:
             try:
                 with open(file_path, "r", encoding=encoding) as f:
-                    return f.read()
+                    content = f.read()
+                    # Strip markdown syntax headers/markup slightly if md
+                    if ext in [".md", ".markdown"]:
+                        content = re.sub(r'#+\s*', '', content)
+                        content = re.sub(r'[*_~`]', '', content)
+                    return content
             except UnicodeDecodeError:
                 continue
         raise HTTPException(status_code=400, detail="텍스트 파일 인코딩을 분석할 수 없습니다. UTF-8로 변환해 주세요.")
+    elif ext == ".hwp":
+        text = extract_hwp_text(file_path)
+        if not text.strip():
+            raise HTTPException(status_code=400, detail="HWP 파일에서 텍스트를 추출할 수 없습니다.")
+        return text
     else:
-        raise HTTPException(status_code=400, detail="지원하지 않는 파일 형식입니다. (지원: .docx, .pdf, .txt)")
+        raise HTTPException(status_code=400, detail="지원하지 않는 파일 형식입니다. (지원: .docx, .pdf, .txt, .md, .hwp)")
 
 def preprocess_text(text: str) -> str:
     # 1. Clean line breaks: single newline to space, double newline to paragraph break with pause indicator
