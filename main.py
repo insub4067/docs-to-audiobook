@@ -220,9 +220,23 @@ def annotate_sentences_with_headings(sentences: list, headings: list) -> tuple:
         s_text = s["text"].strip()
         matched = False
 
-        for h in remaining_headings:
-            # Match if the sentence text starts with or contains the heading's cleaned text
-            if h["cleaned_text"] in s_text or s_text in h["cleaned_text"]:
+        # Only check the next 3 headings to maintain order and allow for at most 2 skipped headings
+        for h in remaining_headings[:3]:
+            h_text = h["cleaned_text"].strip()
+            s_clean = s_text.replace(" ", "")
+            h_clean = h_text.replace(" ", "")
+
+            is_match = False
+            if s_clean == h_clean:
+                is_match = True
+            elif h_clean in s_clean:
+                is_match = True
+            elif s_clean in h_clean and len(s_clean) >= len(h_clean) * 0.5:
+                # If s_text is a substring of the heading, it must be at least half its length 
+                # to prevent short random words/punctuation from stealing the heading.
+                is_match = True
+
+            if is_match:
                 s["type"] = "heading"
                 s["level"] = h["level"]
                 s["display"] = h["display_text"]
