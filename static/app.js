@@ -113,7 +113,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
                 
                 const data = await response.json();
-                openSharedReaderMode(data.title, data.sentences, data.audio_url, shareId, data.headings || []);
+                openSharedReaderMode(data.title, data.sentences, data.audio_url, shareId);
             } catch (err) {
                 console.error(err);
                 showToast(err.message || "공유 링크 불러오기에 실패했습니다.", "error");
@@ -245,7 +245,7 @@ document.addEventListener("DOMContentLoaded", () => {
             
             request.onerror = (event) => {
                 console.error("Database error: ", event.target.error);
-                showToast("로컬 데이터베이스를 열 수 없습니다.", "error");
+                showToast("DB를 열 수 없습니다.", "error");
                 reject(event.target.error);
             };
             
@@ -624,7 +624,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const audioBase64 = completedJobData.audio;
             const sentences = completedJobData.sentences;
-            const headings = completedJobData.headings || [];
 
             // Decode base64 to binary Blob
             const byteCharacters = atob(audioBase64);
@@ -636,7 +635,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const audioBlob = new Blob([byteArray], { type: "audio/mpeg" });
             
             inlineFill.style.width = "100%";
-            inlineStatus.textContent = "로컬 DB에 저장 중...";
+            inlineStatus.textContent = "저장 중...";
             
             // Build Audiobook entry
             const audioId = crypto.randomUUID();
@@ -651,7 +650,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 title: audioFilename,
                 audioData: audioArrayBuffer, 
                 sentences: sentences,
-                headings: headings,
                 timestamp: Date.now(),
                 dateString: new Date().toLocaleDateString("ko-KR", {
                     year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
@@ -664,7 +662,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             // 진행 아이템 제거 후 라이브러리 다시 렌더링
             progressItem.remove();
-            showToast("오디오북이 브라우저 로컬 DB에 안전하게 소장되었습니다!", "success");
+            showToast("저장되었습니다!", "success");
             renderLibrary();
 
         } catch (error) {
@@ -779,58 +777,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (e.target === actionSheetBackdrop) closeActionSheet();
     });
 
-    // ----------------------------------------------------
-    // Index ActionSheet (목차 액션시트)
-    // ----------------------------------------------------
-    const indexSheetBackdrop = document.getElementById("indexSheetBackdrop");
-    const indexSheetList = document.getElementById("indexSheetList");
-    const indexSheetCancelBtn = document.getElementById("indexSheetCancelBtn");
-
-    function openIndexSheet(headings) {
-        if (!indexSheetList) return;
-        indexSheetList.innerHTML = "";
-
-        headings.forEach(item => {
-            const div = document.createElement("div");
-            div.className = `index-item h${item.level}`;
-            
-            // h1, h2, h3 시각적 구분 접두사
-            const prefix = item.level === 1 ? "• " : (item.level === 2 ? "└ " : "  └ ");
-            div.textContent = prefix + item.text;
-
-            div.addEventListener("click", () => {
-                closeIndexSheet();
-                // 해당 문장 위치로 오디오 이동 및 스크롤
-                readerAudio.currentTime = item.startMs / 1000;
-                readerAudio.play().catch(function(err) { console.log("Play failed:", err); });
-                showPauseIcon();
-
-                const targetSpan = document.getElementById(`sent-${item.sentIndex}`);
-                if (targetSpan) {
-                    const spanTop = targetSpan.offsetTop;
-                    const containerHeight = readerContent.clientHeight;
-                    const targetScroll = spanTop - containerHeight / 2 + targetSpan.clientHeight / 2;
-                    readerContent.scrollTo({ top: targetScroll, behavior: "smooth" });
-                }
-            });
-
-            indexSheetList.appendChild(div);
-        });
-
-        indexSheetBackdrop.classList.add("show");
-    }
-
-    function closeIndexSheet() {
-        if (indexSheetBackdrop) indexSheetBackdrop.classList.remove("show");
-    }
-
-    if (indexSheetCancelBtn) indexSheetCancelBtn.addEventListener("click", closeIndexSheet);
-    if (indexSheetBackdrop) {
-        indexSheetBackdrop.addEventListener("click", (e) => {
-            if (e.target === indexSheetBackdrop) closeIndexSheet();
-        });
-    }
-
     async function performShare(target) {
         try {
             // IndexedDB에서 오디오 데이터 가져오기
@@ -870,7 +816,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 formData.append("audio", audioBlob, "audio.mp3");
                 formData.append("title", target.title);
                 formData.append("sentences", JSON.stringify(freshAudio.sentences || []));
-                formData.append("headings", JSON.stringify(freshAudio.headings || []));
 
                 const response = await fetch("/api/share", { method: "POST", body: formData });
                 if (!response.ok) throw new Error("서버 업로드 실패");
@@ -980,10 +925,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 delete objectUrls[id];
             }
             renderLibrary();
-            showToast("오디오북이 제거되었습니다.", "info");
+            showToast("제거되었습니다.", "info");
         } catch (e) {
             console.error(e);
-            showToast("오디오북 제거 실패", "error");
+            showToast("제거 실패", "error");
         }
     }
 
@@ -1056,63 +1001,21 @@ document.addEventListener("DOMContentLoaded", () => {
         readerContent.innerHTML = "";
         lastActiveSpan = null;
         
-        // 문장 및 헤더 렌더링 — 서버에서 추출한 heading 메타데이터 사용
-        const serverHeadings = audio.headings || [];
-
-        function cleanDisplayText(text) {
-            // 마크다운 기호만 제거, 괄호 내용은 보존 (표시용)
-            let t = text.replace(/[*_~`\\]/g, '');
-            t = t.replace(/^#+\s*/, '');
-            return t.trim();
-        }
-
+        // 문장 렌더링
         audio.sentences.forEach((s, index) => {
-            if (s.type === "heading" && s.display) {
-                const level = s.level || 2;
-                const titleText = s.display;
-
-                const headingEl = document.createElement("h" + level);
-                headingEl.className = "reader-heading h" + level;
-
-                const span = document.createElement("span");
-                span.className = "reader-sentence";
-                span.id = "sent-" + index;
-                span.textContent = titleText;
-
-                span.addEventListener("click", () => {
-                    readerAudio.currentTime = s.start / 1000;
-                    readerAudio.play().catch(function(err) { console.log("Play failed:", err); });
-                    showPauseIcon();
-                });
-
-                headingEl.appendChild(span);
-                readerContent.appendChild(headingEl);
-            } else {
-                const span = document.createElement("span");
-                span.className = "reader-sentence";
-                span.id = "sent-" + index;
-                span.textContent = cleanDisplayText(s.text) + " ";
-
-                span.addEventListener("click", () => {
-                    readerAudio.currentTime = s.start / 1000;
-                    readerAudio.play().catch(function(err) { console.log("Play failed:", err); });
-                    showPauseIcon();
-                });
-
-                readerContent.appendChild(span);
-            }
+            const span = document.createElement("span");
+            span.className = "reader-sentence";
+            span.id = `sent-${index}`;
+            span.textContent = s.text + " ";
+            
+            span.addEventListener("click", () => {
+                readerAudio.currentTime = s.start / 1000;
+                readerAudio.play().catch(err => console.log("Play failed:", err));
+                showPauseIcon();
+            });
+            
+            readerContent.appendChild(span);
         });
-
-        // 목차(Index) 버튼 표시 제어 — 서버 제공 headings 배열 사용
-        const readerIndexBtn = document.getElementById("readerIndexBtn");
-        if (readerIndexBtn) {
-            if (serverHeadings.length > 0) {
-                readerIndexBtn.style.display = "flex";
-                readerIndexBtn.onclick = () => openIndexSheet(serverHeadings);
-            } else {
-                readerIndexBtn.style.display = "none";
-            }
-        }
         
         readerOverlay.classList.add("show");
         resetReaderUiTimeout();
@@ -1143,11 +1046,13 @@ document.addEventListener("DOMContentLoaded", () => {
         readerAudio.onloadedmetadata = initAudioState;
         readerAudio.src = localUrl;
         readerAudio.load();
+        readerAudio.play().catch(() => {});
 
-        // Play/Pause 토글 함수 (이중 실행 방지: click 이벤트만 사용)
+        // Play/Pause 토글 함수 (iOS 이중실행 방지)
         let lastToggleTime = 0;
         function togglePlayPause(e) {
             if (e) { e.preventDefault(); e.stopPropagation(); }
+            // 300ms 내 이중 호출 방지
             const now = Date.now();
             if (now - lastToggleTime < 300) return;
             lastToggleTime = now;
@@ -1159,7 +1064,9 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
         
+        // click + touchend 모두 바인드 (이중실행은 위의 debounce로 방지)
         readerPlayPauseBtn.onclick = togglePlayPause;
+        readerPlayPauseBtn.addEventListener("touchend", togglePlayPause, { passive: false });
         
         readerAudio.onplay = function() { showPauseIcon(); };
         readerAudio.onpause = function() { showPlayIcon(); };
@@ -1292,7 +1199,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // --------------------------------------------------
     // 9. Shared Link Auto-Detection
     // --------------------------------------------------
-    function openSharedReaderMode(title, sentences, audioUrl, shareId = null, headings = []) {
+    function openSharedReaderMode(title, sentences, audioUrl, shareId = null) {
         // 공유 링크로 접속한 수신자를 위한 Reader 모드
         currentReadingAudioId = null;
         currentAudioObject = null;
@@ -1317,7 +1224,7 @@ document.addEventListener("DOMContentLoaded", () => {
             
             newBtn.addEventListener("click", async () => {
                 try {
-                    showToast("오디오북을 내 서재에 저장하는 중...", "info");
+                    showToast("저장 중...", "info");
                     
                     const response = await fetch(audioUrl);
                     if (!response.ok) throw new Error("Audio fetch failed");
@@ -1329,78 +1236,35 @@ document.addEventListener("DOMContentLoaded", () => {
                         title,
                         audioData: audioBlob,
                         sentences,
-                        headings,
                         shareId: shareId, // 다운로드한 파일도 shareId를 기억
                         shareExpiry: Date.now() + (23 * 60 * 60 * 1000) // 만료시간 넉넉히 23시간으로 산정
                     });
                     
                     renderLibrary();
                     newBtn.style.display = "none";
-                    showToast("내 오디오북에 저장되었습니다!", "success");
+                    showToast("저장되었습니다!", "success");
                 } catch (err) {
                     console.error("Save shared audiobook error:", err);
-                    showToast("저장에 실패했습니다.", "error");
+                    showToast("저장 실패했습니다.", "error");
                 }
             });
         }
 
-        // 문장 및 헤더 렌더링 — 서버에서 추출한 heading 메타데이터 사용
-        const serverHeadings = headings || [];
-
-        function cleanDisplayText(text) {
-            // 마크다운 기호만 제거, 괄호 내용은 보존 (표시용)
-            let t = text.replace(/[*_~`\\]/g, '');
-            t = t.replace(/^#+\s*/, '');
-            return t.trim();
-        }
-
+        // 문장 렌더링
         sentences.forEach((s, index) => {
-            if (s.type === "heading" && s.display) {
-                const level = s.level || 2;
-                const titleText = s.display;
+            const span = document.createElement("span");
+            span.className = "reader-sentence";
+            span.id = `sent-${index}`;
+            span.textContent = s.text + " ";
 
-                const headingEl = document.createElement("h" + level);
-                headingEl.className = "reader-heading h" + level;
+            span.addEventListener("click", () => {
+                readerAudio.currentTime = s.start / 1000;
+                readerAudio.play().catch(function(err) { console.log("Play failed:", err); });
+                showPauseIcon();
+            });
 
-                const span = document.createElement("span");
-                span.className = "reader-sentence";
-                span.id = "sent-" + index;
-                span.textContent = titleText;
-
-                span.addEventListener("click", () => {
-                    readerAudio.currentTime = s.start / 1000;
-                    readerAudio.play().catch(function(err) { console.log("Play failed:", err); });
-                    showPauseIcon();
-                });
-
-                headingEl.appendChild(span);
-                readerContent.appendChild(headingEl);
-            } else {
-                const span = document.createElement("span");
-                span.className = "reader-sentence";
-                span.id = "sent-" + index;
-                span.textContent = cleanDisplayText(s.text) + " ";
-
-                span.addEventListener("click", () => {
-                    readerAudio.currentTime = s.start / 1000;
-                    readerAudio.play().catch(function(err) { console.log("Play failed:", err); });
-                    showPauseIcon();
-                });
-
-                readerContent.appendChild(span);
-            }
+            readerContent.appendChild(span);
         });
-
-        // 목차(Index) 버튼 표시 제어 — 서버 제공 headings 배열 사용
-        const readerIndexBtn = document.getElementById("readerIndexBtn");
-        if (readerIndexBtn) {
-            if (serverHeadings.length > 0) {
-                readerIndexBtn.style.display = "flex";
-                readerIndexBtn.onclick = () => openIndexSheet(serverHeadings);
-            } else {
-                readerIndexBtn.style.display = "none";
-            }
-        }
 
         readerOverlay.classList.add("show");
         resetReaderUiTimeout();
@@ -1438,6 +1302,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         readerPlayPauseBtn.onclick = togglePlayPause;
+        readerPlayPauseBtn.addEventListener("touchend", togglePlayPause, { passive: false });
 
         readerAudio.onplay = function() { showPauseIcon(); };
         readerAudio.onpause = function() { showPlayIcon(); };
@@ -1520,7 +1385,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const data = await response.json();
             // 약간의 딜레이 후 Reader 열기 (UI 초기화 완료 대기)
             setTimeout(() => {
-                openSharedReaderMode(data.title, data.sentences, data.audio_url, shareId, data.headings || []);
+                openSharedReaderMode(data.title, data.sentences, data.audio_url, shareId);
             }, 500);
         } catch (err) {
             console.error("Failed to load shared audiobook:", err);
