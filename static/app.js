@@ -537,16 +537,42 @@ document.addEventListener("DOMContentLoaded", () => {
         const rate = getFormattedSpeed(parseInt(speedSlider.value));
         const pitch = getFormattedPitch(parseInt(pitchSlider.value));
 
-        loadingOverlay.classList.add("show");
-        progressBarFill.style.width = "0%";
-        loadingStatus.textContent = "오디오북 생성 중...";
+        // 파일 이름 미리 생성
+        const originalName = uploadedFile ? uploadedFile.name : "unknown_doc";
+        const audioFilename = originalName.substring(0, originalName.lastIndexOf('.')) + ".mp3";
+
+        // 라이브러리 섹션에 인라인 진행 아이템 추가
+        libraryEmpty.style.display = "none";
+        const progressItem = document.createElement("div");
+        progressItem.className = "audio-item audio-item-generating";
+        progressItem.innerHTML = `
+            <div class="audio-title-group">
+                <div class="generating-spinner"></div>
+                <div class="generating-info">
+                    <span class="audio-title">${audioFilename}</span>
+                    <div class="generating-progress-track">
+                        <div class="generating-progress-fill" style="width: 0%"></div>
+                    </div>
+                    <span class="generating-status">오디오북 생성 중...</span>
+                </div>
+            </div>
+        `;
+        audioList.prepend(progressItem);
+
+        // 라이브러리 섹션으로 스크롤
+        setTimeout(() => {
+            document.querySelector(".library-section").scrollIntoView({ behavior: "smooth" });
+        }, 200);
+
+        const inlineFill = progressItem.querySelector(".generating-progress-fill");
+        const inlineStatus = progressItem.querySelector(".generating-status");
 
         let simulatedProgress = 0;
         const progressInterval = setInterval(() => {
             if (simulatedProgress < 90) {
                 simulatedProgress += Math.random() * 6;
                 if (simulatedProgress > 90) simulatedProgress = 90;
-                progressBarFill.style.width = `${simulatedProgress}%`;
+                inlineFill.style.width = `${simulatedProgress}%`;
             }
         }, 500);
 
@@ -608,18 +634,16 @@ document.addEventListener("DOMContentLoaded", () => {
             const byteArray = new Uint8Array(byteNumbers);
             const audioBlob = new Blob([byteArray], { type: "audio/mpeg" });
             
-            progressBarFill.style.width = "100%";
-            loadingStatus.textContent = "생성 및 로컬 DB 저장 중...";
+            inlineFill.style.width = "100%";
+            inlineStatus.textContent = "로컬 DB에 저장 중...";
             
             // Build Audiobook entry
             const audioId = crypto.randomUUID();
-            const originalName = uploadedFile ? uploadedFile.name : "unknown_doc";
-            const audioFilename = originalName.substring(0, originalName.lastIndexOf('.')) + ".mp3";
             
             // Parse char count from badge text (e.g. "1,234 자" -> 1234)
             const rawChars = charCountBadge.textContent.replace(/[^0-9]/g, "");
             const charCount = parseInt(rawChars) || 0;
-            const audioArrayBuffer = await audioBlob.arrayBuffer(); // ✅ 추가
+            const audioArrayBuffer = await audioBlob.arrayBuffer();
 
             const entry = {
                 id: audioId,
@@ -636,26 +660,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
             await saveAudiobookToDB(entry);
 
-            setTimeout(() => {
-                loadingOverlay.classList.remove("show");
-                showToast("오디오북이 브라우저 로컬 DB에 안전하게 소장되었습니다!", "success");
-                renderLibrary();
-                
-                if (window.innerWidth <= 768) {
-                    setTimeout(() => {
-                        document.querySelector(".library-section").scrollIntoView({ behavior: "smooth" });
-                    }, 300);
-                } else {
-                    setTimeout(() => {
-                        document.querySelector(".library-section").scrollIntoView({ behavior: "smooth" });
-                    }, 300);
-                }
-            }, 800);
+            // 진행 아이템 제거 후 라이브러리 다시 렌더링
+            progressItem.remove();
+            showToast("오디오북이 브라우저 로컬 DB에 안전하게 소장되었습니다!", "success");
+            renderLibrary();
 
         } catch (error) {
             clearInterval(progressInterval);
             console.error(error);
-            loadingOverlay.classList.remove("show");
+            progressItem.remove();
+            // 리스트가 비었으면 empty 상태 복원
+            if (audioList.children.length === 0) {
+                libraryEmpty.style.display = "flex";
+            }
             showToast(error.message, "error");
         }
     });
