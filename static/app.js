@@ -191,7 +191,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const latestId = await fetchBuildId();
         if (latestId && latestId !== cachedBuildId) {
             // 새 배포 감지 → 토스트 알림 후 3초 뒤 리로드
-            showToast("새 버전이 배포되었습니다. 곧 업데이트됩니다...", "info");
+            showToast("리소스 업데이트 중", "info");
             setTimeout(() => {
                 // Service Worker 캐시도 함께 비우고 리로드
                 if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
