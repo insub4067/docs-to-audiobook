@@ -734,6 +734,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // --- ActionSheet ---
     const actionSheetBackdrop = document.getElementById("actionSheetBackdrop");
     const actionShareBtn = document.getElementById("actionShareBtn");
+    const actionDownloadBtn = document.getElementById("actionDownloadBtn");
     const actionDeleteBtn = document.getElementById("actionDeleteBtn");
     const actionCancelBtn = document.getElementById("actionCancelBtn");
     let actionSheetTarget = null; // 현재 선택된 오디오북 객체
@@ -835,6 +836,48 @@ document.addEventListener("DOMContentLoaded", () => {
         const target = actionSheetTarget;
         closeActionSheet();
         await performShare(target);
+    });
+
+    actionDownloadBtn.addEventListener("click", async () => {
+        if (!actionSheetTarget) return;
+        const target = actionSheetTarget;
+        closeActionSheet();
+
+        try {
+            const freshAudio = await getAudiobookFromDB(target.id);
+            if (!freshAudio || !freshAudio.audioData) {
+                showToast("오디오 데이터를 찾을 수 없습니다.", "error");
+                return;
+            }
+
+            const audioBlob = freshAudio.audioData instanceof Blob
+                ? freshAudio.audioData
+                : new Blob([freshAudio.audioData], { type: "audio/mpeg" });
+
+            const url = URL.createObjectURL(audioBlob);
+            const a = document.createElement("a");
+            a.style.display = "none";
+            a.href = url;
+            // 확장자가 없는 경우 .mp3 추가
+            let filename = target.title || "audiobook";
+            if (!filename.toLowerCase().endsWith(".mp3")) {
+                filename += ".mp3";
+            }
+            a.download = filename;
+            
+            document.body.appendChild(a);
+            a.click();
+            
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 100);
+            
+            showToast("다운로드가 시작되었습니다.", "success");
+        } catch (err) {
+            console.error("Download error:", err);
+            showToast("다운로드에 실패했습니다.", "error");
+        }
     });
 
     if (readerShareBtn) {
