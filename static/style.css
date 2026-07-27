@@ -765,6 +765,18 @@ input[type="range"]::-webkit-slider-thumb:active {
     opacity: 1;
 }
 
+.reader-overlay.show .toast,
+.toast.toast-top {
+    bottom: auto;
+    top: max(24px, env(safe-area-inset-top));
+    transform: translate(-50%, -100px);
+}
+
+.reader-overlay.show .toast.show,
+.toast.toast-top.show {
+    transform: translate(-50%, 0);
+}
+
 .toast-icon {
     width: 18px;
     height: 18px;

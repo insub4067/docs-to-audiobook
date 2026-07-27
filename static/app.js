@@ -929,6 +929,11 @@ document.addEventListener("DOMContentLoaded", () => {
         toast.className = "toast";
         toast.classList.add(`toast-${type}`);
         
+        // Reader 모드가 열려있으면 상단에서 토스트 표시
+        if (readerOverlay.classList.contains("show")) {
+            toast.classList.add("toast-top");
+        }
+        
         let iconName = "info";
         if (type === "success") iconName = "check-circle";
         if (type === "error") iconName = "alert-triangle";
