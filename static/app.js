@@ -925,7 +925,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 delete objectUrls[id];
             }
             renderLibrary();
-            showToast("오디오북이 브라우저 로컬 DB에서 제거되었습니다.", "info");
+            showToast("오디오북이 제거되었습니다.", "info");
         } catch (e) {
             console.error(e);
             showToast("오디오북 제거 실패", "error");
@@ -1046,13 +1046,11 @@ document.addEventListener("DOMContentLoaded", () => {
         readerAudio.onloadedmetadata = initAudioState;
         readerAudio.src = localUrl;
         readerAudio.load();
-        readerAudio.play().catch(() => {});
 
-        // Play/Pause 토글 함수 (iOS 이중실행 방지)
+        // Play/Pause 토글 함수 (이중 실행 방지: click 이벤트만 사용)
         let lastToggleTime = 0;
         function togglePlayPause(e) {
             if (e) { e.preventDefault(); e.stopPropagation(); }
-            // 300ms 내 이중 호출 방지
             const now = Date.now();
             if (now - lastToggleTime < 300) return;
             lastToggleTime = now;
@@ -1064,9 +1062,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
         
-        // click + touchend 모두 바인드 (이중실행은 위의 debounce로 방지)
         readerPlayPauseBtn.onclick = togglePlayPause;
-        readerPlayPauseBtn.addEventListener("touchend", togglePlayPause, { passive: false });
         
         readerAudio.onplay = function() { showPauseIcon(); };
         readerAudio.onpause = function() { showPlayIcon(); };
@@ -1302,7 +1298,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         readerPlayPauseBtn.onclick = togglePlayPause;
-        readerPlayPauseBtn.addEventListener("touchend", togglePlayPause, { passive: false });
 
         readerAudio.onplay = function() { showPauseIcon(); };
         readerAudio.onpause = function() { showPlayIcon(); };
