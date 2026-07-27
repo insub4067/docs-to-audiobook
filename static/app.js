@@ -691,17 +691,23 @@ document.addEventListener("DOMContentLoaded", () => {
     // 5. Audiobook Library Management (IndexedDB Powered)
     // ----------------------------------------------------
     async function renderLibrary() {
+        // 생성 중인 진행 아이템 백업
+        const generatingItems = Array.from(audioList.querySelectorAll(".audio-item-generating"));
+
         audioList.innerHTML = "";
 
         try {
             const list = await getAllAudiobooksFromDB();
 
-            if (list.length === 0) {
+            if (list.length === 0 && generatingItems.length === 0) {
                 libraryEmpty.style.display = "flex";
                 return;
             }
 
             libraryEmpty.style.display = "none";
+
+            // 생성 중인 진행 아이템이 있다면 최상단에 재삽입
+            generatingItems.forEach(item => audioList.appendChild(item));
 
             list.forEach(audio => {
                 const item = document.createElement("div");
