@@ -1057,6 +1057,12 @@ document.addEventListener("DOMContentLoaded", () => {
         const indexHeadings = [];
         let hasMarkdownHeadings = false;
 
+        function cleanDisplayText(text) {
+            let t = text.replace(/[*_~`\\]/g, '');
+            t = t.replace(/^#+\s*/, '');
+            return t;
+        }
+
         audio.sentences.forEach((s, index) => {
             const rawText = s.text.trim();
             const headingMatch = rawText.match(/^(#{1,3})\s+(.+)$/);
@@ -1064,7 +1070,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (headingMatch) {
                 hasMarkdownHeadings = true;
                 const level = headingMatch[1].length; // 1: h1, 2: h2, 3: h3
-                const titleText = headingMatch[2];
+                const titleText = cleanDisplayText(headingMatch[2]);
 
                 const headingEl = document.createElement(`h${level}`);
                 headingEl.className = `reader-heading h${level}`;
@@ -1093,7 +1099,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const span = document.createElement("span");
                 span.className = "reader-sentence";
                 span.id = `sent-${index}`;
-                span.textContent = s.text + " ";
+                span.textContent = cleanDisplayText(s.text) + " ";
 
                 span.addEventListener("click", () => {
                     readerAudio.currentTime = s.start / 1000;
@@ -1349,6 +1355,12 @@ document.addEventListener("DOMContentLoaded", () => {
         const indexHeadings = [];
         let hasMarkdownHeadings = false;
 
+        function cleanDisplayText(text) {
+            let t = text.replace(/[*_~`\\]/g, '');
+            t = t.replace(/^#+\s*/, '');
+            return t;
+        }
+
         sentences.forEach((s, index) => {
             const rawText = s.text.trim();
             const headingMatch = rawText.match(/^(#{1,3})\s+(.+)$/);
@@ -1356,7 +1368,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (headingMatch) {
                 hasMarkdownHeadings = true;
                 const level = headingMatch[1].length;
-                const titleText = headingMatch[2];
+                const titleText = cleanDisplayText(headingMatch[2]);
 
                 const headingEl = document.createElement(`h${level}`);
                 headingEl.className = `reader-heading h${level}`;
@@ -1385,7 +1397,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const span = document.createElement("span");
                 span.className = "reader-sentence";
                 span.id = `sent-${index}`;
-                span.textContent = s.text + " ";
+                span.textContent = cleanDisplayText(s.text) + " ";
 
                 span.addEventListener("click", () => {
                     readerAudio.currentTime = s.start / 1000;

@@ -258,8 +258,27 @@ async def get_voices():
             {"name": "Microsoft Server Speech Text to Speech Voice (ko-KR, JiMinNeural)", "short_name": "ko-KR-JiMinNeural", "gender": "Female", "locale": "ko-KR", "friendly_name": "지민 (밝고 상냥한 동화/안내 - 여성)", "description": "밝고 친근하며, 동화책 낭독이나 상냥한 안내 멘트에 잘 어울립니다."}
         ]
 
+def clean_tts_text(text: str) -> str:
+    # 1. 마크다운 특수문자 제거 (#, *, _, ~, `, \, > 등)
+    t = re.sub(r'#+\s*', '', text)
+    t = re.sub(r'[*_~`\\]', '', t)
+    t = re.sub(r'>\s*', '', t)
+    
+    # 2. 한글 뒤 괄호 안의 영문(원문 표기) 제거: 예) 스캔들(A Scandal in Bohemia) -> 스캔들
+    # 한글 문자나 숫자 바로 뒤에 오는 (영어/공백/문장부호) 괄호 패턴 제거
+    t = re.sub(r'([가-힣0-9])\s*\([A-Za-z0-9\s.,\-\'\"]+\)', r'\1', t)
+    
+    # 3. 연속 공백 정리
+    t = re.sub(r'\s+', ' ', t).strip()
+    return t
+
 async def synthesize_chunk(chunk_index: int, text_chunk: str, voice: str, rate: str, pitch: str):
-    communicate = edge_tts.Communicate(text_chunk, voice=voice, rate=rate, pitch=pitch)
+    # TTS 발음용 깨끗한 텍스트
+    tts_text = clean_tts_text(text_chunk)
+    if not tts_text:
+        tts_text = text_chunk
+
+    communicate = edge_tts.Communicate(tts_text, voice=voice, rate=rate, pitch=pitch)
     audio_data = b""
     sentences = []
     async for msg in communicate.stream():
