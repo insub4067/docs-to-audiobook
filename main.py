@@ -145,10 +145,6 @@ def extract_text(file_path: str, filename: str) -> str:
             try:
                 with open(file_path, "r", encoding=encoding) as f:
                     content = f.read()
-                    # Strip markdown syntax headers/markup slightly if md
-                    if ext in [".md", ".markdown"]:
-                        content = re.sub(r'#+\s*', '', content)
-                        content = re.sub(r'[*_~`]', '', content)
                     return content
             except UnicodeDecodeError:
                 continue
@@ -262,36 +258,85 @@ async def get_voices():
             {"name": "Microsoft Server Speech Text to Speech Voice (ko-KR, JiMinNeural)", "short_name": "ko-KR-JiMinNeural", "gender": "Female", "locale": "ko-KR", "friendly_name": "지민 (밝고 상냥한 동화/안내 - 여성)", "description": "밝고 친근하며, 동화책 낭독이나 상냥한 안내 멘트에 잘 어울립니다."}
         ]
 
+async def synthesize_chunk(chunk_index: int, text_chunk: str, voice: str, rate: str, pitch: str):
+    communicate = edge_tts.Communicate(text_chunk, voice=voice, rate=rate, pitch=pitch)
+    audio_data = b""
+    sentences = []
+    async for msg in communicate.stream():
+        if msg.get("type") == "audio":
+            audio_data += msg.get("data")
+        elif msg.get("type") == "SentenceBoundary":
+            offset_ms = msg.get("offset", 0) // 10000
+            duration_ms = msg.get("duration", 0) // 10000
+            sentences.append({
+                "text": msg.get("text", ""),
+                "start": offset_ms,
+                "end": offset_ms + duration_ms
+            })
+    return chunk_index, audio_data, sentences
+
 async def process_synthesis_task(job_id: str, text: str, voice: str, rate: str, pitch: str):
     try:
-        communicate = edge_tts.Communicate(text, voice=voice, rate=rate, pitch=pitch)
-        audio_data = b""
-        all_sentences = []
+        # Split text into chunks (~800 chars per chunk for optimal parallel TTS generation)
+        paragraphs = text.split(". ")
+        chunks = []
+        current_chunk = ""
         
-        async for msg in communicate.stream():
-            if msg.get("type") == "audio":
-                audio_data += msg.get("data")
-            elif msg.get("type") == "SentenceBoundary":
-                offset_ms = msg.get("offset", 0) // 10000
-                duration_ms = msg.get("duration", 0) // 10000
-                all_sentences.append({
-                    "text": msg.get("text", ""),
-                    "start": offset_ms,
-                    "end": offset_ms + duration_ms
+        for p in paragraphs:
+            if len(current_chunk) + len(p) < 800:
+                current_chunk += (p + ". ")
+            else:
+                if current_chunk.strip():
+                    chunks.append(current_chunk.strip())
+                current_chunk = p + ". "
+        if current_chunk.strip():
+            chunks.append(current_chunk.strip())
+
+        if not chunks:
+            chunks = [text]
+
+        # Process all chunks concurrently using asyncio.gather
+        tasks = [
+            synthesize_chunk(i, chunk, voice, rate, pitch)
+            for i, chunk in enumerate(chunks)
+        ]
+        results = await asyncio.gather(*tasks)
+        
+        # Sort by chunk index to maintain exact order
+        results.sort(key=lambda x: x[0])
+
+        combined_audio = b""
+        combined_sentences = []
+        current_time_offset = 0
+
+        for idx, audio_data, sentences in results:
+            combined_audio += audio_data
+            
+            chunk_duration = 0
+            for s in sentences:
+                combined_sentences.append({
+                    "text": s["text"],
+                    "start": s["start"] + current_time_offset,
+                    "end": s["end"] + current_time_offset
                 })
-                
-        if not audio_data:
+                if s["end"] > chunk_duration:
+                    chunk_duration = s["end"]
+            
+            # Offset next chunk sentences by duration of current chunk
+            current_time_offset += chunk_duration
+
+        if not combined_audio:
             jobs[job_id]["status"] = "error"
             jobs[job_id]["error"] = "음성 합성 결과가 비어 있습니다."
             return
-            
+
         import base64
-        audio_base64 = base64.b64encode(audio_data).decode("utf-8")
-        
+        audio_base64 = base64.b64encode(combined_audio).decode("utf-8")
+
         jobs[job_id]["audio"] = audio_base64
-        jobs[job_id]["sentences"] = all_sentences
+        jobs[job_id]["sentences"] = combined_sentences
         jobs[job_id]["status"] = "completed"
-        
+
     except Exception as e:
         jobs[job_id]["status"] = "error"
         jobs[job_id]["error"] = str(e)

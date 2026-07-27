@@ -176,6 +176,9 @@
                 <header class="reader-header">
                     <h3 id="readerBookTitle" class="reader-book-title">책 제목</h3>
                     <div class="reader-header-actions" style="display: flex; gap: 8px;">
+                        <button class="btn-reader-close" id="readerIndexBtn" title="목차 보기 (Index)" type="button" style="display: none;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+                        </button>
                         <button class="btn-reader-close" id="readerShareBtn" title="공유하기" type="button" style="display: none;">
                             <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
                         </button>
@@ -239,6 +242,20 @@
                 삭제
             </button>
             <button class="action-sheet-btn action-sheet-btn-cancel" id="actionCancelBtn">취소</button>
+        </div>
+    </div>
+
+    <!-- Index ActionSheet Overlay -->
+    <div class="action-sheet-backdrop" id="indexSheetBackdrop">
+        <div class="action-sheet index-sheet" id="indexSheet">
+            <div class="action-sheet-handle"></div>
+            <div class="index-sheet-header">
+                <h3>목차 (Index)</h3>
+            </div>
+            <div class="index-sheet-list" id="indexSheetList">
+                <!-- Dynamically populated headings -->
+            </div>
+            <button class="action-sheet-btn action-sheet-btn-cancel" id="indexSheetCancelBtn">닫기</button>
         </div>
     </div>
 

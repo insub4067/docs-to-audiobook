@@ -987,7 +987,77 @@ input[type="range"]::-webkit-slider-thumb:active {
     padding: 3px 5px;
     border-radius: 5px;
     transition: background-color 0.25s ease;
-    /* 전체 텍스트 선명하게 - opacity 제거 */
+}
+
+/* Dynamic Markdown Headings in Reader */
+.reader-heading {
+    display: block;
+    margin-top: 1.8rem;
+    margin-bottom: 0.8rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    letter-spacing: -0.01em;
+    line-height: 1.3;
+}
+.reader-heading.h1 {
+    font-size: 1.7rem;
+    border-bottom: 2px solid rgba(198, 154, 88, 0.3);
+    padding-bottom: 6px;
+}
+.reader-heading.h2 {
+    font-size: 1.45rem;
+    border-bottom: 1px solid rgba(198, 154, 88, 0.2);
+    padding-bottom: 4px;
+}
+.reader-heading.h3 {
+    font-size: 1.25rem;
+}
+
+/* Index ActionSheet Styling */
+.index-sheet {
+    max-height: 70vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.index-sheet-header {
+    padding: 12px 16px 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.index-sheet-header h3 {
+    font-family: var(--font-serif);
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    margin: 0;
+}
+
+.index-sheet-list {
+    overflow-y: auto;
+    max-height: 50vh;
+    padding: 8px 0;
+}
+
+.index-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 20px;
+    font-family: var(--font-serif);
+    font-size: 0.98rem;
+    color: var(--text-color);
+    border-bottom: 1px solid rgba(120, 90, 60, 0.06);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.index-item:hover {
+    background-color: rgba(198, 154, 88, 0.08);
+}
+
+.index-item.h1 { font-weight: 700; padding-left: 20px; color: var(--primary-color); }
+.index-item.h2 { font-weight: 600; padding-left: 36px; }
+.index-item.h3 { font-weight: 400; padding-left: 52px; color: var(--text-muted); }
 }
 
 .reader-sentence:hover {

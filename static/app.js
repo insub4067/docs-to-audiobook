@@ -777,6 +777,58 @@ document.addEventListener("DOMContentLoaded", () => {
         if (e.target === actionSheetBackdrop) closeActionSheet();
     });
 
+    // ----------------------------------------------------
+    // Index ActionSheet (목차 액션시트)
+    // ----------------------------------------------------
+    const indexSheetBackdrop = document.getElementById("indexSheetBackdrop");
+    const indexSheetList = document.getElementById("indexSheetList");
+    const indexSheetCancelBtn = document.getElementById("indexSheetCancelBtn");
+
+    function openIndexSheet(headings) {
+        if (!indexSheetList) return;
+        indexSheetList.innerHTML = "";
+
+        headings.forEach(item => {
+            const div = document.createElement("div");
+            div.className = `index-item h${item.level}`;
+            
+            // h1, h2, h3 시각적 구분 접두사
+            const prefix = item.level === 1 ? "• " : (item.level === 2 ? "└ " : "  └ ");
+            div.textContent = prefix + item.text;
+
+            div.addEventListener("click", () => {
+                closeIndexSheet();
+                // 해당 문장 위치로 오디오 이동 및 스크롤
+                readerAudio.currentTime = item.startMs / 1000;
+                readerAudio.play().catch(function(err) { console.log("Play failed:", err); });
+                showPauseIcon();
+
+                const targetSpan = document.getElementById(`sent-${item.sentIndex}`);
+                if (targetSpan) {
+                    const spanTop = targetSpan.offsetTop;
+                    const containerHeight = readerContent.clientHeight;
+                    const targetScroll = spanTop - containerHeight / 2 + targetSpan.clientHeight / 2;
+                    readerContent.scrollTo({ top: targetScroll, behavior: "smooth" });
+                }
+            });
+
+            indexSheetList.appendChild(div);
+        });
+
+        indexSheetBackdrop.classList.add("show");
+    }
+
+    function closeIndexSheet() {
+        if (indexSheetBackdrop) indexSheetBackdrop.classList.remove("show");
+    }
+
+    if (indexSheetCancelBtn) indexSheetCancelBtn.addEventListener("click", closeIndexSheet);
+    if (indexSheetBackdrop) {
+        indexSheetBackdrop.addEventListener("click", (e) => {
+            if (e.target === indexSheetBackdrop) closeIndexSheet();
+        });
+    }
+
     async function performShare(target) {
         try {
             // IndexedDB에서 오디오 데이터 가져오기
@@ -1001,21 +1053,68 @@ document.addEventListener("DOMContentLoaded", () => {
         readerContent.innerHTML = "";
         lastActiveSpan = null;
         
-        // 문장 렌더링
+        // 문장 및 헤더 렌더링 & Index(목차) 데이터 구성
+        const indexHeadings = [];
+        let hasMarkdownHeadings = false;
+
         audio.sentences.forEach((s, index) => {
-            const span = document.createElement("span");
-            span.className = "reader-sentence";
-            span.id = `sent-${index}`;
-            span.textContent = s.text + " ";
-            
-            span.addEventListener("click", () => {
-                readerAudio.currentTime = s.start / 1000;
-                readerAudio.play().catch(err => console.log("Play failed:", err));
-                showPauseIcon();
-            });
-            
-            readerContent.appendChild(span);
+            const rawText = s.text.trim();
+            const headingMatch = rawText.match(/^(#{1,3})\s+(.+)$/);
+
+            if (headingMatch) {
+                hasMarkdownHeadings = true;
+                const level = headingMatch[1].length; // 1: h1, 2: h2, 3: h3
+                const titleText = headingMatch[2];
+
+                const headingEl = document.createElement(`h${level}`);
+                headingEl.className = `reader-heading h${level}`;
+
+                const span = document.createElement("span");
+                span.className = "reader-sentence";
+                span.id = `sent-${index}`;
+                span.textContent = titleText;
+
+                span.addEventListener("click", () => {
+                    readerAudio.currentTime = s.start / 1000;
+                    readerAudio.play().catch(function(err) { console.log("Play failed:", err); });
+                    showPauseIcon();
+                });
+
+                headingEl.appendChild(span);
+                readerContent.appendChild(headingEl);
+
+                indexHeadings.push({
+                    text: titleText,
+                    level: level,
+                    sentIndex: index,
+                    startMs: s.start
+                });
+            } else {
+                const span = document.createElement("span");
+                span.className = "reader-sentence";
+                span.id = `sent-${index}`;
+                span.textContent = s.text + " ";
+
+                span.addEventListener("click", () => {
+                    readerAudio.currentTime = s.start / 1000;
+                    readerAudio.play().catch(function(err) { console.log("Play failed:", err); });
+                    showPauseIcon();
+                });
+
+                readerContent.appendChild(span);
+            }
         });
+
+        // 목차(Index) 버튼 표시 제어
+        const readerIndexBtn = document.getElementById("readerIndexBtn");
+        if (readerIndexBtn) {
+            if (hasMarkdownHeadings && indexHeadings.length > 0) {
+                readerIndexBtn.style.display = "flex";
+                readerIndexBtn.onclick = () => openIndexSheet(indexHeadings);
+            } else {
+                readerIndexBtn.style.display = "none";
+            }
+        }
         
         readerOverlay.classList.add("show");
         resetReaderUiTimeout();
@@ -1246,21 +1345,68 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         }
 
-        // 문장 렌더링
+        // 문장 및 헤더 렌더링 & Index(목차) 데이터 구성
+        const indexHeadings = [];
+        let hasMarkdownHeadings = false;
+
         sentences.forEach((s, index) => {
-            const span = document.createElement("span");
-            span.className = "reader-sentence";
-            span.id = `sent-${index}`;
-            span.textContent = s.text + " ";
+            const rawText = s.text.trim();
+            const headingMatch = rawText.match(/^(#{1,3})\s+(.+)$/);
 
-            span.addEventListener("click", () => {
-                readerAudio.currentTime = s.start / 1000;
-                readerAudio.play().catch(function(err) { console.log("Play failed:", err); });
-                showPauseIcon();
-            });
+            if (headingMatch) {
+                hasMarkdownHeadings = true;
+                const level = headingMatch[1].length;
+                const titleText = headingMatch[2];
 
-            readerContent.appendChild(span);
+                const headingEl = document.createElement(`h${level}`);
+                headingEl.className = `reader-heading h${level}`;
+
+                const span = document.createElement("span");
+                span.className = "reader-sentence";
+                span.id = `sent-${index}`;
+                span.textContent = titleText;
+
+                span.addEventListener("click", () => {
+                    readerAudio.currentTime = s.start / 1000;
+                    readerAudio.play().catch(function(err) { console.log("Play failed:", err); });
+                    showPauseIcon();
+                });
+
+                headingEl.appendChild(span);
+                readerContent.appendChild(headingEl);
+
+                indexHeadings.push({
+                    text: titleText,
+                    level: level,
+                    sentIndex: index,
+                    startMs: s.start
+                });
+            } else {
+                const span = document.createElement("span");
+                span.className = "reader-sentence";
+                span.id = `sent-${index}`;
+                span.textContent = s.text + " ";
+
+                span.addEventListener("click", () => {
+                    readerAudio.currentTime = s.start / 1000;
+                    readerAudio.play().catch(function(err) { console.log("Play failed:", err); });
+                    showPauseIcon();
+                });
+
+                readerContent.appendChild(span);
+            }
         });
+
+        // 목차(Index) 버튼 표시 제어
+        const readerIndexBtn = document.getElementById("readerIndexBtn");
+        if (readerIndexBtn) {
+            if (hasMarkdownHeadings && indexHeadings.length > 0) {
+                readerIndexBtn.style.display = "flex";
+                readerIndexBtn.onclick = () => openIndexSheet(indexHeadings);
+            } else {
+                readerIndexBtn.style.display = "none";
+            }
+        }
 
         readerOverlay.classList.add("show");
         resetReaderUiTimeout();
