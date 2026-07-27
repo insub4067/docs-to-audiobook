@@ -57,6 +57,9 @@
                 <div class="card-header">
                     <i data-lucide="folder-heart" class="header-icon"></i>
                     <h2>내 오디오북</h2>
+                    <button class="btn-icon" id="importLinkBtn" title="공유 링크 불러오기" style="margin-left: auto; width: 36px; height: 36px; border-radius: 50%; background: var(--glass-bg); border: 1px solid var(--glass-border); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-color); transition: all 0.3s ease;">
+                        <i data-lucide="link" style="width: 18px; height: 18px;"></i>
+                    </button>
                 </div>
                 
                 <div class="library-container">
@@ -169,6 +172,9 @@
                 <header class="reader-header">
                     <h3 id="readerBookTitle" class="reader-book-title">책 제목</h3>
                     <div class="reader-header-actions" style="display: flex; gap: 8px;">
+                        <button class="btn-reader-close" id="readerShareBtn" title="공유하기" type="button" style="display: none;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+                        </button>
                         <button class="btn-reader-close" id="saveSharedBtn" title="내 오디오북에 저장" style="display: none;">
                             <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                         </button>

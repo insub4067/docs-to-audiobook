@@ -24,6 +24,7 @@ document.addEventListener("DOMContentLoaded", () => {
     
     const libraryEmpty = document.getElementById("libraryEmpty");
     const audioList = document.getElementById("audioList");
+    const importLinkBtn = document.getElementById("importLinkBtn");
     
     // Generation Modal
     const generationModal = document.getElementById("generationModal");
@@ -40,6 +41,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Synced Reader DOM Elements
     const readerOverlay = document.getElementById("readerOverlay");
     const readerBookTitle = document.getElementById("readerBookTitle");
+    const readerShareBtn = document.getElementById("readerShareBtn");
     const closeReaderBtn = document.getElementById("closeReaderBtn");
     const readerContent = document.getElementById("readerContent");
     const readerAudio = document.getElementById("readerAudio");
@@ -88,6 +90,35 @@ document.addEventListener("DOMContentLoaded", () => {
     closeModalBtn.addEventListener("click", () => {
         generationModal.classList.remove("show");
     });
+    
+    // Import Shared Link
+    if (importLinkBtn) {
+        importLinkBtn.addEventListener("click", async () => {
+            const url = prompt("공유받은 링크를 붙여넣어 주세요:\n(예: https://.../share/...)");
+            if (!url) return;
+            
+            try {
+                const match = url.match(/\/share\/([a-zA-Z0-9-]+)/);
+                if (!match) {
+                    showToast("유효한 공유 링크가 아닙니다.", "error");
+                    return;
+                }
+                const shareId = match[1];
+                
+                showToast("공유 링크 정보를 불러오는 중...", "info");
+                const response = await fetch(`/api/share/${shareId}`);
+                if (!response.ok) {
+                    throw new Error("공유 링크가 만료되었거나 존재하지 않습니다.");
+                }
+                
+                const data = await response.json();
+                openSharedReaderMode(data.title, data.sentences, data.audio_url, shareId);
+            } catch (err) {
+                console.error(err);
+                showToast(err.message || "공유 링크 불러오기에 실패했습니다.", "error");
+            }
+        });
+    }
     
     // Listen for scroll on the reader content
     readerContent.addEventListener("scroll", () => {
@@ -706,11 +737,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (e.target === actionSheetBackdrop) closeActionSheet();
     });
 
-    actionShareBtn.addEventListener("click", async () => {
-        if (!actionSheetTarget) return;
-        const target = actionSheetTarget;
-        closeActionSheet();
-        
+    async function performShare(target) {
         try {
             // IndexedDB에서 오디오 데이터 가져오기
             const freshAudio = await getAudiobookFromDB(target.id);
@@ -773,7 +800,21 @@ document.addEventListener("DOMContentLoaded", () => {
                 showToast("공유에 실패했습니다.", "error");
             }
         }
+    }
+
+    actionShareBtn.addEventListener("click", async () => {
+        if (!actionSheetTarget) return;
+        const target = actionSheetTarget;
+        closeActionSheet();
+        await performShare(target);
     });
+
+    if (readerShareBtn) {
+        readerShareBtn.addEventListener("click", async () => {
+            if (!currentAudioObject) return;
+            await performShare(currentAudioObject);
+        });
+    }
 
     actionDeleteBtn.addEventListener("click", async () => {
         if (!actionSheetTarget) return;
@@ -854,6 +895,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // UI 리셋
         readerBookTitle.textContent = audio.title.replace(/\.[^/.]+$/, "");
         showPlayIcon();
+        if (readerShareBtn) readerShareBtn.style.display = "flex";
         readerCurrentTime.textContent = "00:00";
         readerDuration.textContent = "00:00";
         readerProgressFill.style.width = "0%";
@@ -1061,6 +1103,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         readerBookTitle.textContent = title;
         showPlayIcon();
+        if (readerShareBtn) readerShareBtn.style.display = "none";
         readerCurrentTime.textContent = "00:00";
         readerDuration.textContent = "00:00";
         readerProgressFill.style.width = "0%";
