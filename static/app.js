@@ -765,10 +765,22 @@ document.addEventListener("DOMContentLoaded", () => {
             let share_id = freshAudio.shareId;
             const now = Date.now();
             
-            // 캐시된 shareId가 있고 만료기간(24시간)이 지나지 않았다면 재사용
+            let needsUpload = true;
+
+            // 캐시된 shareId가 있고 만료기간(24시간)이 지나지 않았다면 서버에 존재하는지 실제 확인
             if (share_id && freshAudio.shareExpiry && freshAudio.shareExpiry > now) {
-                showToast("공유 링크 준비 중...", "info");
-            } else {
+                try {
+                    const checkRes = await fetch(`/api/share/${share_id}`);
+                    if (checkRes.ok) {
+                        needsUpload = false;
+                        showToast("공유 링크 준비 중...", "info");
+                    }
+                } catch (e) {
+                    console.log("Server check failed, will re-upload", e);
+                }
+            }
+
+            if (needsUpload) {
                 showToast("서버에 업로드하여 공유 링크 생성 중...", "info");
                 
                 const audioBlob = freshAudio.audioData instanceof Blob
