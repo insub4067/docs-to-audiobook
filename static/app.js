@@ -216,7 +216,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         const dropzoneHint = document.querySelector(".dropzone-hint");
         if (dropzoneHint) {
-            dropzoneHint.textContent = "지원: DOCX, PDF, TXT";
+            dropzoneHint.textContent = "지원: DOCX, PDF, TXT, MD, HWP";
         }
     }
 
