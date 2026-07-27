@@ -483,7 +483,6 @@ document.addEventListener("DOMContentLoaded", () => {
             charCountBadge.style.display = "block";
             
             generateBtn.disabled = false;
-            showToast("준비 완료", "success");
             
             // Show generation modal instead of confirm alert
             setTimeout(() => {
@@ -1074,21 +1073,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 titleText = s.display;
             } else {
                 const mdHeadingMatch = rawText.match(/^(#{1,3})\s+(.+)$/);
-                const boldHeadingMatch = rawText.match(/^(\**|__)(.+?)\1$/);
-                const numberHeadingMatch = rawText.match(/^(\**|__)?(\d+[\.\\s]+.+?)\1?$/);
-
                 if (mdHeadingMatch) {
                     isHeading = true;
                     level = mdHeadingMatch[1].length;
                     titleText = cleanDisplayText(mdHeadingMatch[2]);
-                } else if (boldHeadingMatch && rawText.length < 60) {
-                    isHeading = true;
-                    level = 2;
-                    titleText = cleanDisplayText(boldHeadingMatch[2]);
-                } else if (numberHeadingMatch && rawText.length < 40) {
-                    isHeading = true;
-                    level = 3;
-                    titleText = cleanDisplayText(rawText);
                 }
             }
 
@@ -1399,21 +1387,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 titleText = s.display;
             } else {
                 const mdHeadingMatch = rawText.match(/^(#{1,3})\s+(.+)$/);
-                const boldHeadingMatch = rawText.match(/^(\**|__)(.+?)\1$/);
-                const numberHeadingMatch = rawText.match(/^(\**|__)?(\d+[\.\\s]+.+?)\1?$/);
-
                 if (mdHeadingMatch) {
                     isHeading = true;
                     level = mdHeadingMatch[1].length;
                     titleText = cleanDisplayText(mdHeadingMatch[2]);
-                } else if (boldHeadingMatch && rawText.length < 60) {
-                    isHeading = true;
-                    level = 2;
-                    titleText = cleanDisplayText(boldHeadingMatch[2]);
-                } else if (numberHeadingMatch && rawText.length < 40) {
-                    isHeading = true;
-                    level = 3;
-                    titleText = cleanDisplayText(rawText);
                 }
             }
 
