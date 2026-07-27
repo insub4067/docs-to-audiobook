@@ -1060,17 +1060,36 @@ document.addEventListener("DOMContentLoaded", () => {
         function cleanDisplayText(text) {
             let t = text.replace(/[*_~`\\]/g, '');
             t = t.replace(/^#+\s*/, '');
-            return t;
+            return t.trim();
         }
 
         audio.sentences.forEach((s, index) => {
             const rawText = s.text.trim();
-            const headingMatch = rawText.match(/^(#{1,3})\s+(.+)$/);
+            // 1) 마크다운 # 헤더 또는 2) **굵은글씨**로 이루어진 단독 제목 또는 3) **1\. 숫자목록 제목 감지
+            const mdHeadingMatch = rawText.match(/^(#{1,3})\s+(.+)$/);
+            const boldHeadingMatch = rawText.match(/^(\*\*|__)(.+?)\1$/);
+            const numberHeadingMatch = rawText.match(/^(\*\*|__)?(\d+[\.\\\s]+.+?)\1?$/);
 
-            if (headingMatch) {
+            let isHeading = false;
+            let level = 2;
+            let titleText = "";
+
+            if (mdHeadingMatch) {
+                isHeading = true;
+                level = mdHeadingMatch[1].length;
+                titleText = cleanDisplayText(mdHeadingMatch[2]);
+            } else if (boldHeadingMatch && rawText.length < 60) {
+                isHeading = true;
+                level = 2;
+                titleText = cleanDisplayText(boldHeadingMatch[2]);
+            } else if (numberHeadingMatch && rawText.length < 40) {
+                isHeading = true;
+                level = 3;
+                titleText = cleanDisplayText(rawText);
+            }
+
+            if (isHeading && titleText) {
                 hasMarkdownHeadings = true;
-                const level = headingMatch[1].length; // 1: h1, 2: h2, 3: h3
-                const titleText = cleanDisplayText(headingMatch[2]);
 
                 const headingEl = document.createElement(`h${level}`);
                 headingEl.className = `reader-heading h${level}`;
@@ -1358,17 +1377,35 @@ document.addEventListener("DOMContentLoaded", () => {
         function cleanDisplayText(text) {
             let t = text.replace(/[*_~`\\]/g, '');
             t = t.replace(/^#+\s*/, '');
-            return t;
+            return t.trim();
         }
 
         sentences.forEach((s, index) => {
             const rawText = s.text.trim();
-            const headingMatch = rawText.match(/^(#{1,3})\s+(.+)$/);
+            const mdHeadingMatch = rawText.match(/^(#{1,3})\s+(.+)$/);
+            const boldHeadingMatch = rawText.match(/^(\*\*|__)(.+?)\1$/);
+            const numberHeadingMatch = rawText.match(/^(\*\*|__)?(\d+[\.\\\s]+.+?)\1?$/);
 
-            if (headingMatch) {
+            let isHeading = false;
+            let level = 2;
+            let titleText = "";
+
+            if (mdHeadingMatch) {
+                isHeading = true;
+                level = mdHeadingMatch[1].length;
+                titleText = cleanDisplayText(mdHeadingMatch[2]);
+            } else if (boldHeadingMatch && rawText.length < 60) {
+                isHeading = true;
+                level = 2;
+                titleText = cleanDisplayText(boldHeadingMatch[2]);
+            } else if (numberHeadingMatch && rawText.length < 40) {
+                isHeading = true;
+                level = 3;
+                titleText = cleanDisplayText(rawText);
+            }
+
+            if (isHeading && titleText) {
                 hasMarkdownHeadings = true;
-                const level = headingMatch[1].length;
-                const titleText = cleanDisplayText(headingMatch[2]);
 
                 const headingEl = document.createElement(`h${level}`);
                 headingEl.className = `reader-heading h${level}`;
