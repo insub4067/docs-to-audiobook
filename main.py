@@ -160,10 +160,20 @@ def extract_text(file_path: str, filename: str) -> str:
 def preprocess_text(text: str) -> str:
     # 1. Clean line breaks: single newline to space, double newline to paragraph break with pause indicator
     cleaned_text = text.replace("\r\n", "\n")
+    
+    # 2. Prevent headings from merging with the next paragraph
+    lines = cleaned_text.split('\n')
+    for i in range(len(lines)):
+        line = lines[i].strip()
+        # If the line is a markdown heading, ensure it ends with a period so TTS treats it as a separate sentence
+        if re.match(r'^(#{1,6}|\*\*|__)', line) and not line.endswith('.'):
+            lines[i] = line + "."
+    cleaned_text = '\n'.join(lines)
+
     cleaned_text = cleaned_text.replace("\n\n", ".   ")
     cleaned_text = cleaned_text.replace("\n", " ")
     
-    # 2. Clean consecutive spaces
+    # 3. Clean consecutive spaces
     while "  " in cleaned_text:
         cleaned_text = cleaned_text.replace("  ", " ")
         
