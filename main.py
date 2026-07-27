@@ -81,12 +81,12 @@ VOICE_METADATA = {
     }
 }
 
-import olefile
-import zlib
-import struct
-
 def extract_hwp_text(filepath: str) -> str:
     try:
+        import olefile
+        import zlib
+        import struct
+
         f = olefile.OleFileIO(filepath)
         dirs = f.listdir()
         if ['FileHeader'] not in dirs:
