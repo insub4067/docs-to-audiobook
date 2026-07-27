@@ -1004,6 +1004,8 @@ document.addEventListener("DOMContentLoaded", () => {
             if (audio.lastPosition > 0) {
                 readerAudio.currentTime = audio.lastPosition;
             }
+            // Apply saved speed
+            readerAudio.playbackRate = speedOptions ? speedOptions[currentSpeedIndex] : 1.0;
             readerAudio.play().catch(err => console.log("Autoplay blocked:", err));
             showPauseIcon();
         };
@@ -1121,6 +1123,8 @@ document.addEventListener("DOMContentLoaded", () => {
         
         // closeReader 내부의 이벤트 초기화 부분
         readerAudio.pause();
+        
+        if (window.clearSleepTimer) window.clearSleepTimer();
 
         readerAudio.onplay = null;
         readerAudio.onpause = null;
@@ -1241,6 +1245,8 @@ document.addEventListener("DOMContentLoaded", () => {
             if (readerAudio.duration && !isNaN(readerAudio.duration)) {
                 readerDuration.textContent = formatTime(readerAudio.duration);
             }
+            // Apply saved speed
+            readerAudio.playbackRate = speedOptions ? speedOptions[currentSpeedIndex] : 1.0;
             readerAudio.play().catch(function(err) { console.log("Autoplay blocked:", err); });
             showPauseIcon();
         };
@@ -1358,6 +1364,86 @@ document.addEventListener("DOMContentLoaded", () => {
             showToast("공유 오디오북 로드에 실패했습니다.", "error");
         }
     }
+
+    // --------------------------------------------------
+    // 10. Secondary Controls (Speed & Timer)
+    // --------------------------------------------------
+    const readerSpeedBtn = document.getElementById("readerSpeedBtn");
+    const readerSpeedText = document.getElementById("readerSpeedText");
+    const speedOptions = [0.75, 1.0, 1.25, 1.5, 2.0];
+    let currentSpeedIndex = 1;
+
+    const savedSpeed = localStorage.getItem("textAudio_playbackSpeed");
+    if (savedSpeed) {
+        const idx = speedOptions.indexOf(parseFloat(savedSpeed));
+        if (idx !== -1) currentSpeedIndex = idx;
+    }
+    
+    function applySpeedUI() {
+        const speed = speedOptions[currentSpeedIndex];
+        readerSpeedText.textContent = speed.toFixed(2).replace(/\.00$/, '.0') + "x";
+        readerSpeedBtn.classList.toggle("active", speed !== 1.0);
+    }
+    applySpeedUI();
+
+    readerSpeedBtn.addEventListener("click", () => {
+        currentSpeedIndex = (currentSpeedIndex + 1) % speedOptions.length;
+        const newSpeed = speedOptions[currentSpeedIndex];
+        readerAudio.playbackRate = newSpeed;
+        applySpeedUI();
+        localStorage.setItem("textAudio_playbackSpeed", newSpeed);
+        showToast(`재생 속도 ${newSpeed}x`, "info");
+    });
+
+    const readerTimerBtn = document.getElementById("readerTimerBtn");
+    const readerTimerText = document.getElementById("readerTimerText");
+    const timerOptions = [0, 15, 30, 60];
+    let currentTimerIndex = 0;
+    let sleepTimerInterval = null;
+    let sleepTimeRemaining = 0;
+
+    window.clearSleepTimer = function() {
+        clearInterval(sleepTimerInterval);
+        readerTimerBtn.classList.remove("active");
+        readerTimerText.textContent = "타이머";
+        currentTimerIndex = 0;
+    };
+
+    function updateTimerDisplay() {
+        if (sleepTimeRemaining <= 0) return;
+        const m = Math.floor(sleepTimeRemaining / 60);
+        const s = sleepTimeRemaining % 60;
+        readerTimerText.textContent = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
+
+    readerTimerBtn.addEventListener("click", () => {
+        currentTimerIndex = (currentTimerIndex + 1) % timerOptions.length;
+        const mins = timerOptions[currentTimerIndex];
+        
+        clearInterval(sleepTimerInterval);
+
+        if (mins === 0) {
+            window.clearSleepTimer();
+            showToast("취침 타이머가 해제되었습니다.", "info");
+        } else {
+            readerTimerBtn.classList.add("active");
+            sleepTimeRemaining = mins * 60;
+            updateTimerDisplay();
+            
+            sleepTimerInterval = setInterval(() => {
+                sleepTimeRemaining--;
+                if (sleepTimeRemaining <= 0) {
+                    readerAudio.pause();
+                    window.clearSleepTimer();
+                    showToast("타이머가 종료되어 재생을 멈췄습니다.", "info");
+                } else {
+                    updateTimerDisplay();
+                }
+            }, 1000);
+            
+            showToast(`${mins}분 뒤에 재생이 자동 종료됩니다.`, "info");
+        }
+    });
 
     checkSharedLink();
 });
