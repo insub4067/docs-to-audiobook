@@ -1129,7 +1129,8 @@ input[type="range"]::-webkit-slider-thumb:active {
 .reader-controls {
     flex-shrink: 0;
     z-index: 10;
-    padding: 8px 20px max(6px, env(safe-area-inset-bottom));
+    /* SafeArea 무시: 홈 인디케이터 여유분을 예약하지 않고 고정 여백만 사용 */
+    padding: 8px 20px 10px;
     border-top: 1px solid rgba(120, 90, 60, 0.1);
     background-color: rgba(250, 245, 230, 0.88);
     backdrop-filter: blur(24px) saturate(160%);
@@ -1155,11 +1156,6 @@ input[type="range"]::-webkit-slider-thumb:active {
     padding-bottom: 0;
 }
 
-/* UI를 숨기면 header/controls가 사라지므로 콘텐츠가 직접 safe area를 확보한다 */
-.reader-container.hide-ui .reader-content {
-    padding-top: calc(24px + env(safe-area-inset-top));
-    padding-bottom: calc(24px + env(safe-area-inset-bottom));
-}
 
 .reader-player-ui {
     display: flex;
@@ -1419,7 +1415,8 @@ input[type="range"]::-webkit-slider-thumb:active {
 }
 
 .modal-footer {
-    padding: 12px 20px max(12px, env(safe-area-inset-bottom));
+    /* SafeArea 무시: 홈 인디케이터 여유분을 예약하지 않고 고정 여백만 사용 */
+    padding: 12px 20px 16px;
     border-top: 1px solid var(--border-color);
     background-color: var(--card-bg-solid);
 }
