@@ -1,4 +1,7 @@
 import os
+from dotenv import load_dotenv
+load_dotenv()
+
 import uuid
 import docx
 import pypdf
@@ -8,7 +11,7 @@ import time
 import re
 import json
 import shutil
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Response, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Response, BackgroundTasks, Header
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -796,7 +799,7 @@ async def register(user_data: dict):
         from auth import get_supabase_client, hash_password
         from models import UserRegister
 
-        supabase = get_supabase_client()
+        supabase = get_supabase_client(use_service_role=True)
         if not supabase:
             raise HTTPException(status_code=500, detail="Database connection failed")
 
@@ -840,7 +843,7 @@ async def login(credentials: dict):
     try:
         from auth import get_supabase_client, verify_password, create_access_token
 
-        supabase = get_supabase_client()
+        supabase = get_supabase_client(use_service_role=True)
         if not supabase:
             raise HTTPException(status_code=500, detail="Database connection failed")
 
@@ -881,7 +884,7 @@ async def login(credentials: dict):
         raise HTTPException(status_code=500, detail="Login failed")
 
 @app.get("/api/auth/me")
-async def get_current_user(authorization: str = None):
+async def get_current_user(authorization: str = Header(None)):
     """Get current user info from JWT token."""
     try:
         from auth import decode_token, get_supabase_client
@@ -897,7 +900,7 @@ async def get_current_user(authorization: str = None):
             raise HTTPException(status_code=401, detail="Invalid token")
 
         user_id = payload.get("sub")
-        supabase = get_supabase_client()
+        supabase = get_supabase_client(use_service_role=True)
 
         response = supabase.table("users").select("*").eq("id", user_id).single().execute()
         if not response.data:

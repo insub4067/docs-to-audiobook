@@ -4,13 +4,10 @@ import os
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
 from dotenv import load_dotenv
 
 load_dotenv()
-
-# Password hashing context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # JWT configuration
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
@@ -23,11 +20,12 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30")
 
 def hash_password(password: str) -> str:
     """Hash a password using bcrypt."""
-    return pwd_context.hash(password)
+    salt = bcrypt.gensalt(rounds=12)
+    return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a plain password against its hash."""
-    return pwd_context.verify(plain_password, hashed_password)
+    return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
 
 # ============================================================
 # JWT Token Functions
@@ -61,18 +59,30 @@ def decode_token(token: str) -> Optional[dict]:
 # Supabase Client Initialization
 # ============================================================
 
-def get_supabase_client():
+def get_supabase_client(use_service_role: bool = False):
     """Initialize and return Supabase client."""
     try:
         from supabase import create_client, Client
 
         url = os.getenv("SUPABASE_URL")
         key = os.getenv("SUPABASE_KEY")
+        service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
-        if not url or not key:
-            raise ValueError("SUPABASE_URL and SUPABASE_KEY must be set in .env")
+        if not url:
+            raise ValueError("SUPABASE_URL must be set in .env")
 
-        supabase: Client = create_client(url, key)
+        if use_service_role:
+            if not service_key:
+                print("WARNING: service_role key not set, falling back to anon key")
+                key_to_use = key
+            else:
+                key_to_use = service_key
+        else:
+            if not key:
+                raise ValueError("SUPABASE_KEY must be set in .env")
+            key_to_use = key
+
+        supabase: Client = create_client(url, key_to_use)
         return supabase
     except Exception as e:
         print(f"Failed to initialize Supabase client: {e}")
