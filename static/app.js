@@ -703,12 +703,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const existing = await getAudiobookFromDB(DEFAULT_BOOK_ID);
             if (existing && existing.audioData) return;
 
-            const metaRes = await fetch("/api/default-book");
-            if (!metaRes.ok) return;
-            const meta = await metaRes.json();
-            if (meta.status !== "ready") return;
-
-            // 라이브러리에 다운로드 중 표시 아이템 추가
+            // 라이브러리에 다운로드/생성 중 표시 아이템 미리 추가
             libraryEmpty.style.display = "none";
             const progressItem = document.createElement("div");
             progressItem.className = "audio-item audio-item-generating";
@@ -716,15 +711,45 @@ document.addEventListener("DOMContentLoaded", () => {
                 <div class="audio-title-group">
                     <div class="generating-spinner"></div>
                     <div class="generating-info">
-                        <span class="audio-title">${meta.title}</span>
+                        <span class="audio-title">셜록 홈즈의 모험 (기본 제공)</span>
                         <div class="generating-progress-track">
                             <div class="generating-progress-fill" style="width: 30%"></div>
                         </div>
-                        <span class="generating-status">기본 제공 오디오북 다운로드 중...</span>
+                        <span class="generating-status">기본 제공 오디오북 준비 중...</span>
                     </div>
                 </div>
             `;
             audioList.prepend(progressItem);
+
+            let meta = null;
+            let attempts = 0;
+            while (attempts < 60) { // Max 1 minute polling
+                const metaRes = await fetch("/api/default-book");
+                if (!metaRes.ok) break;
+                meta = await metaRes.json();
+                
+                if (meta.status === "ready") {
+                    break;
+                } else if (meta.status === "error") {
+                    console.error("Default book generation error on server");
+                    break;
+                }
+                
+                // pending or generating -> wait 2 seconds and poll again
+                await new Promise(r => setTimeout(r, 2000));
+                attempts++;
+            }
+
+            if (!meta || meta.status !== "ready") {
+                progressItem.remove();
+                if (audioList.children.length === 0) {
+                    libraryEmpty.style.display = "flex";
+                }
+                return;
+            }
+
+            progressItem.querySelector(".generating-status").textContent = "다운로드 중...";
+            progressItem.querySelector(".generating-progress-fill").style.width = "70%";
 
             try {
                 const audioRes = await fetch(meta.audio_url);

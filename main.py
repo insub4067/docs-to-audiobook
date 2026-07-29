@@ -358,27 +358,42 @@ def clean_tts_text(text: str) -> str:
     t = re.sub(r'\s+', ' ', t).strip()
     return t
 
-async def synthesize_chunk(chunk_index: int, text_chunk: str, voice: str, rate: str, pitch: str):
+async def synthesize_chunk(chunk_index: int, text_chunk: str, voice: str, rate: str, pitch: str, max_attempts: int = 3):
     # TTS 발음용 깨끗한 텍스트
     tts_text = clean_tts_text(text_chunk)
     if not tts_text:
         tts_text = text_chunk
 
-    communicate = edge_tts.Communicate(tts_text, voice=voice, rate=rate, pitch=pitch)
-    audio_data = b""
-    sentences = []
-    async for msg in communicate.stream():
-        if msg.get("type") == "audio":
-            audio_data += msg.get("data")
-        elif msg.get("type") == "SentenceBoundary":
-            offset_ms = msg.get("offset", 0) // 10000
-            duration_ms = msg.get("duration", 0) // 10000
-            sentences.append({
-                "text": msg.get("text", ""),
-                "start": offset_ms,
-                "end": offset_ms + duration_ms
-            })
-    return chunk_index, audio_data, sentences
+    # Edge-TTS는 특정 호스팅 환경에서 개별 연결이 간헐적으로 끊긴다.
+    # 청크 단위로 재시도해, 문서 전체를 병렬 변환할 때 청크 하나의 일시적
+    # 실패가 전체 asyncio.gather를 실패시키지 않도록 한다.
+    last_error = None
+    for attempt in range(max_attempts):
+        try:
+            communicate = edge_tts.Communicate(tts_text, voice=voice, rate=rate, pitch=pitch)
+            audio_data = b""
+            sentences = []
+            async for msg in communicate.stream():
+                if msg.get("type") == "audio":
+                    audio_data += msg.get("data")
+                elif msg.get("type") == "SentenceBoundary":
+                    offset_ms = msg.get("offset", 0) // 10000
+                    duration_ms = msg.get("duration", 0) // 10000
+                    sentences.append({
+                        "text": msg.get("text", ""),
+                        "start": offset_ms,
+                        "end": offset_ms + duration_ms
+                    })
+            if audio_data:
+                return chunk_index, audio_data, sentences
+            last_error = RuntimeError("빈 오디오 응답을 받았습니다.")
+        except Exception as e:
+            last_error = e
+
+        if attempt < max_attempts - 1:
+            await asyncio.sleep(1.5 * (attempt + 1))
+
+    raise last_error
 
 async def synthesize_document(raw_text: str, voice: str, rate: str, pitch: str) -> tuple:
     """Synthesize a full document into (audio_bytes, annotated_sentences, heading_index)."""
