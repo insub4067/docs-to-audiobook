@@ -702,13 +702,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (localStorage.getItem(DEFAULT_BOOK_SEEDED_KEY)) return;
 
         try {
-            const existing = await getAllAudiobooksFromDB();
-            if (existing.length > 0) {
-                // 이미 라이브러리에 무언가 있다면(예: 다른 기기에서 가져온 상태) 건드리지 않는다.
-                localStorage.setItem(DEFAULT_BOOK_SEEDED_KEY, "1");
-                return;
-            }
-
             const mdResponse = await fetch(DEFAULT_BOOK_URL);
             if (!mdResponse.ok) return;
             const mdBlob = await mdResponse.blob();
