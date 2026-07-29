@@ -347,7 +347,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // ----------------------------------------------------
     // Fetch and display Service Worker version
-    // ----------------------------------------------------
+    // Display app version from sw.js CACHE_NAME
     if (appVersionDisplay) {
         fetch("/sw.js", { cache: "no-store" })
             .then(res => res.text())
@@ -355,9 +355,13 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const match = text.match(/CACHE_NAME\s*=\s*["']([^"']+)["']/);
                 if (match && match[1]) {
                     appVersionDisplay.textContent = `v ${match[1]}`;
+                } else {
+                    console.warn("Could not find CACHE_NAME in sw.js");
                 }
             })
-            .catch(err => console.log("Failed to fetch sw version", err));
+            .catch(err => console.error("Failed to fetch sw version:", err));
+    } else {
+        console.warn("appVersionDisplay element not found");
     }
 
     // ----------------------------------------------------
