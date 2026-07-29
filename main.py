@@ -785,6 +785,139 @@ async def cleanup_expired_files_loop():
         
         await asyncio.sleep(600)  # Every 10 minutes
 
+# ====================================================
+# P2: Authentication & User Management Routes
+# ====================================================
+
+@app.post("/api/auth/register")
+async def register(user_data: dict):
+    """Register a new user."""
+    try:
+        from auth import get_supabase_client, hash_password
+        from models import UserRegister
+
+        supabase = get_supabase_client()
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Database connection failed")
+
+        # Parse request
+        email = user_data.get("email")
+        password = user_data.get("password")
+        full_name = user_data.get("full_name")
+
+        if not email or not password:
+            raise HTTPException(status_code=400, detail="Email and password required")
+
+        # Check if user exists
+        try:
+            existing = supabase.table("users").select("id").eq("email", email).single().execute()
+            raise HTTPException(status_code=409, detail="Email already registered")
+        except:
+            pass  # User doesn't exist, continue
+
+        # Create user
+        hashed_pw = hash_password(password)
+        response = supabase.table("users").insert({
+            "email": email,
+            "password_hash": hashed_pw,
+            "full_name": full_name
+        }).execute()
+
+        if response.data:
+            return {"status": "success", "message": "User registered successfully"}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to create user")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Registration error: {e}")
+        raise HTTPException(status_code=500, detail="Registration failed")
+
+@app.post("/api/auth/login")
+async def login(credentials: dict):
+    """Login user with email and password."""
+    try:
+        from auth import get_supabase_client, verify_password, create_access_token
+
+        supabase = get_supabase_client()
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Database connection failed")
+
+        email = credentials.get("email")
+        password = credentials.get("password")
+
+        if not email or not password:
+            raise HTTPException(status_code=400, detail="Email and password required")
+
+        # Get user from database
+        response = supabase.table("users").select("*").eq("email", email).single().execute()
+
+        if not response.data:
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+
+        user = response.data
+        if not verify_password(password, user["password_hash"]):
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+
+        # Create JWT token
+        token = create_access_token({"sub": user["id"]})
+
+        return {
+            "access_token": token,
+            "token_type": "bearer",
+            "user": {
+                "id": user["id"],
+                "email": user["email"],
+                "full_name": user.get("full_name"),
+                "avatar_url": user.get("avatar_url")
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Login error: {e}")
+        raise HTTPException(status_code=500, detail="Login failed")
+
+@app.get("/api/auth/me")
+async def get_current_user(authorization: str = None):
+    """Get current user info from JWT token."""
+    try:
+        from auth import decode_token, get_supabase_client
+
+        if not authorization:
+            raise HTTPException(status_code=401, detail="No authorization token")
+
+        # Extract token from "Bearer <token>"
+        token = authorization.split(" ")[-1] if " " in authorization else authorization
+        payload = decode_token(token)
+
+        if not payload:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        user_id = payload.get("sub")
+        supabase = get_supabase_client()
+
+        response = supabase.table("users").select("*").eq("id", user_id).single().execute()
+        if not response.data:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        user = response.data
+        return {
+            "id": user["id"],
+            "email": user["email"],
+            "full_name": user.get("full_name"),
+            "avatar_url": user.get("avatar_url"),
+            "created_at": user.get("created_at")
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Get user error: {e}")
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(cleanup_expired_files_loop())

@@ -6,3 +6,8 @@ uploads/
 shared/
 .DS_Store
 .claude/settings.local.json
+
+# Environment variables (P2)
+.env
+.env.local
+.env.*.local
