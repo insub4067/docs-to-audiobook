@@ -2086,52 +2086,15 @@ function logout() {
 }
 
 function setupAuthEventListeners() {
-    const loginTab = document.getElementById("loginTab");
-    const registerTab = document.getElementById("registerTab");
-    const loginForm = document.getElementById("loginForm");
-    const registerForm = document.getElementById("registerForm");
+    const googleLoginBtn = document.getElementById("googleLoginBtn");
     const logoutBtn = document.getElementById("logoutBtn");
 
-    // Tab switching
-    if (loginTab) {
-        loginTab.addEventListener("click", () => {
-            loginTab.classList.add("active");
-            registerTab.classList.remove("active");
-            loginForm.classList.add("active");
-            registerForm.classList.remove("active");
-        });
-    }
-
-    if (registerTab) {
-        registerTab.addEventListener("click", () => {
-            registerTab.classList.add("active");
-            loginTab.classList.remove("active");
-            registerForm.classList.add("active");
-            loginForm.classList.remove("active");
-        });
-    }
-
-    // Login form
-    if (loginForm) {
-        loginForm.addEventListener("submit", async (e) => {
-            e.preventDefault();
-            const email = document.getElementById("loginEmail").value;
-            const password = document.getElementById("loginPassword").value;
-            const message = document.getElementById("loginMessage");
-
-            message.textContent = "로그인 중...";
-            message.classList.remove("error", "success");
-
-            const result = await login(email, password);
-
-            if (result.success) {
-                message.textContent = "로그인 성공!";
-                message.classList.add("success");
-                setTimeout(() => location.reload(), 500);
-            } else {
-                message.textContent = result.error;
-                message.classList.add("error");
-            }
+    // Google Login Button
+    if (googleLoginBtn) {
+        googleLoginBtn.addEventListener("click", () => {
+            googleLoginBtn.disabled = true;
+            googleLoginBtn.textContent = "로그인 중...";
+            handleGoogleLogin();
         });
     }
 
@@ -2170,5 +2133,77 @@ function setupAuthEventListeners() {
     // Logout button
     if (logoutBtn) {
         logoutBtn.addEventListener("click", logout);
+    }
+}
+
+    // Logout button
+    if (logoutBtn) {
+        logoutBtn.addEventListener("click", logout);
+    }
+}
+
+// ============================================================
+// Google OAuth Handler
+// ============================================================
+
+async function handleGoogleLogin() {
+    try {
+        // Initialize Google OAuth
+        google.accounts.id.initialize({
+            client_id: "YOUR_GOOGLE_CLIENT_ID",
+            callback: onGoogleSignIn
+        });
+
+        google.accounts.id.renderButton(
+            document.getElementById("googleLoginBtn"),
+            { theme: "outline", size: "large" }
+        );
+
+        google.accounts.id.prompt();
+    } catch (error) {
+        console.error("Google login failed:", error);
+        showAuthError("Google 로그인에 실패했습니다.");
+    }
+}
+
+async function onGoogleSignIn(response) {
+    const idToken = response.credential;
+
+    try {
+        const result = await fetch("/api/auth/google", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ token: idToken })
+        });
+
+        const data = await result.json();
+
+        if (!result.ok) {
+            throw new Error(data.detail || "로그인 실패");
+        }
+
+        // Save token and reload
+        localStorage.setItem("authToken", data.access_token);
+        setTimeout(() => location.reload(), 500);
+    } catch (error) {
+        console.error("Auth error:", error);
+        showAuthError(error.message || "로그인에 실패했습니다.");
+    }
+}
+
+function showAuthError(message) {
+    const authMessage = document.getElementById("authMessage");
+    const googleLoginBtn = document.getElementById("googleLoginBtn");
+    
+    if (authMessage) {
+        authMessage.textContent = message;
+        authMessage.classList.add("error");
+    }
+    
+    if (googleLoginBtn) {
+        googleLoginBtn.disabled = false;
+        googleLoginBtn.textContent = "Google로 계속하기";
     }
 }

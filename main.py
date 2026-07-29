@@ -921,6 +921,83 @@ async def get_current_user(authorization: str = Header(None)):
         print(f"Get user error: {e}")
         raise HTTPException(status_code=401, detail="Unauthorized")
 
+@app.post("/api/auth/google")
+async def google_login(data: dict):
+    """Login/Register with Google OAuth token."""
+    try:
+        from auth import get_supabase_client, create_access_token
+        from google.auth.transport import requests
+        from google.oauth2 import id_token
+
+        token_string = data.get("token")
+        if not token_string:
+            raise HTTPException(status_code=400, detail="Token required")
+
+        try:
+            idinfo = id_token.verify_oauth2_token(
+                token_string,
+                requests.Request(),
+                os.getenv("GOOGLE_CLIENT_ID")
+            )
+        except Exception as e:
+            print(f"Invalid Google token: {e}")
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        email = idinfo.get("email")
+        name = idinfo.get("name", "")
+        google_id = idinfo.get("sub")
+
+        if not email:
+            raise HTTPException(status_code=400, detail="Email not found in token")
+
+        supabase = get_supabase_client(use_service_role=True)
+
+        try:
+            user = supabase.table("users").select("*").eq("email", email).single().execute()
+            existing_user = user.data
+        except:
+            existing_user = None
+
+        if existing_user:
+            user_id = existing_user["id"]
+            user_response = existing_user
+        else:
+            user_id = str(uuid.uuid4())
+            supabase.table("users").insert({
+                "id": user_id,
+                "email": email,
+                "full_name": name,
+                "password_hash": "",
+                "google_id": google_id,
+                "avatar_url": idinfo.get("picture", None)
+            }).execute()
+            user_response = {
+                "id": user_id,
+                "email": email,
+                "full_name": name,
+                "avatar_url": idinfo.get("picture", None),
+                "created_at": datetime.utcnow().isoformat()
+            }
+
+        token = create_access_token({"sub": user_id})
+
+        return {
+            "access_token": token,
+            "token_type": "bearer",
+            "user": {
+                "id": user_response.get("id"),
+                "email": user_response.get("email"),
+                "full_name": user_response.get("full_name"),
+                "avatar_url": user_response.get("avatar_url")
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Google login error: {e}")
+        raise HTTPException(status_code=500, detail="Google login failed")
+
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(cleanup_expired_files_loop())
