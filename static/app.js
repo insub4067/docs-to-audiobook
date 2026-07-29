@@ -35,8 +35,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     const closeModalBtn = document.getElementById("closeModalBtn");
     
     const loadingOverlay = document.getElementById("loadingOverlay");
-    const progressBarFill = document.querySelector(".progress-bar-fill");
-    const loadingStatus = document.querySelector(".loading-status");
     
     const toast = document.getElementById("toast");
     const toastIcon = document.getElementById("toastIcon");
@@ -480,9 +478,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
+    // 배치는 현재 음성 설정을 모든 파일에 공통 적용하고, 파일마다
+    // 추출 → 생성까지 끝낸다. 진행 상황은 라이브러리의 파일별 진행 아이템으로 보여준다.
     async function processBatchFiles(files) {
-        generationModal.classList.add("show");
-        document.body.style.overflow = "hidden";
+        const voice = voiceSelect.value;
+        const rate = getFormattedSpeed(parseInt(speedSlider.value));
+        const pitch = getFormattedPitch(parseInt(pitchSlider.value));
 
         const totalFiles = files.length;
         let completed = 0;
@@ -491,27 +492,24 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         for (const file of files) {
             try {
-                loadingStatus.textContent = `[${completed + 1}/${totalFiles}] ${file.name} 처리 중...`;
-                progressBarFill.style.width = ((completed / totalFiles) * 100) + "%";
-
-                uploadedFile = file;
-                await uploadFile(file);
-                completed++;
+                const data = await extractText(file);
+                const ok = await generateAudiobook({
+                    textId: data.text_id,
+                    filename: toAudioFilename(file.name),
+                    charCount: data.char_count,
+                    voice,
+                    rate,
+                    pitch
+                });
+                if (ok) completed++;
             } catch (error) {
                 console.error(`파일 처리 실패: ${file.name}`, error);
                 showToast(`${file.name} 처리 실패`, "error");
             }
         }
 
-        progressBarFill.style.width = "100%";
-        loadingStatus.textContent = `완료! ${completed}/${totalFiles}개 파일 처리됨`;
         showToast(`배치 변환 완료: ${completed}/${totalFiles}`, "success");
-
-        setTimeout(() => {
-            generationModal.classList.remove("show");
-            document.body.style.overflow = "";
-            fileInput.value = "";
-        }, 2000);
+        fileInput.value = "";
     }
 
     async function handleFileSelect(file) {
@@ -549,28 +547,33 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // Upload to Server for High-Speed Parsing
+    // 텍스트 추출만 수행한다. UI를 건드리지 않아 배치 경로에서 재사용 가능하다.
+    async function extractText(file) {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const response = await fetch("/api/upload", {
+            method: "POST",
+            body: formData
+        });
+
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.detail || "텍스트 추출 실패");
+        }
+
+        return await response.json();
+    }
+
     async function uploadFile(file) {
         if (previewPlaceholder) previewPlaceholder.style.display = "none";
         previewText.style.display = "block";
         previewText.innerHTML = '<div style="color: var(--text-muted); text-align: center; margin-top: 40px;"><div class="spinner-container" style="width: 30px; height: 30px; margin: 0 auto 10px;"><div class="double-bounce1"></div><div class="double-bounce2"></div></div>서버에서 고속 문서 해독 중...</div>';
-        
-        const formData = new FormData();
-        formData.append("file", file);
 
         try {
-            const response = await fetch("/api/upload", {
-                method: "POST",
-                body: formData
-            });
-
-            if (!response.ok) {
-                const errData = await response.json();
-                throw new Error(errData.detail || "텍스트 추출 실패");
-            }
-
-            const data = await response.json();
+            const data = await extractText(file);
             currentTextId = data.text_id;
-            
+
             // Render text preview
             previewText.textContent = data.preview;
             charCountBadge.textContent = `${data.char_count.toLocaleString()} 자`;
@@ -624,17 +627,32 @@ document.addEventListener("DOMContentLoaded", async () => {
     // ----------------------------------------------------
     generateBtn.addEventListener("click", async () => {
         if (!currentTextId) return;
-        
+
         generationModal.classList.remove("show");
         document.body.style.overflow = "";
 
-        const voice = voiceSelect.value;
-        const rate = getFormattedSpeed(parseInt(speedSlider.value));
-        const pitch = getFormattedPitch(parseInt(pitchSlider.value));
-
-        // 파일 이름 미리 생성
         const originalName = uploadedFile ? uploadedFile.name : "unknown_doc";
-        const audioFilename = originalName.substring(0, originalName.lastIndexOf('.')) + ".mp3";
+        await generateAudiobook({
+            textId: currentTextId,
+            filename: toAudioFilename(originalName),
+            charCount: parseInt(charCountBadge.textContent.replace(/[^0-9]/g, "")) || 0,
+            voice: voiceSelect.value,
+            rate: getFormattedSpeed(parseInt(speedSlider.value)),
+            pitch: getFormattedPitch(parseInt(pitchSlider.value))
+        });
+    });
+
+    function toAudioFilename(originalName) {
+        const dot = originalName.lastIndexOf('.');
+        const base = dot > 0 ? originalName.substring(0, dot) : originalName;
+        return base + ".mp3";
+    }
+
+    // 오디오북 생성 + 저장. 단일 파일 경로와 배치 경로가 공유한다.
+    // 전역 상태 대신 인자만 사용하므로 루프에서 반복 호출해도 안전하다.
+    // 성공하면 true, 실패하면 false를 반환한다.
+    async function generateAudiobook({ textId, filename, charCount, voice, rate, pitch }) {
+        const audioFilename = filename;
 
         // 라이브러리 섹션에 인라인 진행 아이템 추가
         libraryEmpty.style.display = "none";
@@ -673,7 +691,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         try {
             const formData = new FormData();
-            formData.append("text_id", currentTextId);
+            formData.append("text_id", textId);
             formData.append("voice", voice);
             formData.append("rate", rate);
             formData.append("pitch", pitch);
@@ -734,10 +752,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             
             // Build Audiobook entry
             const audioId = crypto.randomUUID();
-            
-            // Parse char count from badge text (e.g. "1,234 자" -> 1234)
-            const rawChars = charCountBadge.textContent.replace(/[^0-9]/g, "");
-            const charCount = parseInt(rawChars) || 0;
             const audioArrayBuffer = await audioBlob.arrayBuffer();
 
             const entry = {
@@ -759,6 +773,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             progressItem.remove();
             showToast("저장되었습니다!", "success");
             renderLibrary();
+            return true;
 
         } catch (error) {
             clearInterval(progressInterval);
@@ -769,8 +784,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                 libraryEmpty.style.display = "flex";
             }
             showToast(error.message, "error");
+            return false;
         }
-    });
+    }
 
     function getAudiobookFromDB(id) {
         return new Promise((resolve, reject) => {

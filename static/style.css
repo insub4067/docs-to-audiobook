@@ -1348,7 +1348,8 @@ input[type="range"]::-webkit-slider-thumb:active {
 .generation-modal .modal-content {
     width: 100%;
     max-width: 680px;
-    max-height: 90vh;
+    /* 노치/다이나믹 아일랜드 아래로만 올라오도록 상단 인셋만큼 더 깎는다 */
+    max-height: calc(90vh - env(safe-area-inset-top));
     background-color: var(--card-bg);
     border-radius: 24px 24px 0 0; /* Rounded top corners */
     display: flex;
@@ -1418,7 +1419,7 @@ input[type="range"]::-webkit-slider-thumb:active {
 }
 
 .modal-footer {
-    padding: 16px 20px calc(12px + env(safe-area-inset-bottom));
+    padding: 12px 20px max(12px, env(safe-area-inset-bottom));
     border-top: 1px solid var(--border-color);
     background-color: var(--card-bg-solid);
 }
