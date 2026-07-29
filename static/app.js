@@ -416,7 +416,7 @@ document.addEventListener("DOMContentLoaded", () => {
     
     fileInput.addEventListener("change", (e) => {
         if (e.target.files.length > 0) {
-            handleFileSelect(e.target.files[0]);
+            handleBatchFileSelect(e.target.files);
         }
     });
 
@@ -440,9 +440,62 @@ document.addEventListener("DOMContentLoaded", () => {
         const dt = e.dataTransfer;
         const files = dt.files;
         if (files.length > 0) {
-            handleFileSelect(files[0]);
+            handleBatchFileSelect(files);
         }
     });
+
+    async function handleBatchFileSelect(files) {
+        const validFiles = [];
+        for (let file of files) {
+            if (file.size > 10 * 1024 * 1024) {
+                showToast(`${file.name}: 파일이 너무 큽니다 (최대 10MB)`, "error");
+                continue;
+            }
+            validFiles.push(file);
+        }
+
+        if (validFiles.length === 0) return;
+
+        if (validFiles.length === 1) {
+            handleFileSelect(validFiles[0]);
+        } else {
+            processBatchFiles(validFiles);
+        }
+    }
+
+    async function processBatchFiles(files) {
+        generationModal.classList.add("show");
+        document.body.style.overflow = "hidden";
+
+        const totalFiles = files.length;
+        let completed = 0;
+
+        showToast(`${totalFiles}개 파일 배치 변환 시작`, "info");
+
+        for (const file of files) {
+            try {
+                loadingStatus.textContent = `[${completed + 1}/${totalFiles}] ${file.name} 처리 중...`;
+                progressBarFill.style.width = ((completed / totalFiles) * 100) + "%";
+
+                uploadedFile = file;
+                await uploadFile(file);
+                completed++;
+            } catch (error) {
+                console.error(`파일 처리 실패: ${file.name}`, error);
+                showToast(`${file.name} 처리 실패`, "error");
+            }
+        }
+
+        progressBarFill.style.width = "100%";
+        loadingStatus.textContent = `완료! ${completed}/${totalFiles}개 파일 처리됨`;
+        showToast(`배치 변환 완료: ${completed}/${totalFiles}`, "success");
+
+        setTimeout(() => {
+            generationModal.classList.remove("show");
+            document.body.style.overflow = "";
+            fileInput.value = "";
+        }, 2000);
+    }
 
     async function handleFileSelect(file) {
         if (file.size > 10 * 1024 * 1024) {
@@ -454,7 +507,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (fileName) fileName.textContent = file.name;
         if (fileSize) fileSize.textContent = formatBytes(file.size);
         if (fileDetails) fileDetails.style.display = "block";
-        
+
         await uploadFile(file);
     }
 
