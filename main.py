@@ -647,6 +647,7 @@ async def generate_default_book():
 
     if os.path.exists(audio_path) and os.path.exists(meta_path):
         default_book_state["status"] = "ready"
+        print("Default audiobook already exists on disk. Skipping generation.")
         return
 
     if not os.path.exists(DEFAULT_BOOK_SOURCE):
@@ -656,6 +657,7 @@ async def generate_default_book():
         return
 
     default_book_state["status"] = "generating"
+    print(f"Starting default audiobook generation from {DEFAULT_BOOK_SOURCE}...")
     try:
         raw_text = extract_text(DEFAULT_BOOK_SOURCE, "sherlock-holmes.md")
         audio_bytes, sentences, headings = await synthesize_document(
