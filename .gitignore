@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.venv/
+default_book/
+uploads/
+shared/
+.DS_Store
+.claude/settings.local.json
