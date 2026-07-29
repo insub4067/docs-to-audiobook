@@ -616,6 +616,7 @@ DEFAULT_BOOK_TITLE = "셜록 홈즈의 모험"
 DEFAULT_BOOK_VOICE = "ko-KR-SoonBokNeural"
 
 default_book_state = {"status": "pending", "error": None}
+default_book_lock = asyncio.Lock()
 
 
 def default_book_paths():
@@ -672,8 +673,15 @@ async def generate_default_book():
 
 @app.get("/api/default-book")
 async def get_default_book():
-    """기본 제공 오디오북의 상태 및 메타데이터를 반환."""
+    """기본 제공 오디오북의 상태 및 메타데이터를 반환.
+    Edge-TTS 접속이 간헐적으로 막히는 호스팅 환경 특성상, 이전 시도가
+    실패한 상태라면 요청이 들어올 때마다 재시도한다 (동시 중복 실행은 락으로 방지)."""
     audio_path, meta_path = default_book_paths()
+
+    if default_book_state["status"] == "error":
+        async with default_book_lock:
+            if default_book_state["status"] == "error":
+                await generate_default_book()
 
     if default_book_state["status"] != "ready" or not os.path.exists(meta_path):
         return JSONResponse(content={
