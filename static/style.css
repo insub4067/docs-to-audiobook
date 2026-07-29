@@ -1133,8 +1133,9 @@ input[type="range"]::-webkit-slider-thumb:active {
 .reader-controls {
     flex-shrink: 0;
     z-index: 10;
-    /* SafeArea 무시: 홈 인디케이터 여유분을 예약하지 않고 고정 여백만 사용 */
-    padding: 8px 20px 10px;
+    /* 터치 영역은 홈 인디케이터를 비켜야 한다. 배경은 화면 끝까지 full-bleed로
+       깔리고(부모가 뷰포트 하단까지 닿음) 버튼만 인셋만큼 올라온다. */
+    padding: 8px 20px max(12px, env(safe-area-inset-bottom));
     border-top: 1px solid rgba(120, 90, 60, 0.1);
     background-color: rgba(250, 245, 230, 0.88);
     backdrop-filter: blur(24px) saturate(160%);
@@ -1426,8 +1427,9 @@ input[type="range"]::-webkit-slider-thumb:active {
 }
 
 .modal-footer {
-    /* SafeArea 무시: 홈 인디케이터 여유분을 예약하지 않고 고정 여백만 사용 */
-    padding: 12px 20px 16px;
+    /* 터치 영역은 홈 인디케이터를 비켜야 한다. 배경은 화면 끝까지 full-bleed로
+       깔리고 버튼만 인셋만큼 올라온다. */
+    padding: 12px 20px max(12px, env(safe-area-inset-bottom));
     border-top: 1px solid var(--border-color);
     background-color: var(--card-bg-solid);
 }
@@ -1454,8 +1456,8 @@ input[type="range"]::-webkit-slider-thumb:active {
     max-width: 500px;
     background: #fff;
     border-radius: 16px 16px 0 0;
-    /* SafeArea 무시: 홈 인디케이터 여유분을 예약하지 않고 고정 여백만 사용 */
-    padding: 8px 0 12px;
+    /* 터치 영역은 홈 인디케이터를 비켜야 한다 */
+    padding: 8px 0 max(12px, env(safe-area-inset-bottom));
     animation: slideUpSheet 0.3s cubic-bezier(0.19, 1, 0.22, 1);
 }
 
