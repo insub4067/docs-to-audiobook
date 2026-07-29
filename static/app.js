@@ -2140,12 +2140,6 @@ function setupAuthEventListeners() {
     }
 }
 
-    // Logout button
-    if (logoutBtn) {
-        logoutBtn.addEventListener("click", logout);
-    }
-}
-
 // ============================================================
 // Google OAuth Handler
 // ============================================================
