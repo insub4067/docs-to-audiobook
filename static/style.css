@@ -1443,7 +1443,8 @@ input[type="range"]::-webkit-slider-thumb:active {
     max-width: 500px;
     background: #fff;
     border-radius: 16px 16px 0 0;
-    padding: 8px 0 calc(12px + env(safe-area-inset-bottom));
+    /* SafeArea 무시: 홈 인디케이터 여유분을 예약하지 않고 고정 여백만 사용 */
+    padding: 8px 0 12px;
     animation: slideUpSheet 0.3s cubic-bezier(0.19, 1, 0.22, 1);
 }
 
