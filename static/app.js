@@ -283,7 +283,11 @@ document.addEventListener("DOMContentLoaded", () => {
             
             request.onsuccess = (e) => {
                 const list = e.target.result || [];
-                list.sort((a, b) => b.timestamp - a.timestamp);
+                // 기본 제공 오디오북은 항상 최상단에 고정
+                list.sort((a, b) => {
+                    if (!!a.isDefault !== !!b.isDefault) return a.isDefault ? -1 : 1;
+                    return b.timestamp - a.timestamp;
+                });
                 resolve(list);
             };
             request.onerror = (e) => reject(e.target.error);
@@ -688,26 +692,23 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // ----------------------------------------------------
-    // 4.5 First-Visit Sample Audiobook Seeding
-    // 신규 사용자가 처음 앱에 들어왔을 때 샘플 오디오북(셜록 홈즈의 모험)을
-    // 자동으로 생성하여 라이브러리에 기본으로 보여준다. 성공 시에만 플래그를
-    // 저장해, 실패(네트워크 오류 등)하면 다음 방문 때 다시 시도한다.
+    // 4.5 Default Audiobook Sync
+    // 기본 제공 오디오북은 서버가 기동 시 미리 생성해 둔다. 클라이언트는
+    // 라이브러리에 해당 책이 없을 때만 서버에서 내려받아 저장한다.
     // ----------------------------------------------------
-    const DEFAULT_BOOK_URL = "/static/samples/sherlock-holmes.md";
-    const DEFAULT_BOOK_FILENAME = "셜록 홈즈의 모험.md";
-    const DEFAULT_BOOK_VOICE = "ko-KR-SoonBokNeural";
-    const DEFAULT_BOOK_SEEDED_KEY = "defaultBookSeeded";
+    const DEFAULT_BOOK_ID = "default-sherlock-holmes";
 
     async function seedDefaultBookIfNeeded() {
-        if (localStorage.getItem(DEFAULT_BOOK_SEEDED_KEY)) return;
-
         try {
-            const mdResponse = await fetch(DEFAULT_BOOK_URL);
-            if (!mdResponse.ok) return;
-            const mdBlob = await mdResponse.blob();
-            const sampleFile = new File([mdBlob], DEFAULT_BOOK_FILENAME, { type: "text/markdown" });
+            const existing = await getAudiobookFromDB(DEFAULT_BOOK_ID);
+            if (existing && existing.audioData) return;
 
-            // 라이브러리에 생성 중 표시 아이템 추가
+            const metaRes = await fetch("/api/default-book");
+            if (!metaRes.ok) return;
+            const meta = await metaRes.json();
+            if (meta.status !== "ready") return;
+
+            // 라이브러리에 다운로드 중 표시 아이템 추가
             libraryEmpty.style.display = "none";
             const progressItem = document.createElement("div");
             progressItem.className = "audio-item audio-item-generating";
@@ -715,90 +716,39 @@ document.addEventListener("DOMContentLoaded", () => {
                 <div class="audio-title-group">
                     <div class="generating-spinner"></div>
                     <div class="generating-info">
-                        <span class="audio-title">${DEFAULT_BOOK_FILENAME.replace(/\.[^/.]+$/, "")}.mp3</span>
+                        <span class="audio-title">${meta.title}</span>
                         <div class="generating-progress-track">
-                            <div class="generating-progress-fill" style="width: 0%"></div>
+                            <div class="generating-progress-fill" style="width: 30%"></div>
                         </div>
-                        <span class="generating-status">샘플 오디오북 준비 중...</span>
+                        <span class="generating-status">기본 제공 오디오북 다운로드 중...</span>
                     </div>
                 </div>
             `;
             audioList.prepend(progressItem);
-            const inlineFill = progressItem.querySelector(".generating-progress-fill");
-
-            let simulatedProgress = 0;
-            const progressInterval = setInterval(() => {
-                if (simulatedProgress < 90) {
-                    simulatedProgress += Math.random() * 6;
-                    if (simulatedProgress > 90) simulatedProgress = 90;
-                    inlineFill.style.width = `${simulatedProgress}%`;
-                }
-            }, 500);
 
             try {
-                // 1. 텍스트 업로드 및 추출
-                const formData = new FormData();
-                formData.append("file", sampleFile);
-                const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
-                if (!uploadRes.ok) throw new Error("샘플 텍스트 업로드 실패");
-                const uploadData = await uploadRes.json();
+                const audioRes = await fetch(meta.audio_url);
+                if (!audioRes.ok) throw new Error("기본 제공 오디오북 다운로드 실패");
+                const audioArrayBuffer = await audioRes.arrayBuffer();
 
-                // 2. 음성 합성 요청
-                const synthForm = new FormData();
-                synthForm.append("text_id", uploadData.text_id);
-                synthForm.append("voice", DEFAULT_BOOK_VOICE);
-                synthForm.append("rate", "+0%");
-                synthForm.append("pitch", "+0Hz");
-                const synthRes = await fetch("/api/synthesize", { method: "POST", body: synthForm });
-                if (!synthRes.ok) throw new Error("샘플 오디오북 변환 요청 실패");
-                const { job_id } = await synthRes.json();
-
-                // 3. 완료될 때까지 폴링
-                let jobData;
-                while (true) {
-                    const pollRes = await fetch(`/api/job/${job_id}`);
-                    if (!pollRes.ok) throw new Error("작업 상태 통신 실패");
-                    jobData = await pollRes.json();
-                    if (jobData.status === "completed" || jobData.status === "error") break;
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                }
-                if (jobData.status !== "completed") {
-                    throw new Error(jobData.error || "샘플 오디오북 생성 실패");
-                }
-
-                clearInterval(progressInterval);
-                inlineFill.style.width = "100%";
-
-                // 4. base64 오디오를 ArrayBuffer로 디코딩 후 저장
-                const byteCharacters = atob(jobData.audio);
-                const byteNumbers = new Array(byteCharacters.length);
-                for (let i = 0; i < byteCharacters.length; i++) {
-                    byteNumbers[i] = byteCharacters.charCodeAt(i);
-                }
-                const audioBlob = new Blob([new Uint8Array(byteNumbers)], { type: "audio/mpeg" });
-                const audioArrayBuffer = await audioBlob.arrayBuffer();
-
-                const entry = {
-                    id: crypto.randomUUID(),
-                    title: DEFAULT_BOOK_FILENAME.replace(/\.[^/.]+$/, "") + ".mp3",
+                await saveAudiobookToDB({
+                    id: DEFAULT_BOOK_ID,
+                    title: meta.title + ".mp3",
                     audioData: audioArrayBuffer,
-                    sentences: jobData.sentences,
+                    sentences: meta.sentences,
+                    headings: meta.headings,
                     timestamp: Date.now(),
                     dateString: new Date().toLocaleDateString("ko-KR", {
                         year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
                     }),
-                    sizeBytes: audioBlob.size,
-                    charCount: uploadData.char_count
-                };
-
-                await saveAudiobookToDB(entry);
-                localStorage.setItem(DEFAULT_BOOK_SEEDED_KEY, "1");
+                    sizeBytes: audioArrayBuffer.byteLength,
+                    charCount: meta.char_count,
+                    isDefault: true
+                });
 
                 progressItem.remove();
                 renderLibrary();
-                showToast("샘플 오디오북이 준비되었습니다!", "success");
             } catch (innerError) {
-                clearInterval(progressInterval);
                 progressItem.remove();
                 if (audioList.children.length === 0) {
                     libraryEmpty.style.display = "flex";
@@ -806,8 +756,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 throw innerError;
             }
         } catch (error) {
-            // 실패 시 플래그를 저장하지 않아 다음 방문 때 재시도한다.
-            console.error("Default book seeding failed:", error);
+            // 실패해도 조용히 넘어간다. 다음 방문 때 다시 시도된다.
+            console.error("Default book sync failed:", error);
         }
     }
 
@@ -842,6 +792,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     <div class="audio-title-group">
                         <i data-lucide="play-circle"></i>
                         <span class="audio-title" title="${audio.title}">${audio.title}</span>
+                        ${audio.isDefault ? '<span class="default-badge" title="기본 제공 오디오북">기본 제공</span>' : ''}
                     </div>
                     <div class="audio-actions">
                         <button class="btn-icon-round btn-more" data-id="${audio.id}" title="더보기">
@@ -888,6 +839,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function openActionSheet(audio) {
         actionSheetTarget = audio;
+        actionDeleteBtn.style.display = audio.isDefault ? "none" : "";
         actionSheetBackdrop.classList.add("show");
     }
 
@@ -1087,6 +1039,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     actionDeleteBtn.addEventListener("click", async () => {
         if (!actionSheetTarget) return;
+        if (actionSheetTarget.isDefault) {
+            closeActionSheet();
+            showToast("기본 제공 오디오북은 삭제할 수 없습니다.", "error");
+            return;
+        }
         const idToDelete = actionSheetTarget.id;
         closeActionSheet();
         await deleteAudiobook(idToDelete);

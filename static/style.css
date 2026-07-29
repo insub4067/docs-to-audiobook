@@ -642,6 +642,17 @@ input[type="range"]::-webkit-slider-thumb:active {
     flex-shrink: 0;
 }
 
+.default-badge {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    background: rgba(166, 124, 82, 0.15);
+    padding: 2px 8px;
+    border-radius: 999px;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
 .btn-icon-round.btn-delete {
     display: flex;
     align-items: center;

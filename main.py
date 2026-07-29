@@ -380,61 +380,75 @@ async def synthesize_chunk(chunk_index: int, text_chunk: str, voice: str, rate: 
             })
     return chunk_index, audio_data, sentences
 
+async def synthesize_document(raw_text: str, voice: str, rate: str, pitch: str) -> tuple:
+    """Synthesize a full document into (audio_bytes, annotated_sentences, heading_index)."""
+    # Extract heading metadata from original text (before preprocessing strips newlines)
+    headings = extract_markdown_headings(raw_text)
+
+    # Preprocess text for TTS (merge lines, clean spacing)
+    text = preprocess_text(raw_text)
+
+    # Split text into chunks (~800 chars per chunk for optimal parallel TTS generation)
+    paragraphs = text.split(". ")
+    chunks = []
+    current_chunk = ""
+
+    for p in paragraphs:
+        if len(current_chunk) + len(p) < 800:
+            current_chunk += (p + ". ")
+        else:
+            if current_chunk.strip():
+                chunks.append(current_chunk.strip())
+            current_chunk = p + ". "
+    if current_chunk.strip():
+        chunks.append(current_chunk.strip())
+
+    if not chunks:
+        chunks = [text]
+
+    # Process all chunks concurrently using asyncio.gather
+    tasks = [
+        synthesize_chunk(i, chunk, voice, rate, pitch)
+        for i, chunk in enumerate(chunks)
+    ]
+    results = await asyncio.gather(*tasks)
+
+    # Sort by chunk index to maintain exact order
+    results.sort(key=lambda x: x[0])
+
+    combined_audio = b""
+    combined_sentences = []
+    current_time_offset = 0
+
+    for idx, audio_data, sentences in results:
+        combined_audio += audio_data
+
+        chunk_duration = 0
+        for s in sentences:
+            combined_sentences.append({
+                "text": s["text"],
+                "start": s["start"] + current_time_offset,
+                "end": s["end"] + current_time_offset
+            })
+            if s["end"] > chunk_duration:
+                chunk_duration = s["end"]
+
+        # Offset next chunk sentences by duration of current chunk
+        current_time_offset += chunk_duration
+
+    # Annotate sentences with heading metadata
+    annotated_sentences, heading_index = annotate_sentences_with_headings(
+        combined_sentences, headings
+    )
+
+    return combined_audio, annotated_sentences, heading_index
+
+
 async def process_synthesis_task(job_id: str, raw_text: str, voice: str, rate: str, pitch: str):
     try:
-        # Extract heading metadata from original text (before preprocessing strips newlines)
-        headings = extract_markdown_headings(raw_text)
-
-        # Preprocess text for TTS (merge lines, clean spacing)
-        text = preprocess_text(raw_text)
-
-        # Split text into chunks (~800 chars per chunk for optimal parallel TTS generation)
-        paragraphs = text.split(". ")
-        chunks = []
-        current_chunk = ""
-        
-        for p in paragraphs:
-            if len(current_chunk) + len(p) < 800:
-                current_chunk += (p + ". ")
-            else:
-                if current_chunk.strip():
-                    chunks.append(current_chunk.strip())
-                current_chunk = p + ". "
-        if current_chunk.strip():
-            chunks.append(current_chunk.strip())
-
-        if not chunks:
-            chunks = [text]
-
-        # Process all chunks concurrently using asyncio.gather
-        tasks = [
-            synthesize_chunk(i, chunk, voice, rate, pitch)
-            for i, chunk in enumerate(chunks)
-        ]
-        results = await asyncio.gather(*tasks)
-        
-        # Sort by chunk index to maintain exact order
-        results.sort(key=lambda x: x[0])
-
-        combined_audio = b""
-        combined_sentences = []
-        current_time_offset = 0
-
-        for idx, audio_data, sentences in results:
-            combined_audio += audio_data
-            
-            chunk_duration = 0
-            for s in sentences:
-                combined_sentences.append({
-                    "text": s["text"],
-                    "start": s["start"] + current_time_offset,
-                    "end": s["end"] + current_time_offset
-                })
-                if s["end"] > chunk_duration:
-                    chunk_duration = s["end"]
-            
-            # Offset next chunk sentences by duration of current chunk
-            current_time_offset += chunk_duration
+        combined_audio, annotated_sentences, heading_index = await synthesize_document(
+            raw_text, voice, rate, pitch
+        )
 
         if not combined_audio:
             jobs[job_id]["status"] = "error"
@@ -443,11 +457,6 @@ async def process_synthesis_task(job_id: str, raw_text: str, voice: str, rate: s
 
         import base64
         audio_base64 = base64.b64encode(combined_audio).decode("utf-8")
-
-        # Annotate sentences with heading metadata
-        annotated_sentences, heading_index = annotate_sentences_with_headings(
-            combined_sentences, headings
-        )
 
         jobs[job_id]["audio"] = audio_base64
         jobs[job_id]["sentences"] = annotated_sentences
@@ -597,6 +606,102 @@ async def serve_shared_page(share_id: str):
         return FileResponse(index_path)
     raise HTTPException(status_code=404, detail="Page not found")
 
+# --------------------------------------------------
+# Default Book: 서버 기동 시 기본 제공 오디오북을 미리 생성해 캐시
+# --------------------------------------------------
+
+DEFAULT_BOOK_DIR = os.path.join(BASE_DIR, "default_book")
+DEFAULT_BOOK_SOURCE = os.path.join(STATIC_DIR, "samples", "sherlock-holmes.md")
+DEFAULT_BOOK_TITLE = "셜록 홈즈의 모험"
+DEFAULT_BOOK_VOICE = "ko-KR-SoonBokNeural"
+
+default_book_state = {"status": "pending", "error": None}
+
+
+def default_book_paths():
+    return (
+        os.path.join(DEFAULT_BOOK_DIR, "audio.mp3"),
+        os.path.join(DEFAULT_BOOK_DIR, "meta.json"),
+    )
+
+
+async def generate_default_book():
+    """기본 제공 오디오북을 생성해 디스크에 캐시한다. 이미 있으면 재사용."""
+    audio_path, meta_path = default_book_paths()
+
+    if os.path.exists(audio_path) and os.path.exists(meta_path):
+        default_book_state["status"] = "ready"
+        return
+
+    if not os.path.exists(DEFAULT_BOOK_SOURCE):
+        default_book_state["status"] = "error"
+        default_book_state["error"] = "기본 제공 문서를 찾을 수 없습니다."
+        print(f"Default book source missing: {DEFAULT_BOOK_SOURCE}")
+        return
+
+    default_book_state["status"] = "generating"
+    try:
+        raw_text = extract_text(DEFAULT_BOOK_SOURCE, "sherlock-holmes.md")
+        audio_bytes, sentences, headings = await synthesize_document(
+            raw_text, DEFAULT_BOOK_VOICE, "+0%", "+0Hz"
+        )
+
+        if not audio_bytes:
+            raise RuntimeError("음성 합성 결과가 비어 있습니다.")
+
+        os.makedirs(DEFAULT_BOOK_DIR, exist_ok=True)
+        with open(audio_path, "wb") as f:
+            f.write(audio_bytes)
+        with open(meta_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "title": DEFAULT_BOOK_TITLE,
+                "sentences": sentences,
+                "headings": headings,
+                "char_count": len(raw_text),
+                "size_bytes": len(audio_bytes),
+            }, f, ensure_ascii=False)
+
+        default_book_state["status"] = "ready"
+        default_book_state["error"] = None
+        print(f"Default book generated: {len(audio_bytes)} bytes")
+    except Exception as e:
+        default_book_state["status"] = "error"
+        default_book_state["error"] = str(e)
+        print(f"Default book generation failed: {e}")
+
+
+@app.get("/api/default-book")
+async def get_default_book():
+    """기본 제공 오디오북의 상태 및 메타데이터를 반환."""
+    audio_path, meta_path = default_book_paths()
+
+    if default_book_state["status"] != "ready" or not os.path.exists(meta_path):
+        return JSONResponse(content={
+            "status": default_book_state["status"],
+            "error": default_book_state["error"],
+        })
+
+    with open(meta_path, "r", encoding="utf-8") as f:
+        meta = json.load(f)
+
+    return JSONResponse(content={
+        "status": "ready",
+        "title": meta["title"],
+        "sentences": meta["sentences"],
+        "headings": meta.get("headings", []),
+        "char_count": meta.get("char_count", 0),
+        "audio_url": "/api/default-book/audio",
+    })
+
+
+@app.get("/api/default-book/audio")
+async def get_default_book_audio():
+    audio_path, _ = default_book_paths()
+    if not os.path.exists(audio_path):
+        raise HTTPException(status_code=404, detail="기본 제공 오디오북이 아직 준비되지 않았습니다.")
+    return FileResponse(audio_path, media_type="audio/mpeg", filename="sherlock-holmes.mp3")
+
+
 async def cleanup_expired_files_loop():
     while True:
         try:
@@ -632,6 +737,7 @@ async def cleanup_expired_files_loop():
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(cleanup_expired_files_loop())
+    asyncio.create_task(generate_default_book())
 
 if __name__ == "__main__":
     import uvicorn
