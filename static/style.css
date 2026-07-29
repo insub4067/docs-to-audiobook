@@ -37,14 +37,18 @@ body {
     background-color: var(--bg-color);
     color: var(--text-color);
     min-height: 100vh;
-    min-height: -webkit-fill-available; /* Fill viewport height on iOS Safari */
+    /* dvh는 viewport-fit=cover에서 화면 전체 높이로 계산된다.
+       -webkit-fill-available은 standalone PWA에서 상단 안전영역을 제외한
+       높이가 되어 루트 박스가 짧아지고, 그 안의 fixed 오버레이가 화면
+       하단에 닿지 못하는 문제가 있어 사용하지 않는다. */
+    min-height: 100dvh;
     position: relative;
     overflow-x: hidden;
     line-height: 1.6;
 }
 
 html {
-    height: -webkit-fill-available;
+    height: 100%;
 }
 
 /* Background Decor - Removed for flat iOS look */
