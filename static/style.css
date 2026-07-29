@@ -1156,6 +1156,13 @@ input[type="range"]::-webkit-slider-thumb:active {
     padding-bottom: 0;
 }
 
+/* status-bar-style이 black-translucent라 헤더가 사라지면 텍스트가
+   상단 다이나믹 아일랜드/노치 밑으로 그려진다. 상단만 안전영역만큼
+   추가 확보한다 (하단은 IgnoreSafeArea 요청에 따라 그대로 둔다). */
+.reader-container.hide-ui .reader-content {
+    padding-top: calc(24px + env(safe-area-inset-top));
+}
+
 
 .reader-player-ui {
     display: flex;
