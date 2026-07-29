@@ -419,7 +419,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     // ----------------------------------------------------
     // 2. Drag & Drop / File Input Handlers
     // ----------------------------------------------------
-    dropzone.addEventListener("click", () => fileInput.click());
+    const openFileInput = () => {
+        console.log("🔓 Opening file input...");
+        fileInput.click();
+    };
+
+    dropzone.addEventListener("click", openFileInput);
+    dropzone.addEventListener("touchend", (e) => {
+        e.preventDefault();
+        console.log("📱 Touch event detected");
+        openFileInput();
+    });
     
     fileInput.addEventListener("change", (e) => {
         if (e.target.files.length > 0) {
