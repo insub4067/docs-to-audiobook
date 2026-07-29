@@ -70,21 +70,49 @@ document.addEventListener("DOMContentLoaded", async () => {
     let readerUiTimeout = null;
     let lastScrollTop = 0;
     let isAutoScrolling = false;
+    let readerUiProgress = 0;      // 0 = 완전히 펼침, 1 = 완전히 접힘
+    let readerSnapTimeout = null;
+    const READER_COLLAPSE_DISTANCE = 90;  // 이만큼 스크롤하면 완전히 접힘
+
+    function setReaderUiProgress(p, animated) {
+        if (!readerContainer) return;
+        readerUiProgress = Math.min(1, Math.max(0, p));
+        readerContainer.classList.toggle("ui-snapping", animated === true);
+        readerContainer.style.setProperty("--reader-ui-p", readerUiProgress.toFixed(3));
+    }
+
+    // 바 높이는 safe-area 때문에 기기마다 달라서 실측해 본문 패딩 기준으로 넘긴다.
+    // 펼친 상태(p=0)에서 재야 정확하다.
+    function measureReaderBars() {
+        if (!readerContainer) return;
+        const header = readerContainer.querySelector(".reader-header");
+        const controls = readerContainer.querySelector(".reader-controls");
+        const secondary = readerContainer.querySelector(".reader-secondary-controls");
+        // scrollHeight는 max-height에 눌리지 않는 자연 높이를 준다
+        if (secondary) {
+            readerContainer.style.setProperty("--reader-secondary-h", secondary.scrollHeight + "px");
+        }
+        if (header) readerContainer.style.setProperty("--reader-header-h", header.offsetHeight + "px");
+        if (controls) readerContainer.style.setProperty("--reader-controls-h", controls.offsetHeight + "px");
+    }
 
     function showReaderUi() {
-        if (!readerContainer) return;
-        readerContainer.classList.remove("hide-ui");
-        
+        setReaderUiProgress(0, true);
+
         clearTimeout(readerUiTimeout);
         // Auto-hide UI after 4 seconds of inactivity if we are playing
         readerUiTimeout = setTimeout(() => {
             if (!readerAudio.paused) {
-                readerContainer.classList.add("hide-ui");
+                setReaderUiProgress(1, true);
             }
         }, 4000);
     }
 
+    // 리더가 열릴 때만 호출된다 — 펼친 상태를 만든 뒤 바 높이를 실측한다
     function resetReaderUiTimeout() {
+        lastScrollTop = 0;
+        setReaderUiProgress(0, false);
+        requestAnimationFrame(measureReaderBars);
         showReaderUi();
     }
     
@@ -125,25 +153,40 @@ document.addEventListener("DOMContentLoaded", async () => {
     
     // Listen for scroll on the reader content
     readerContent.addEventListener("scroll", () => {
-        if (isAutoScrolling) return; // Ignore automated scrolling (e.g. following text)
-        
         const currentScrollTop = readerContent.scrollTop;
-        
-        if (currentScrollTop > lastScrollTop + 5) {
-            // Scrolling down -> Hide UI
-            readerContainer.classList.add("hide-ui");
-            clearTimeout(readerUiTimeout);
-        } else if (currentScrollTop < lastScrollTop - 5) {
-            // Scrolling up -> Show UI
-            showReaderUi();
+
+        // Ignore automated scrolling (e.g. following text)
+        if (isAutoScrolling) {
+            lastScrollTop = Math.max(0, currentScrollTop);
+            return;
         }
-        
+
+        const delta = currentScrollTop - lastScrollTop;
         lastScrollTop = Math.max(0, currentScrollTop);
+
+        if (currentScrollTop <= 0) {
+            setReaderUiProgress(0, true);   // 맨 위에서는 항상 펼친다
+        } else {
+            // 트랜지션 없이 스크롤량에 비례해 손가락을 그대로 따라간다
+            setReaderUiProgress(readerUiProgress + delta / READER_COLLAPSE_DISTANCE, false);
+            clearTimeout(readerUiTimeout);
+        }
+
+        // 스크롤이 멈추면 가까운 쪽으로 스냅해서 어중간한 상태로 남지 않게 한다
+        clearTimeout(readerSnapTimeout);
+        readerSnapTimeout = setTimeout(() => {
+            setReaderUiProgress(readerUiProgress > 0.5 ? 1 : 0, true);
+        }, 140);
     }, { passive: true });
     
     // Touch/Click explicitly shows the UI
     readerContent.addEventListener("click", showReaderUi);
     readerContent.addEventListener("touchstart", showReaderUi, { passive: true });
+
+    // 회전하면 safe-area와 바 높이가 달라지므로 본문 패딩 기준을 다시 잡는다
+    window.addEventListener("resize", () => {
+        if (readerOverlay && readerOverlay.classList.contains("show")) measureReaderBars();
+    });
 
     // App State
     let currentTextId = null;
@@ -1547,7 +1590,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         
         readerOverlay.classList.remove("show");
         clearTimeout(readerUiTimeout);
-        if (readerContainer) readerContainer.classList.remove("hide-ui");
+        clearTimeout(readerSnapTimeout);
+        setReaderUiProgress(0, false);
+        lastScrollTop = 0;
         
         showPlayIcon();
         

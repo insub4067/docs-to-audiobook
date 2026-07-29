@@ -964,15 +964,34 @@ input[type="range"]::-webkit-slider-thumb:active {
     position: absolute;
     top: 0;
     bottom: 0;
-    display: flex;
-    flex-direction: column;
     background-color: #FAF5E6;
     overflow: hidden;
 }
 
-/* Header - flex child (NOT absolute) to prevent iOS touch event blocking */
+/* 상단 안전영역 고정 블러 스트립. 헤더가 접혀도 본문이 다이나믹
+   아일랜드 밑으로 드러나지 않게 항상 덮는다. */
+.reader-container::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: env(safe-area-inset-top);
+    background-color: rgba(250, 245, 230, 0.88);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    z-index: 9;
+    pointer-events: none;
+}
+
+/* 상/하단 바는 absolute 오버레이다. 접힘을 transform으로 처리해 본문
+   스크롤 컨테이너를 리플로우시키지 않는다 — max-height로 접던 이전
+   방식은 매 프레임 리플로우가 스크롤 위치와 서로 밀어내 덜컹거렸다. */
 .reader-header {
-    flex-shrink: 0;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
     z-index: 10;
     display: flex;
     justify-content: space-between;
@@ -982,11 +1001,8 @@ input[type="range"]::-webkit-slider-thumb:active {
     background-color: rgba(250, 245, 230, 0.88);
     backdrop-filter: blur(24px) saturate(160%);
     -webkit-backdrop-filter: blur(24px) saturate(160%);
-    /* max-height transition for smooth hide */
-    max-height: 120px;
-    overflow: hidden;
-    opacity: 1;
-    transition: max-height 0.35s ease, opacity 0.25s ease, padding 0.35s ease;
+    /* 접히면 위로 밀려 컨테이너 overflow에 잘린다 */
+    transform: translateY(calc(var(--reader-ui-p, 0) * -100%));
 }
 
 .reader-book-title {
@@ -1023,11 +1039,18 @@ input[type="range"]::-webkit-slider-thumb:active {
     color: var(--text-color);
 }
 
-/* Content - 이제 header/controls가 flex flow에 있으므로 padding 정상화 */
+/* 본문도 absolute. 바가 오버레이라 문서 처음/끝이 가려지지 않게 바
+   높이만큼 패딩을 확보한다. 이 패딩은 접힘과 무관하게 고정이다 —
+   여기가 바뀌면 리플로우가 나서 스크롤이 튄다. */
 .reader-content {
-    flex-grow: 1;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
     overflow-y: auto;
-    padding: 24px 28px 24px;
+    padding: calc(var(--reader-header-h, 96px) + 24px) 28px
+             calc(var(--reader-controls-h, 120px) + 24px);
     font-family: var(--font-serif);
     font-size: 1.15rem;
     line-height: 2.0;
@@ -1130,8 +1153,14 @@ input[type="range"]::-webkit-slider-thumb:active {
     box-shadow: inset 0 -2px 0 rgba(198, 154, 88, 0.5);
 }
 
+/* 하단 바는 접혀도 사라지지 않고 재생 컨트롤만 남는 컴팩트 상태가 된다.
+   오디오북에서 일시정지와 재생 위치는 읽는 중 가장 자주 쓰는 컨트롤이라
+   완전히 숨기면 매번 스크롤을 되돌려야 한다. */
 .reader-controls {
-    flex-shrink: 0;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
     z-index: 10;
     /* 터치 영역은 홈 인디케이터를 비켜야 한다. 배경은 화면 끝까지 full-bleed로
        깔리고(부모가 뷰포트 하단까지 닿음) 버튼만 인셋만큼 올라온다. */
@@ -1140,32 +1169,14 @@ input[type="range"]::-webkit-slider-thumb:active {
     background-color: rgba(250, 245, 230, 0.88);
     backdrop-filter: blur(24px) saturate(160%);
     -webkit-backdrop-filter: blur(24px) saturate(160%);
-    max-height: 160px;
-    overflow: hidden;
-    opacity: 1;
-    transition: max-height 0.35s ease, opacity 0.25s ease, padding 0.35s ease;
 }
 
-/* Auto-hide UI: max-height collapse instead of transform (works with in-flow elements) */
-.reader-container.hide-ui .reader-header {
-    max-height: 0;
-    opacity: 0;
-    padding-top: 0;
-    padding-bottom: 0;
-}
-
-.reader-container.hide-ui .reader-controls {
-    max-height: 0;
-    opacity: 0;
-    padding-top: 0;
-    padding-bottom: 0;
-}
-
-/* status-bar-style이 black-translucent라 헤더가 사라지면 텍스트가
-   상단 다이나믹 아일랜드/노치 밑으로 그려진다. 상단만 안전영역만큼
-   추가 확보한다 (하단은 IgnoreSafeArea 요청에 따라 그대로 둔다). */
-.reader-container.hide-ui .reader-content {
-    padding-top: calc(24px + env(safe-area-inset-top));
+/* 스크롤 중에는 트랜지션 없이 손가락을 그대로 따라가고, 손을 뗀 뒤
+   가까운 쪽으로 스냅할 때만 트랜지션을 켠다. */
+.reader-container.ui-snapping .reader-header,
+.reader-container.ui-snapping .reader-secondary-controls {
+    transition: transform 0.28s ease, max-height 0.28s ease,
+                margin-top 0.28s ease, opacity 0.28s ease;
 }
 
 
@@ -1248,7 +1259,12 @@ input[type="range"]::-webkit-slider-thumb:active {
     align-items: center;
     justify-content: center;
     gap: 12px;
-    margin-top: 6px;
+    /* 접힘 진행도에 따라 이 줄만 사라진다. 바가 하단 고정 오버레이라
+       높이가 변해도 본문 스크롤에는 영향이 없다. */
+    max-height: calc((1 - var(--reader-ui-p, 0)) * var(--reader-secondary-h, 40px));
+    margin-top: calc((1 - var(--reader-ui-p, 0)) * 6px);
+    opacity: calc(1 - var(--reader-ui-p, 0));
+    overflow: hidden;
 }
 
 .btn-reader-secondary {
@@ -1323,7 +1339,10 @@ input[type="range"]::-webkit-slider-thumb:active {
     }
     
     .reader-content {
-        padding: 30px 20px;
+        /* 좌우만 좁히고 상/하는 바 높이 확보를 유지해야 한다 —
+           여기서 padding을 통째로 덮으면 문서 처음/끝이 바에 가려진다 */
+        padding: calc(var(--reader-header-h, 96px) + 30px) 20px
+                 calc(var(--reader-controls-h, 120px) + 30px);
         font-size: 1.12rem;
         line-height: 1.8;
     }
