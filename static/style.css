@@ -1155,6 +1155,38 @@ input[type="range"]::-webkit-slider-thumb:active {
     height: 24px;
 }
 
+.btn-player-skip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    background-color: rgba(93, 75, 64, 0.1);
+    color: var(--primary-color);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.btn-player-skip:hover {
+    background-color: rgba(93, 75, 64, 0.2);
+    transform: scale(1.05);
+}
+
+.btn-player-skip:active {
+    transform: scale(0.95);
+}
+
+.btn-player-skip svg {
+    width: 20px;
+    height: 20px;
+}
+
 .reader-secondary-controls {
     display: flex;
     align-items: center;

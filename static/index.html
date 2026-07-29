@@ -196,9 +196,15 @@
                 <footer class="reader-controls">
                     <audio id="readerAudio"></audio>
                     <div class="reader-player-ui">
+                        <button class="btn-player-skip" id="readerSkipBackBtn" title="10초 뒤로" type="button">
+                            <i data-lucide="skip-back"></i>
+                        </button>
                         <button class="btn-player-play" id="readerPlayPauseBtn" title="재생/일시정지" type="button">
                             <svg id="playIconSvg" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
                             <svg id="pauseIconSvg" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="display:none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+                        </button>
+                        <button class="btn-player-skip" id="readerSkipForwardBtn" title="10초 앞으로" type="button">
+                            <i data-lucide="skip-forward"></i>
                         </button>
                         <div class="reader-progress-wrapper">
                             <span class="player-time" id="readerCurrentTime">00:00</span>
@@ -209,6 +215,9 @@
                         </div>
                     </div>
                     <div class="reader-secondary-controls">
+                        <button class="btn-reader-secondary" id="readerRepeatBtn" title="반복 모드" type="button">
+                            <i data-lucide="repeat"></i> <span id="readerRepeatText">반복 안 함</span>
+                        </button>
                         <button class="btn-reader-secondary" id="readerSpeedBtn" title="재생 속도" type="button">
                             <i data-lucide="gauge"></i> <span id="readerSpeedText">1.0x</span>
                         </button>

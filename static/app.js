@@ -1719,8 +1719,70 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // --------------------------------------------------
-    // 10. Secondary Controls (Speed & Timer)
+    // 9.5 Time Skip Controls
     // --------------------------------------------------
+    const readerSkipBackBtn = document.getElementById("readerSkipBackBtn");
+    const readerSkipForwardBtn = document.getElementById("readerSkipForwardBtn");
+
+    readerSkipBackBtn.addEventListener("click", () => {
+        if (readerAudio && !isNaN(readerAudio.currentTime)) {
+            readerAudio.currentTime = Math.max(0, readerAudio.currentTime - 10);
+        }
+    });
+
+    readerSkipForwardBtn.addEventListener("click", () => {
+        if (readerAudio && !isNaN(readerAudio.duration)) {
+            readerAudio.currentTime = Math.min(readerAudio.duration, readerAudio.currentTime + 10);
+        }
+    });
+
+    // --------------------------------------------------
+    // 10. Secondary Controls (Repeat, Speed & Timer)
+    // --------------------------------------------------
+    const readerRepeatBtn = document.getElementById("readerRepeatBtn");
+    const readerRepeatText = document.getElementById("readerRepeatText");
+    const repeatModes = ["off", "all", "one"];
+    let currentRepeatMode = 0;
+
+    const savedRepeatMode = localStorage.getItem("textAudio_repeatMode");
+    if (savedRepeatMode) {
+        const idx = repeatModes.indexOf(savedRepeatMode);
+        if (idx !== -1) currentRepeatMode = idx;
+    }
+
+    const repeatModeLabels = {
+        "off": "반복 안 함",
+        "all": "전체 반복",
+        "one": "한 곡 반복"
+    };
+
+    function applyRepeatUI() {
+        const mode = repeatModes[currentRepeatMode];
+        readerRepeatText.textContent = repeatModeLabels[mode];
+        readerRepeatBtn.classList.toggle("active", mode !== "off");
+    }
+    applyRepeatUI();
+
+    readerRepeatBtn.addEventListener("click", () => {
+        currentRepeatMode = (currentRepeatMode + 1) % repeatModes.length;
+        const newMode = repeatModes[currentRepeatMode];
+        applyRepeatUI();
+        localStorage.setItem("textAudio_repeatMode", newMode);
+        showToast(`반복 모드: ${repeatModeLabels[newMode]}`, "info");
+    });
+
+    // Handle audio end event for repeat
+    readerAudio.addEventListener("ended", () => {
+        const mode = repeatModes[currentRepeatMode];
+        if (mode === "all") {
+            readerAudio.currentTime = 0;
+            readerAudio.play().catch(err => console.log("Autoplay blocked:", err));
+        } else if (mode === "one") {
+            readerAudio.currentTime = 0;
+            readerAudio.play().catch(err => console.log("Autoplay blocked:", err));
+        }
+    });
+
     const readerSpeedBtn = document.getElementById("readerSpeedBtn");
     const readerSpeedText = document.getElementById("readerSpeedText");
     const speedOptions = [0.75, 1.0, 1.25, 1.5, 2.0];
