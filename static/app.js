@@ -1986,10 +1986,10 @@ async function initializeAuth() {
             showAppUI(user, token);
         } catch (error) {
             localStorage.removeItem("authToken");
-            showAuthUI();
+            showAppUI(null, null);
         }
     } else {
-        showAuthUI();
+        showAppUI(null, null);
     }
 
     setupAuthEventListeners();
@@ -2013,8 +2013,12 @@ function showAppUI(user, token) {
 
     authContainer.style.display = "none";
     appMain.style.display = "block";
-    userInfo.style.display = "flex";
-    userEmail.textContent = user.email;
+    if (user && token) {
+        userInfo.style.display = "flex";
+        userEmail.textContent = user.email;
+    } else {
+        userInfo.style.display = "none";
+    }
 }
 
 async function fetchCurrentUser(token) {
