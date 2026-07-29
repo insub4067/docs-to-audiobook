@@ -694,9 +694,16 @@ async def get_default_book():
     audio_path, meta_path = default_book_paths()
 
     if default_book_state["status"] == "error":
-        async with default_book_lock:
-            if default_book_state["status"] == "error":
-                await generate_default_book()
+        async def retry_generation():
+            async with default_book_lock:
+                if default_book_state["status"] == "error":
+                    await generate_default_book()
+        asyncio.create_task(retry_generation())
+        # Let the client know we are retrying
+        return JSONResponse(content={
+            "status": "generating",
+            "error": None,
+        })
 
     if default_book_state["status"] != "ready" or not os.path.exists(meta_path):
         return JSONResponse(content={
