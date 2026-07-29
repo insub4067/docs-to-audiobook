@@ -628,7 +628,7 @@ async def serve_shared_page(share_id: str):
 DEFAULT_BOOK_DIR = os.path.join(BASE_DIR, "default_book")
 DEFAULT_BOOK_SOURCE = os.path.join(STATIC_DIR, "samples", "sherlock-holmes.md")
 DEFAULT_BOOK_TITLE = "셜록 홈즈의 모험"
-DEFAULT_BOOK_VOICE = "ko-KR-SoonBokNeural"
+DEFAULT_BOOK_VOICE = "ko-KR-SunHiNeural"
 
 default_book_state = {"status": "pending", "error": None}
 default_book_lock = asyncio.Lock()
