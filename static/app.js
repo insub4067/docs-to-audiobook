@@ -1139,6 +1139,43 @@ document.addEventListener("DOMContentLoaded", () => {
         return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
     }
 
+    // Web Speech API Fallback System
+    let webSpeechSynthesis = window.speechSynthesis;
+    let currentUtterance = null;
+
+    function speakWithWebSpeech(text, voice = "ko-KR", rate = 1.0, pitch = 1.0) {
+        if (!webSpeechSynthesis) {
+            showToast("Web Speech API를 지원하지 않는 브라우저입니다.", "error");
+            return;
+        }
+
+        webSpeechSynthesis.cancel();
+        currentUtterance = new SpeechSynthesisUtterance(text);
+        currentUtterance.lang = "ko-KR";
+        currentUtterance.rate = rate;
+        currentUtterance.pitch = pitch;
+        currentUtterance.volume = 1.0;
+
+        currentUtterance.onstart = () => {
+            showToast("🎤 Web Speech API로 읽는 중...", "info");
+        };
+        currentUtterance.onend = () => {
+            currentUtterance = null;
+        };
+        currentUtterance.onerror = (event) => {
+            showToast(`Web Speech 오류: ${event.error}`, "error");
+        };
+
+        webSpeechSynthesis.speak(currentUtterance);
+    }
+
+    function stopWebSpeech() {
+        if (webSpeechSynthesis) {
+            webSpeechSynthesis.cancel();
+            currentUtterance = null;
+        }
+    }
+
     // Toast Notification System
     let toastTimeout = null;
     function showToast(message, type = "info") {
@@ -1620,9 +1657,23 @@ document.addEventListener("DOMContentLoaded", () => {
             if (now - lastToggleTime < 300) return;
             lastToggleTime = now;
             if (readerAudio.paused) {
-                readerAudio.play().catch(function(err) { console.log("Play failed:", err); });
+                readerAudio.play().catch(function(err) {
+                    console.log("Play failed:", err);
+                    const textContent = readerContent.innerText || "";
+                    if (textContent.trim() && webSpeechSynthesis) {
+                        showToast("오디오 재생 실패. Web Speech API로 읽을까요?", "warning");
+                        setTimeout(() => {
+                            if (confirm("Web Speech API로 텍스트를 읽으시겠습니까?\n(오디오북을 생성할 수 없는 경우의 대체 방법입니다)")) {
+                                const speed = readerAudio.playbackRate || 1.0;
+                                speakWithWebSpeech(textContent, "ko-KR", speed, 1.0);
+                                showPauseIcon();
+                            }
+                        }, 100);
+                    }
+                });
             } else {
                 readerAudio.pause();
+                stopWebSpeech();
             }
         }
 
