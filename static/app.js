@@ -723,20 +723,30 @@ document.addEventListener("DOMContentLoaded", () => {
 
             let meta = null;
             let attempts = 0;
-            while (attempts < 60) { // Max 1 minute polling
-                const metaRes = await fetch("/api/default-book");
-                if (!metaRes.ok) break;
-                meta = await metaRes.json();
-                
-                if (meta.status === "ready") {
-                    break;
-                } else if (meta.status === "error") {
-                    console.error("Default book generation error on server");
-                    break;
+            const maxAttempts = 60; // Max 1 minute polling
+            while (attempts < maxAttempts) {
+                try {
+                    const metaRes = await fetch("/api/default-book");
+                    if (!metaRes.ok) {
+                        attempts++;
+                        await new Promise(r => setTimeout(r, 2000));
+                        continue;
+                    }
+                    meta = await metaRes.json();
+
+                    if (meta.status === "ready") {
+                        break;
+                    } else if (meta.status === "error") {
+                        console.warn("Default book generation error on server:", meta.error);
+                        await new Promise(r => setTimeout(r, 2000));
+                    } else {
+                        // pending or generating -> wait and retry
+                        await new Promise(r => setTimeout(r, 2000));
+                    }
+                } catch (fetchError) {
+                    console.warn("Error fetching default book status:", fetchError);
+                    await new Promise(r => setTimeout(r, 2000));
                 }
-                
-                // pending or generating -> wait 2 seconds and poll again
-                await new Promise(r => setTimeout(r, 2000));
                 attempts++;
             }
 
@@ -745,6 +755,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (audioList.children.length === 0) {
                     libraryEmpty.style.display = "flex";
                 }
+                showToast("기본 제공 오디오북을 준비할 수 없습니다. 새 문서를 업로드해 주세요.", "info");
                 return;
             }
 
@@ -753,7 +764,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             try {
                 const audioRes = await fetch(meta.audio_url);
-                if (!audioRes.ok) throw new Error("기본 제공 오디오북 다운로드 실패");
+                if (!audioRes.ok) throw new Error("다운로드 실패");
                 const audioArrayBuffer = await audioRes.arrayBuffer();
 
                 await saveAudiobookToDB({
@@ -773,12 +784,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 progressItem.remove();
                 renderLibrary();
+                showToast("기본 제공 오디오북이 준비되었습니다!", "success");
             } catch (innerError) {
+                console.error("Failed to save default book:", innerError);
                 progressItem.remove();
                 if (audioList.children.length === 0) {
                     libraryEmpty.style.display = "flex";
                 }
-                throw innerError;
+                showToast("기본 제공 오디오북 저장에 실패했습니다.", "error");
             }
         } catch (error) {
             // 실패해도 조용히 넘어간다. 다음 방문 때 다시 시도된다.

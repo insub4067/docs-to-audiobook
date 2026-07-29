@@ -53,31 +53,38 @@ jobs = {}
 VOICE_METADATA = {
     "ko-KR-SunHiNeural": {
         "friendly_name": "선희 (차분한 뉴스/정보 전달 - 여성)",
-        "description": "단정하고 차분하며, 정보 전달이나 지적인 낭독에 적합합니다."
+        "description": "단정하고 차분하며, 정보 전달이나 지적인 낭독에 적합합니다.",
+        "tone": "formal", "use_case": ["news", "education", "documentation"]
     },
     "ko-KR-InJoonNeural": {
         "friendly_name": "인준 (신뢰감 있는 소설/다큐 - 남성)",
-        "description": "진중하고 신뢰감 있는 남성 톤으로, 다큐멘터리나 소설 낭독에 적합합니다."
+        "description": "진중하고 신뢰감 있는 남성 톤으로, 다큐멘터리나 소설 낭독에 적합합니다.",
+        "tone": "serious", "use_case": ["fiction", "documentary"]
     },
     "ko-KR-JiMinNeural": {
         "friendly_name": "지민 (밝고 상냥한 동화/안내 - 여성)",
-        "description": "밝고 친근하며, 동화책 낭독이나 상냥한 안내 멘트에 잘 어울립니다."
+        "description": "밝고 친근하며, 동화책 낭독이나 상냥한 안내 멘트에 잘 어울립니다.",
+        "tone": "friendly", "use_case": ["children", "guide", "instruction"]
     },
     "ko-KR-SeoHyeonNeural": {
         "friendly_name": "서현 (부드러운 나레이션/뉴스 - 여성)",
-        "description": "부드럽고 지적인 중저음 성우 스타일의 낭독입니다."
+        "description": "부드럽고 지적인 중저음 성우 스타일의 낭독입니다.",
+        "tone": "soft", "use_case": ["narration", "news", "meditation"]
     },
     "ko-KR-SoonBokNeural": {
         "friendly_name": "순복 (편안하고 단정한 책 낭독 - 여성)",
-        "description": "편안하고 정돈된 낭독으로, 긴 호흡의 책 읽기에 가장 편안합니다."
+        "description": "편안하고 정돈된 낭독으로, 긴 호흡의 책 읽기에 가장 편안합니다.",
+        "tone": "comfortable", "use_case": ["novel", "audiobook", "long_text"]
     },
     "ko-KR-YuJinNeural": {
         "friendly_name": "유진 (활기차고 경쾌한 대화 - 여성)",
-        "description": "활기차고 생동감이 넘치며, 소설 속 대화체 구현에 뛰어납니다."
+        "description": "활기차고 생동감이 넘치며, 소설 속 대화체 구현에 뛰어납니다.",
+        "tone": "energetic", "use_case": ["dialogue", "drama", "entertainment"]
     },
     "ko-KR-HyunMinNeural": {
         "friendly_name": "현민 (생동감 있는 동화/라디오 - 남성)",
-        "description": "생생하고 다이내믹하며, 아동 도서나 경쾌한 이야기에 적합합니다."
+        "description": "생생하고 다이내믹하며, 아동 도서나 경쾌한 이야기에 적합합니다.",
+        "tone": "dynamic", "use_case": ["children", "radio", "entertainment"]
     }
 }
 
@@ -307,32 +314,44 @@ async def upload_file(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"텍스트 추출 오류: {str(e)}")
 
 @app.get("/api/voices")
-async def get_voices():
+async def get_voices(tone: str = None, use_case: str = None):
+    """음성 목록 반환. tone/use_case로 필터링 가능."""
     try:
         # Get all voices
         all_voices = await edge_tts.VoicesManager.create()
         voices = all_voices.voices
-        
+
         filtered_voices = []
         for voice in voices:
             lang = voice.get("Locale", "")
             if lang.startswith("ko-KR") or lang.startswith("en-US"):
                 short_name = voice.get("ShortName", "")
-                
+
                 # Check if we have custom metadata for this Korean voice
                 meta = VOICE_METADATA.get(short_name, {})
                 friendly_name = meta.get("friendly_name", voice.get("FriendlyName", short_name))
                 description = meta.get("description", "표준 신경망(Neural) 음성입니다.")
-                
+
+                voice_tone = meta.get("tone", "")
+                voice_use_cases = meta.get("use_case", [])
+
+                # Apply filters
+                if tone and voice_tone != tone:
+                    continue
+                if use_case and use_case not in voice_use_cases:
+                    continue
+
                 filtered_voices.append({
                     "name": voice.get("Name", ""),
                     "short_name": short_name,
                     "gender": voice.get("Gender", ""),
                     "locale": lang,
                     "friendly_name": friendly_name,
-                    "description": description
+                    "description": description,
+                    "tone": voice_tone,
+                    "use_case": voice_use_cases
                 })
-        
+
         # Sort so Korean voices are at the top
         filtered_voices.sort(key=lambda x: 0 if x["locale"].startswith("ko-KR") else 1)
         return filtered_voices
