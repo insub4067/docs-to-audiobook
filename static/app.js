@@ -2116,37 +2116,7 @@ function setupAuthEventListeners() {
         });
     }
 
-    // Register form
-    if (registerForm) {
-        registerForm.addEventListener("submit", async (e) => {
-            e.preventDefault();
-            const email = document.getElementById("registerEmail").value;
-            const password = document.getElementById("registerPassword").value;
-            const fullName = document.getElementById("registerName").value;
-            const message = document.getElementById("registerMessage");
 
-            message.textContent = "가입 중...";
-            message.classList.remove("error", "success");
-
-            const result = await register(email, password, fullName);
-
-            if (result.success) {
-                message.textContent = "가입 성공! 로그인해주세요.";
-                message.classList.add("success");
-                
-                // Auto-switch to login tab
-                document.getElementById("loginTab").click();
-                document.getElementById("registerForm").reset();
-                setTimeout(() => {
-                    document.getElementById("loginEmail").value = email;
-                    document.getElementById("loginPassword").focus();
-                }, 300);
-            } else {
-                message.textContent = result.error;
-                message.classList.add("error");
-            }
-        });
-    }
 
     // Logout button
     if (logoutBtn) {
