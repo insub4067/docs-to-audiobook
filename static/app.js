@@ -91,7 +91,6 @@ document.addEventListener("DOMContentLoaded", () => {
     closeModalBtn.addEventListener("click", () => {
         generationModal.classList.remove("show");
         document.body.style.overflow = "";
-        document.body.style.overflow = "";
     });
     
     // Import Shared Link
