@@ -90,6 +90,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // Close generation modal
     closeModalBtn.addEventListener("click", () => {
         generationModal.classList.remove("show");
+        document.body.style.overflow = "";
+        document.body.style.overflow = "";
     });
     
     // Import Shared Link
@@ -181,11 +183,11 @@ document.addEventListener("DOMContentLoaded", () => {
     // 최초 로드 시 build_id 기억
     fetchBuildId().then(id => { cachedBuildId = id; });
 
-    // 앱이 포그라운드로 돌아올 때마다 체크
-    document.addEventListener("visibilitychange", async () => {
-        if (document.visibilityState !== "visible") return;
+    let lastVersionCheckTime = 0;
+
+    // 버전 확인 및 업데이트 로직 (공통)
+    async function checkAndReloadIfUpdated() {
         if (!cachedBuildId) {
-            // 아직 초기 ID가 없으면 지금 저장
             cachedBuildId = await fetchBuildId();
             return;
         }
@@ -206,7 +208,25 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             }, 3000);
         }
+    }
+
+    // 앱이 포그라운드로 돌아올 때마다 체크
+    document.addEventListener("visibilitychange", async () => {
+        if (document.visibilityState !== "visible") return;
+        checkAndReloadIfUpdated();
     });
+
+    // 메인 화면에서 스크롤 다운할 때도 버전 확인 (30초마다 한 번)
+    const appMain = document.querySelector(".app-main");
+    if (appMain) {
+        appMain.addEventListener("scroll", () => {
+            const now = Date.now();
+            if (now - lastVersionCheckTime > 30000) { // 30초 이상 지났으면 확인
+                lastVersionCheckTime = now;
+                checkAndReloadIfUpdated();
+            }
+        }, { passive: true });
+    }
 
     // Mobile specific UI adjustments
     const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
@@ -492,6 +512,7 @@ document.addEventListener("DOMContentLoaded", () => {
             // Show generation modal instead of confirm alert
             setTimeout(() => {
                 generationModal.classList.add("show");
+                document.body.style.overflow = "hidden";
             }, 300);
         } catch (error) {
             console.error(error);
@@ -536,6 +557,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!currentTextId) return;
         
         generationModal.classList.remove("show");
+        document.body.style.overflow = "";
 
         const voice = voiceSelect.value;
         const rate = getFormattedSpeed(parseInt(speedSlider.value));
@@ -879,11 +901,13 @@ document.addEventListener("DOMContentLoaded", () => {
         actionSheetTarget = audio;
         actionDeleteBtn.style.display = audio.isDefault ? "none" : "";
         actionSheetBackdrop.classList.add("show");
+        document.body.style.overflow = "hidden";
     }
 
     function closeActionSheet() {
         actionSheetBackdrop.classList.remove("show");
         actionSheetTarget = null;
+        document.body.style.overflow = "";
     }
 
     actionCancelBtn.addEventListener("click", closeActionSheet);
@@ -926,11 +950,13 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         indexSheetBackdrop.classList.add("show");
+        document.body.style.overflow = "hidden";
     }
 
     function closeIndexSheet() {
         const indexSheetBackdrop = document.getElementById("indexSheetBackdrop");
         if (indexSheetBackdrop) indexSheetBackdrop.classList.remove("show");
+        document.body.style.overflow = "";
     }
 
     const indexSheetCancelBtn = document.getElementById("indexSheetCancelBtn");
