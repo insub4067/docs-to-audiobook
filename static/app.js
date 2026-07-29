@@ -2026,7 +2026,7 @@ function showAppUI(user, token) {
     const userEmail = document.getElementById("userEmail");
 
     authContainer.style.display = "none";
-    appMain.style.display = "block";
+    appMain.style.display = "flex";
     if (user && token) {
         userInfo.style.display = "flex";
         userEmail.textContent = user.email;
