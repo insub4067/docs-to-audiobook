@@ -32,11 +32,61 @@
                 <h1>Text<span>Audio</span></h1>
             </div>
             <p class="subtitle">문서 파일을 자연스러운 음성 오디오북으로 변환하여 기기에 저장해 보세요.</p>
+
+            <!-- User Info Section (Hidden when not logged in) -->
+            <div class="user-info" id="userInfo" style="display: none;">
+                <span class="user-email" id="userEmail"></span>
+                <button class="btn-logout" id="logoutBtn" title="로그아웃">
+                    <i data-lucide="log-out"></i>
+                </button>
+            </div>
         </header>
 
+        <!-- Auth Section (Hidden when logged in) -->
+        <section class="auth-container" id="authContainer" style="display: none;">
+            <div class="glass-card auth-card">
+                <div class="auth-tabs">
+                    <button class="auth-tab active" id="loginTab">로그인</button>
+                    <button class="auth-tab" id="registerTab">가입</button>
+                </div>
+
+                <!-- Login Form -->
+                <form class="auth-form active" id="loginForm">
+                    <div class="form-group">
+                        <label for="loginEmail">이메일</label>
+                        <input type="email" id="loginEmail" placeholder="your@email.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="loginPassword">비밀번호</label>
+                        <input type="password" id="loginPassword" placeholder="••••••••" required>
+                    </div>
+                    <button type="submit" class="btn-primary">로그인</button>
+                    <p class="auth-message" id="loginMessage"></p>
+                </form>
+
+                <!-- Register Form -->
+                <form class="auth-form" id="registerForm" style="display: none;">
+                    <div class="form-group">
+                        <label for="registerName">이름</label>
+                        <input type="text" id="registerName" placeholder="홍길동">
+                    </div>
+                    <div class="form-group">
+                        <label for="registerEmail">이메일</label>
+                        <input type="email" id="registerEmail" placeholder="your@email.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="registerPassword">비밀번호</label>
+                        <input type="password" id="registerPassword" placeholder="••••••••" required>
+                    </div>
+                    <button type="submit" class="btn-primary">가입</button>
+                    <p class="auth-message" id="registerMessage"></p>
+                </form>
+            </div>
+        </section>
+
         <!-- Main Content -->
-        <main class="app-main">
-            
+        <main class="app-main" id="appMain">
+
             <!-- Upload Section -->
             <section class="glass-card upload-section">
                 <div class="card-header">

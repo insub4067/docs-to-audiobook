@@ -1,6 +1,9 @@
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
     // Initialize Lucide Icons
     lucide.createIcons();
+
+    // Check authentication status
+    await initializeAuth();
 
     // DOM Elements
     const dropzone = document.getElementById("dropzone");
@@ -1966,3 +1969,206 @@ document.addEventListener("DOMContentLoaded", () => {
 
     checkSharedLink();
 });
+
+// ============================================================
+// Authentication System
+// ============================================================
+
+async function initializeAuth() {
+    const token = localStorage.getItem("authToken");
+    const authContainer = document.getElementById("authContainer");
+    const appMain = document.getElementById("appMain");
+    const userInfo = document.getElementById("userInfo");
+
+    if (token) {
+        try {
+            const user = await fetchCurrentUser(token);
+            showAppUI(user, token);
+        } catch (error) {
+            localStorage.removeItem("authToken");
+            showAuthUI();
+        }
+    } else {
+        showAuthUI();
+    }
+
+    setupAuthEventListeners();
+}
+
+function showAuthUI() {
+    const authContainer = document.getElementById("authContainer");
+    const appMain = document.getElementById("appMain");
+    const userInfo = document.getElementById("userInfo");
+
+    authContainer.style.display = "block";
+    appMain.style.display = "none";
+    userInfo.style.display = "none";
+}
+
+function showAppUI(user, token) {
+    const authContainer = document.getElementById("authContainer");
+    const appMain = document.getElementById("appMain");
+    const userInfo = document.getElementById("userInfo");
+    const userEmail = document.getElementById("userEmail");
+
+    authContainer.style.display = "none";
+    appMain.style.display = "block";
+    userInfo.style.display = "flex";
+    userEmail.textContent = user.email;
+}
+
+async function fetchCurrentUser(token) {
+    const response = await fetch("/api/auth/me", {
+        headers: {
+            "Authorization": `Bearer ${token}`
+        }
+    });
+
+    if (!response.ok) {
+        throw new Error("Failed to fetch user");
+    }
+
+    return await response.json();
+}
+
+async function login(email, password) {
+    try {
+        const response = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ email, password })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            return { success: false, error: data.detail || "로그인 실패" };
+        }
+
+        localStorage.setItem("authToken", data.access_token);
+        return { success: true, user: data.user };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+}
+
+async function register(email, password, fullName) {
+    try {
+        const response = await fetch("/api/auth/register", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                email,
+                password,
+                full_name: fullName
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            return { success: false, error: data.detail || "가입 실패" };
+        }
+
+        return { success: true, message: data.message };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+}
+
+function logout() {
+    localStorage.removeItem("authToken");
+    location.reload();
+}
+
+function setupAuthEventListeners() {
+    const loginTab = document.getElementById("loginTab");
+    const registerTab = document.getElementById("registerTab");
+    const loginForm = document.getElementById("loginForm");
+    const registerForm = document.getElementById("registerForm");
+    const logoutBtn = document.getElementById("logoutBtn");
+
+    // Tab switching
+    if (loginTab) {
+        loginTab.addEventListener("click", () => {
+            loginTab.classList.add("active");
+            registerTab.classList.remove("active");
+            loginForm.classList.add("active");
+            registerForm.classList.remove("active");
+        });
+    }
+
+    if (registerTab) {
+        registerTab.addEventListener("click", () => {
+            registerTab.classList.add("active");
+            loginTab.classList.remove("active");
+            registerForm.classList.add("active");
+            loginForm.classList.remove("active");
+        });
+    }
+
+    // Login form
+    if (loginForm) {
+        loginForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const email = document.getElementById("loginEmail").value;
+            const password = document.getElementById("loginPassword").value;
+            const message = document.getElementById("loginMessage");
+
+            message.textContent = "로그인 중...";
+            message.classList.remove("error", "success");
+
+            const result = await login(email, password);
+
+            if (result.success) {
+                message.textContent = "로그인 성공!";
+                message.classList.add("success");
+                setTimeout(() => location.reload(), 500);
+            } else {
+                message.textContent = result.error;
+                message.classList.add("error");
+            }
+        });
+    }
+
+    // Register form
+    if (registerForm) {
+        registerForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const email = document.getElementById("registerEmail").value;
+            const password = document.getElementById("registerPassword").value;
+            const fullName = document.getElementById("registerName").value;
+            const message = document.getElementById("registerMessage");
+
+            message.textContent = "가입 중...";
+            message.classList.remove("error", "success");
+
+            const result = await register(email, password, fullName);
+
+            if (result.success) {
+                message.textContent = "가입 성공! 로그인해주세요.";
+                message.classList.add("success");
+                
+                // Auto-switch to login tab
+                document.getElementById("loginTab").click();
+                document.getElementById("registerForm").reset();
+                setTimeout(() => {
+                    document.getElementById("loginEmail").value = email;
+                    document.getElementById("loginPassword").focus();
+                }, 300);
+            } else {
+                message.textContent = result.error;
+                message.classList.add("error");
+            }
+        });
+    }
+
+    // Logout button
+    if (logoutBtn) {
+        logoutBtn.addEventListener("click", logout);
+    }
+}
