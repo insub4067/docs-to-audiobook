@@ -510,12 +510,17 @@ async def get_voices(tone: str = None, use_case: str = None):
 # 있는 그대로 본다. require_user_id로 막아 아무나 두드리지 못하게 한다.
 # ----------------------------------------------------------------
 @app.post("/api/_debug/tts_probe")
-async def tts_probe(request: Request, concurrency: int = Form(...), authorization: str = Header(None)):
+async def tts_probe(request: Request, concurrency: int = Form(...), chars: int = Form(20), authorization: str = Header(None)):
     require_user_id(authorization)
     if concurrency < 1 or concurrency > 100:
         raise HTTPException(status_code=400, detail="concurrency는 1~100 사이여야 합니다.")
+    if chars < 1 or chars > 2000:
+        raise HTTPException(status_code=400, detail="chars는 1~2000 사이여야 합니다.")
 
-    probe_text = "안녕하세요. 동시성 테스트용 짧은 문장입니다."
+    # 실제 청크 크기(~800자)에 가깝게 재현하려면 chars를 키워야 한다.
+    # 문장이 짧으면 스트리밍이 즉시 끝나 동시 연결 부담이 거의 안 걸린다.
+    base = "안녕하세요. 동시성 테스트용 문장입니다. 충분히 길게 반복해 실제 청크와 비슷한 스트리밍 시간을 재현합니다. "
+    probe_text = (base * (chars // len(base) + 1))[:chars]
 
     async def one_attempt(i: int):
         t0 = time.time()
