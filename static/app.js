@@ -521,6 +521,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
+    // 동시에 처리할 파일 수
+    const BATCH_CONCURRENCY = 2;
+
     // 배치는 현재 음성 설정을 모든 파일에 공통 적용하고, 파일마다
     // 추출 → 생성까지 끝낸다. 진행 상황은 라이브러리의 파일별 진행 아이템으로 보여준다.
     async function processBatchFiles(files) {
@@ -533,23 +536,34 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         showToast(`${totalFiles}개 파일 배치 변환 시작`, "info");
 
-        for (const file of files) {
-            try {
-                const data = await extractText(file);
-                const ok = await generateAudiobook({
-                    textId: data.text_id,
-                    filename: toAudioFilename(file.name),
-                    charCount: data.char_count,
-                    voice,
-                    rate,
-                    pitch
-                });
-                if (ok) completed++;
-            } catch (error) {
-                console.error(`파일 처리 실패: ${file.name}`, error);
-                showToast(`${file.name} 처리 실패`, "error");
+        // 워커들이 큐에서 하나씩 꺼내 처리한다. 동시 실행 수를 제한하는 이유는
+        // 서버가 파일 하나를 이미 청크 단위로 병렬 합성하기 때문이다 —
+        // 파일까지 무제한 병렬로 돌리면 Edge-TTS 동시 연결이 곱으로 늘어난다.
+        const queue = files.slice();
+
+        async function worker() {
+            while (queue.length > 0) {
+                const file = queue.shift();
+                try {
+                    const data = await extractText(file);
+                    const ok = await generateAudiobook({
+                        textId: data.text_id,
+                        filename: toAudioFilename(file.name),
+                        charCount: data.char_count,
+                        voice,
+                        rate,
+                        pitch
+                    });
+                    if (ok) completed++;
+                } catch (error) {
+                    console.error(`파일 처리 실패: ${file.name}`, error);
+                    showToast(`${file.name} 처리 실패`, "error");
+                }
             }
         }
+
+        const workerCount = Math.min(BATCH_CONCURRENCY, totalFiles);
+        await Promise.all(Array.from({ length: workerCount }, worker));
 
         showToast(`배치 변환 완료: ${completed}/${totalFiles}`, "success");
         fileInput.value = "";

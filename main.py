@@ -380,6 +380,12 @@ def clean_tts_text(text: str) -> str:
     t = re.sub(r'\s+', ' ', t).strip()
     return t
 
+# Edge-TTS 동시 연결 상한. 이전에는 문서의 모든 청크를 상한 없이
+# asyncio.gather로 한꺼번에 띄웠고(2만 자 = 25개 동시), 여러 작업이 겹치면
+# 수백 개까지 늘어났다. 아래 재시도 로직이 필요했던 간헐적 연결 끊김이
+# 사실상 이 과도한 동시성 때문이다. 작업 수와 무관하게 전역으로 묶는다.
+TTS_CONCURRENCY = asyncio.Semaphore(8)
+
 async def synthesize_chunk(chunk_index: int, text_chunk: str, voice: str, rate: str, pitch: str, max_attempts: int = 3):
     # TTS 발음용 깨끗한 텍스트
     tts_text = clean_tts_text(text_chunk)
@@ -392,20 +398,22 @@ async def synthesize_chunk(chunk_index: int, text_chunk: str, voice: str, rate: 
     last_error = None
     for attempt in range(max_attempts):
         try:
-            communicate = edge_tts.Communicate(tts_text, voice=voice, rate=rate, pitch=pitch)
-            audio_data = b""
-            sentences = []
-            async for msg in communicate.stream():
-                if msg.get("type") == "audio":
-                    audio_data += msg.get("data")
-                elif msg.get("type") == "SentenceBoundary":
-                    offset_ms = msg.get("offset", 0) // 10000
-                    duration_ms = msg.get("duration", 0) // 10000
-                    sentences.append({
-                        "text": msg.get("text", ""),
-                        "start": offset_ms,
-                        "end": offset_ms + duration_ms
-                    })
+            # 백오프 sleep은 슬롯을 잡은 채로 기다리지 않도록 밖에 둔다
+            async with TTS_CONCURRENCY:
+                communicate = edge_tts.Communicate(tts_text, voice=voice, rate=rate, pitch=pitch)
+                audio_data = b""
+                sentences = []
+                async for msg in communicate.stream():
+                    if msg.get("type") == "audio":
+                        audio_data += msg.get("data")
+                    elif msg.get("type") == "SentenceBoundary":
+                        offset_ms = msg.get("offset", 0) // 10000
+                        duration_ms = msg.get("duration", 0) // 10000
+                        sentences.append({
+                            "text": msg.get("text", ""),
+                            "start": offset_ms,
+                            "end": offset_ms + duration_ms
+                        })
             if audio_data:
                 return chunk_index, audio_data, sentences
             last_error = RuntimeError("빈 오디오 응답을 받았습니다.")
