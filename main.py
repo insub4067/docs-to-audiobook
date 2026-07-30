@@ -1063,13 +1063,17 @@ async def list_audiobooks(authorization: str = Header(None)):
         for row in rows:
             audio_path, sentences_path = _object_paths(user_id, row["id"])
             item = dict(row)
-            # 업로드가 중간에 끊긴 행은 서명 URL 발급이 실패한다. 목록 전체를
-            # 실패시키지 않고 해당 항목만 표시에서 제외한다.
+            # 오디오가 없으면 재생이 불가능하므로 그 항목만 목록에서 제외한다
+            # (업로드가 중간에 끊긴 행). 목록 전체를 실패시키지는 않는다.
             try:
                 item["audio_url"] = storage.create_signed_url(audio_path, SIGNED_URL_TTL)["signedURL"]
-                item["sentences_url"] = storage.create_signed_url(sentences_path, SIGNED_URL_TTL)["signedURL"]
             except Exception:
                 continue
+            # 문장 데이터는 없어도 오디오 재생은 되므로 선택 사항으로 둔다
+            try:
+                item["sentences_url"] = storage.create_signed_url(sentences_path, SIGNED_URL_TTL)["signedURL"]
+            except Exception:
+                item["sentences_url"] = None
             items.append(item)
         return {"audiobooks": items}
     except HTTPException:
