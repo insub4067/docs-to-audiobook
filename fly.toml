@@ -11,9 +11,14 @@ primary_region = 'iad'
 [http_service]
   internal_port = 7860
   force_https = true
-  auto_stop_machines = 'stop'
+  # 머신을 재우면 안 된다. 콜드 스타트마다 ONNX 모델을 다시 올리고
+  # 기본 오디오북을 처음부터 다시 만든다.
+  auto_stop_machines = 'off'
   auto_start_machines = true
-  min_machines_running = 0
+  # 반드시 1대만 떠야 한다. text_storage와 jobs가 프로세스 인메모리라
+  # 머신이 2대면 업로드와 합성이 서로 다른 머신에 붙어 404가 난다.
+  # (실측: POST /api/synthesize가 text_id를 못 찾아 404, 폴링도 404)
+  min_machines_running = 1
   processes = ['app']
 
 [[vm]]
