@@ -1138,7 +1138,6 @@ async def register(user_data: dict):
     """Register a new user."""
     try:
         from auth import get_supabase_client, hash_password
-        from models import UserRegister
 
         supabase = get_supabase_client(use_service_role=True)
         if not supabase:
