@@ -826,7 +826,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     function toAudioFilename(originalName) {
         const dot = originalName.lastIndexOf('.');
         const base = dot > 0 ? originalName.substring(0, dot) : originalName;
-        return base + ".ogg";
+        return base + ".mp3";
     }
 
     // 오디오북 생성 + 저장. 단일 파일 경로와 배치 경로가 공유한다.
@@ -1057,7 +1057,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
                 await saveAudiobookToDB({
                     id: DEFAULT_BOOK_ID,
-                    title: meta.title + ".ogg",
+                    title: meta.title + ".mp3",
                     audioData: audioArrayBuffer,
                     sentences: meta.sentences,
                     headings: meta.headings,
@@ -1304,7 +1304,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         // 파일 본체는 서버를 거치지 않고 Supabase로 직접 올린다
         const up = await fetch(audio_upload.signed_url, {
             method: "PUT",
-            headers: { "Content-Type": "audio/ogg" },
+            headers: { "Content-Type": "audio/mpeg" },
             body: entry.audioData
         });
         if (!up.ok) throw new Error("오디오 업로드 실패");
@@ -1525,11 +1525,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                 
                 const audioBlob = freshAudio.audioData instanceof Blob
                     ? freshAudio.audioData
-                    : new Blob([freshAudio.audioData], { type: "audio/ogg" });
+                    : new Blob([freshAudio.audioData], { type: "audio/mpeg" });
 
                 // 서버에 임시 업로드 (24시간 후 자동 삭제)
                 const formData = new FormData();
-                formData.append("audio", audioBlob, "audio.ogg");
+                formData.append("audio", audioBlob, "audio.mp3");
                 formData.append("title", target.title);
                 formData.append("sentences", JSON.stringify(freshAudio.sentences || []));
 
@@ -1591,16 +1591,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             const audioBlob = freshAudio.audioData instanceof Blob
                 ? freshAudio.audioData
-                : new Blob([freshAudio.audioData], { type: "audio/ogg" });
+                : new Blob([freshAudio.audioData], { type: "audio/mpeg" });
 
             const url = URL.createObjectURL(audioBlob);
             const a = document.createElement("a");
             a.style.display = "none";
             a.href = url;
-            // 확장자가 없는 경우 .ogg 추가
+            // 확장자가 없는 경우 .mp3 추가
             let filename = target.title || "audiobook";
-            if (!filename.toLowerCase().endsWith(".ogg")) {
-                filename += ".ogg";
+            if (!filename.toLowerCase().endsWith(".mp3")) {
+                filename += ".mp3";
             }
             a.download = filename;
             
@@ -1753,7 +1753,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         // ArrayBuffer(신규)든 Blob(구버전 호환)이든 항상 새 Blob으로 재구성
         const audioBlob = audio.audioData instanceof Blob
             ? audio.audioData
-            : new Blob([audio.audioData], { type: "audio/ogg" });
+            : new Blob([audio.audioData], { type: "audio/mpeg" });
 
         const localUrl = URL.createObjectURL(audioBlob);
         currentReaderObjectUrl = localUrl;

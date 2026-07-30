@@ -16,10 +16,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.background import BackgroundTask
-from supertonic import TTS
-import soundfile as sf
-import numpy as np
-import io
+import edge_tts
 import mimetypes
 mimetypes.add_type("text/css", ".css")
 mimetypes.add_type("application/javascript", ".js")
@@ -64,12 +61,6 @@ MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 # 되므로, 10MB 텍스트(약 350만 자)를 그대로 받으면 오디오만 2.9GB가 되어
 # 반드시 죽는다. 10만 자면 약 4시간 분량이라 실사용에는 충분하다.
 MAX_SYNTH_CHARS = 100_000
-
-# 글로벌 Supertonic 엔진 초기화 (부팅 시 모델 다운로드)
-print("Initializing Supertonic TTS engine (This takes ~1 min on 1 CPU)...", flush=True)
-tts_engine = TTS(auto_download=True)
-print("TTS engine initialized.", flush=True)
-
 
 # 공유되는 오디오는 오디오북 전체라 크다. MAX_SYNTH_CHARS(10만 자) 분량이
 # 약 90MB이므로 여유를 둔다. 대신 메모리에 담지 않고 디스크로 흘려보낸다.
@@ -172,7 +163,7 @@ def _object_paths(user_id: str, audiobook_id: str):
     """오디오와 문장 데이터를 나란히 둔다. audiobooks 테이블에 sentences
     컬럼이 없어 스키마 변경 없이 버킷에 함께 보관한다."""
     base = f"{user_id}/{audiobook_id}"
-    return f"{base}.ogg", f"{base}.sentences.json"
+    return f"{base}.mp3", f"{base}.sentences.json"
 
 
 # App build ID: generated once at server startup.
@@ -461,39 +452,52 @@ async def upload_file(request: Request, file: UploadFile = File(...), authorizat
 @app.get("/api/voices")
 async def get_voices(tone: str = None, use_case: str = None):
     """음성 목록 반환. tone/use_case로 필터링 가능."""
-    voices = []
-    
-    # Supertonic 한국어 지원 보이스 매핑
-    # F1~F5 (여성), M1~M5 (남성)
-    for i in range(1, 6):
-        voices.append({
-            "name": f"Supertonic Female {i}",
-            "short_name": f"F{i}",
-            "gender": "Female",
-            "locale": "ko-KR",
-            "friendly_name": f"슈퍼토닉 여성 음성 {i}",
-            "description": "매우 자연스러운 다국어 여성 성우",
-            "tone": "soft",
-            "use_case": ["novel", "audiobook"]
-        })
-        voices.append({
-            "name": f"Supertonic Male {i}",
-            "short_name": f"M{i}",
-            "gender": "Male",
-            "locale": "ko-KR",
-            "friendly_name": f"슈퍼토닉 남성 음성 {i}",
-            "description": "매우 자연스러운 다국어 남성 성우",
-            "tone": "formal",
-            "use_case": ["documentary", "news"]
-        })
-        
-    # tone/use_case 필터링
-    if tone:
-        voices = [v for v in voices if v.get("tone") == tone]
-    if use_case:
-        voices = [v for v in voices if use_case in v.get("use_case", [])]
-        
-    return voices
+    try:
+        # Get all voices
+        all_voices = await edge_tts.VoicesManager.create()
+        voices = all_voices.voices
+
+        filtered_voices = []
+        for voice in voices:
+            lang = voice.get("Locale", "")
+            if lang.startswith("ko-KR") or lang.startswith("en-US"):
+                short_name = voice.get("ShortName", "")
+
+                # Check if we have custom metadata for this Korean voice
+                meta = VOICE_METADATA.get(short_name, {})
+                friendly_name = meta.get("friendly_name", voice.get("FriendlyName", short_name))
+                description = meta.get("description", "표준 신경망(Neural) 음성입니다.")
+
+                voice_tone = meta.get("tone", "")
+                voice_use_cases = meta.get("use_case", [])
+
+                # Apply filters
+                if tone and voice_tone != tone:
+                    continue
+                if use_case and use_case not in voice_use_cases:
+                    continue
+
+                filtered_voices.append({
+                    "name": voice.get("Name", ""),
+                    "short_name": short_name,
+                    "gender": voice.get("Gender", ""),
+                    "locale": lang,
+                    "friendly_name": friendly_name,
+                    "description": description,
+                    "tone": voice_tone,
+                    "use_case": voice_use_cases
+                })
+
+        # Sort so Korean voices are at the top
+        filtered_voices.sort(key=lambda x: 0 if x["locale"].startswith("ko-KR") else 1)
+        return filtered_voices
+    except Exception as e:
+        # Fallback list if edge-tts call fails or no internet
+        return [
+            {"name": "Microsoft Server Speech Text to Speech Voice (ko-KR, HyunsuMultilingualNeural)", "short_name": "ko-KR-HyunsuMultilingualNeural", "gender": "Male", "locale": "ko-KR", "friendly_name": "현수 (자연스러운 다국어 소설/에세이 - 남성)", "description": "가장 최신 모델로, 억양이 자연스럽고 감정선이 부드럽습니다."},
+            {"name": "Microsoft Server Speech Text to Speech Voice (ko-KR, SunHiNeural)", "short_name": "ko-KR-SunHiNeural", "gender": "Female", "locale": "ko-KR", "friendly_name": "선희 (차분한 뉴스/정보 전달 - 여성)", "description": "단정하고 차분하며, 정보 전달이나 지적인 낭독에 적합합니다."},
+            {"name": "Microsoft Server Speech Text to Speech Voice (ko-KR, InJoonNeural)", "short_name": "ko-KR-InJoonNeural", "gender": "Male", "locale": "ko-KR", "friendly_name": "인준 (신뢰감 있는 다큐 - 남성)", "description": "진중하고 신뢰감 있는 남성 톤으로, 다큐멘터리 낭독에 적합합니다."}
+        ]
 
 def clean_tts_text(text: str) -> str:
     # 1. 마크다운 특수문자 제거 (#, *, _, ~, `, \, > 등)
@@ -509,30 +513,64 @@ def clean_tts_text(text: str) -> str:
     t = re.sub(r'\s+', ' ', t).strip()
     return t
 
-def synthesize_supertonic_sync(text: str, voice: str, rate: float):
-    """동기적으로 TTS를 실행하고 (wav_array, duration, text)를 반환"""
-    # 호환성 백업 (구버전 edge-tts 보이스가 넘어올 경우 기본 F1으로 맵핑)
-    valid_voices = ["F1", "F2", "F3", "F4", "F5", "M1", "M2", "M3", "M4", "M5"]
-    if voice not in valid_voices:
-        print(f"Unknown voice '{voice}', falling back to 'F1'")
-        voice = "F1"
+# Edge-TTS 동시 연결 상한. 이전에는 문서의 모든 청크를 상한 없이
+# asyncio.gather로 한꺼번에 띄웠고(2만 자 = 25개 동시), 여러 작업이 겹치면
+# 수백 개까지 늘어났다. 아래 재시도 로직이 필요했던 간헐적 연결 끊김이
+# 사실상 이 과도한 동시성 때문이다. 작업 수와 무관하게 전역으로 묶는다.
+TTS_CONCURRENCY = asyncio.Semaphore(8)
 
-    # M1, F1 등 기본 내장된 목소리 스킨
-    style = tts_engine.get_voice_style(voice_name=voice)
-    # 텍스트 합성 수행
-    wav_array, duration = tts_engine.synthesize(text, voice_style=style, lang="ko", speed=rate)
-    # synthesize는 duration을 스칼라가 아니라 ndarray로 준다(문서의 예제도
-    # dur[0]으로 꺼낸다). 바로 int()를 씌우면 numpy가
-    # "only 0-dimensional arrays can be converted to Python scalars"로 죽는다.
-    duration_sec = float(np.asarray(duration).reshape(-1)[0])
-    return wav_array, duration_sec, text
+async def synthesize_chunk(chunk_index: int, text_chunk: str, voice: str, rate: str, pitch: str, max_attempts: int = 3):
+    # TTS 발음용 깨끗한 텍스트
+    tts_text = clean_tts_text(text_chunk)
+    if not tts_text:
+        tts_text = text_chunk
 
-async def synthesize_document(raw_text: str, voice: str, rate: str, pitch: str, audio_path: str) -> tuple:
-    """Synthesize a full document into audio_path sequentially to save memory."""
+    # Edge-TTS는 특정 호스팅 환경에서 개별 연결이 간헐적으로 끊긴다.
+    # 청크 단위로 재시도해, 문서 전체를 병렬 변환할 때 청크 하나의 일시적
+    # 실패가 전체 asyncio.gather를 실패시키지 않도록 한다.
+    last_error = None
+    for attempt in range(max_attempts):
+        try:
+            # 백오프 sleep은 슬롯을 잡은 채로 기다리지 않도록 밖에 둔다
+            async with TTS_CONCURRENCY:
+                communicate = edge_tts.Communicate(tts_text, voice=voice, rate=rate, pitch=pitch)
+                # bytes는 불변이라 += 누적은 조각마다 전체 복사본을 새로 만든다.
+                # 조각을 모아 마지막에 한 번만 합친다.
+                audio_parts = []
+                sentences = []
+                async for msg in communicate.stream():
+                    if msg.get("type") == "audio":
+                        audio_parts.append(msg.get("data"))
+                    elif msg.get("type") == "SentenceBoundary":
+                        offset_ms = msg.get("offset", 0) // 10000
+                        duration_ms = msg.get("duration", 0) // 10000
+                        sentences.append({
+                            "text": msg.get("text", ""),
+                            "start": offset_ms,
+                            "end": offset_ms + duration_ms
+                        })
+                audio_data = b"".join(audio_parts)
+                audio_parts.clear()
+            if audio_data:
+                return chunk_index, audio_data, sentences
+            last_error = RuntimeError("빈 오디오 응답을 받았습니다.")
+        except Exception as e:
+            last_error = e
+
+        if attempt < max_attempts - 1:
+            await asyncio.sleep(1.5 * (attempt + 1))
+
+    raise last_error
+
+async def synthesize_document(raw_text: str, voice: str, rate: str, pitch: str) -> tuple:
+    """Synthesize a full document into (audio_bytes, annotated_sentences, heading_index)."""
+    # Extract heading metadata from original text (before preprocessing strips newlines)
     headings = extract_markdown_headings(raw_text)
+
+    # Preprocess text for TTS (merge lines, clean spacing)
     text = preprocess_text(raw_text)
 
-    # Split text into chunks (~800 chars per chunk)
+    # Split text into chunks (~800 chars per chunk for optimal parallel TTS generation)
     paragraphs = text.split(". ")
     chunks = []
     current_chunk = ""
@@ -550,66 +588,69 @@ async def synthesize_document(raw_text: str, voice: str, rate: str, pitch: str, 
     if not chunks:
         chunks = [text]
 
-    # Convert rate string to float
-    speed_float = 1.0
-    if isinstance(rate, str) and rate.endswith("%"):
-        if rate.startswith("+"):
-            speed_float = 1.0 + float(rate[1:-1])/100.0
-        elif rate.startswith("-"):
-            speed_float = 1.0 - float(rate[1:-1])/100.0
+    # Process all chunks concurrently using asyncio.gather
+    tasks = [
+        synthesize_chunk(i, chunk, voice, rate, pitch)
+        for i, chunk in enumerate(chunks)
+    ]
+    results = await asyncio.gather(*tasks)
 
+    # Sort by chunk index to maintain exact order
+    results.sort(key=lambda x: x[0])
+
+    # 청크를 += 로 이어붙이면 매번 전체 복사본이 생겨 피크 메모리가 2배가 된다.
+    # 30,000자 문서 기준 50.8MB -> 25.8MB.
+    audio_parts = []
     combined_sentences = []
     current_time_offset = 0
-    
-    # 디스크에 OGG 스트림으로 바로 기록 (메모리 OOM 방지)
-    # 샘플레이트는 모델 설정에서 온다(엔진마다 다를 수 있다). 44100을 박아두면
-    # 모델이 다른 값을 내는 순간 재생 속도가 통째로 틀어진다.
-    samplerate = int(getattr(tts_engine, "sample_rate", 44100))
-    with sf.SoundFile(audio_path, mode='w', samplerate=samplerate, channels=1, format='OGG') as f:
-        for chunk in chunks:
-            tts_text = clean_tts_text(chunk)
-            if not tts_text:
-                tts_text = chunk
-                
-            # 쓰레드 풀에서 동기 TTS 작업 실행
-            wav_array, duration, processed_text = await asyncio.to_thread(
-                synthesize_supertonic_sync, tts_text, voice, speed_float
-            )
-            
-            # OGG 파일에 Append (1D array로 변환)
-            f.write(wav_array.squeeze())
-            
-            # 타임스탬프 계산 (문장 단위)
+
+    for idx, audio_data, sentences in results:
+        audio_parts.append(audio_data)
+
+        chunk_duration = 0
+        for s in sentences:
             combined_sentences.append({
-                "text": processed_text,
-                "start": current_time_offset,
-                "end": current_time_offset + int(duration * 1000)
+                "text": s["text"],
+                "start": s["start"] + current_time_offset,
+                "end": s["end"] + current_time_offset
             })
-            
-            current_time_offset += int(duration * 1000)
-            
-            # GC 해제 (OOM 방지)
-            del wav_array
+            if s["end"] > chunk_duration:
+                chunk_duration = s["end"]
+
+        # Offset next chunk sentences by duration of current chunk
+        current_time_offset += chunk_duration
+
+    combined_audio = b"".join(audio_parts)
+    # 합친 뒤에는 조각과 gather 결과가 필요 없다. 참조를 끊어 즉시 회수시킨다.
+    audio_parts.clear()
+    results.clear()
 
     # Annotate sentences with heading metadata
     annotated_sentences, heading_index = annotate_sentences_with_headings(
         combined_sentences, headings
     )
 
-    return True, annotated_sentences, heading_index
+    return combined_audio, annotated_sentences, heading_index
 
 
 async def process_synthesis_task(job_id: str, raw_text: str, voice: str, rate: str, pitch: str):
     try:
-        audio_path = os.path.join(JOB_AUDIO_DIR, f"{job_id}.ogg")
-        success, annotated_sentences, heading_index = await synthesize_document(
-            raw_text, voice, rate, pitch, audio_path
+        combined_audio, annotated_sentences, heading_index = await synthesize_document(
+            raw_text, voice, rate, pitch
         )
 
-        if not success:
+        if not combined_audio:
             jobs[job_id]["status"] = "error"
             jobs[job_id]["error"] = "음성 합성 결과가 비어 있습니다."
             return
+
+        # 완성된 오디오는 디스크로 내린다. base64로 메모리에 들고 있으면
+        # 문자당 약 900바이트 x 1.33배가 클라이언트가 가져갈 때까지 RAM에
+        # 남아, 동시 작업 수만큼 곱해져 인스턴스가 죽는다.
+        audio_path = os.path.join(JOB_AUDIO_DIR, f"{job_id}.mp3")
+        with open(audio_path, "wb") as f:
+            f.write(combined_audio)
+        del combined_audio
 
         jobs[job_id]["audio_path"] = audio_path
         jobs[job_id]["sentences"] = annotated_sentences
@@ -703,7 +744,7 @@ async def get_job_audio(job_id: str):
 
     return FileResponse(
         audio_path,
-        media_type="audio/ogg",
+        media_type="audio/mpeg",
         background=BackgroundTask(_cleanup)
     )
 
@@ -777,7 +818,7 @@ async def create_share(
     os.makedirs(share_dir, exist_ok=True)
 
     # Save audio file
-    audio_path = os.path.join(share_dir, "audio.ogg")
+    audio_path = os.path.join(share_dir, "audio.mp3")
     await save_upload_limited(audio, audio_path, MAX_SHARE_AUDIO_BYTES)
 
     # Save metadata
@@ -822,10 +863,10 @@ async def get_share_audio(share_id: str):
         if not os.path.exists(audio_path):
             raise HTTPException(status_code=404, detail="기본 제공 오디오북을 아직 준비 중입니다.")
     else:
-        audio_path = os.path.join(SHARED_DIR, share_id, "audio.ogg")
+        audio_path = os.path.join(SHARED_DIR, share_id, "audio.mp3")
         if not os.path.exists(audio_path):
             raise HTTPException(status_code=404, detail="공유 오디오가 만료되었거나 존재하지 않습니다.")
-    return FileResponse(audio_path, media_type="audio/ogg", filename="audiobook.ogg")
+    return FileResponse(audio_path, media_type="audio/mpeg", filename="audiobook.mp3")
 
 @app.get("/share/{share_id}")
 async def serve_shared_page(share_id: str):
@@ -845,7 +886,7 @@ DEFAULT_BOOK_DIR = os.path.join(BASE_DIR, "default_book")
 # 머신이 "Exited abruptly"로 죽는 것을 확인했다.
 DEFAULT_BOOK_SOURCE = os.path.join(STATIC_DIR, "samples", "sherlock-holmes-sample.md")
 DEFAULT_BOOK_TITLE = "셜록 홈즈의 모험"
-DEFAULT_BOOK_VOICE = "F1"
+DEFAULT_BOOK_VOICE = "ko-KR-SunHiNeural"
 
 default_book_state = {"status": "pending", "error": None}
 default_book_lock = asyncio.Lock()
@@ -853,7 +894,7 @@ default_book_lock = asyncio.Lock()
 
 def default_book_paths():
     return (
-        os.path.join(DEFAULT_BOOK_DIR, "audio.ogg"),
+        os.path.join(DEFAULT_BOOK_DIR, "audio.mp3"),
         os.path.join(DEFAULT_BOOK_DIR, "meta.json"),
     )
 
@@ -861,7 +902,7 @@ def default_book_paths():
 # 기본 제공 오디오북을 클라우드에 한 번만 만들어 두는 자리.
 # 디스크는 재배포마다 날아가므로 여기 없으면 부팅할 때마다 36,000자를
 # 다시 합성하게 되고, 공유 CPU 1개를 점유해 사용자 변환까지 굶긴다.
-DEFAULT_BOOK_REMOTE_AUDIO = "_default/sherlock-holmes.ogg"
+DEFAULT_BOOK_REMOTE_AUDIO = "_default/sherlock-holmes.mp3"
 DEFAULT_BOOK_REMOTE_META = "_default/sherlock-holmes.meta.json"
 
 
@@ -901,7 +942,7 @@ def _upload_default_book_to_cloud(audio_path: str, meta_path: str) -> None:
         storage = client.storage.from_(AUDIOBOOK_BUCKET)
         with open(audio_path, "rb") as f:
             storage.upload(DEFAULT_BOOK_REMOTE_AUDIO, f.read(),
-                           {"content-type": "audio/ogg", "upsert": "true"})
+                           {"content-type": "audio/mpeg", "upsert": "true"})
         with open(meta_path, "rb") as f:
             storage.upload(DEFAULT_BOOK_REMOTE_META, f.read(),
                            {"content-type": "application/json", "upsert": "true"})
@@ -947,9 +988,15 @@ async def generate_default_book():
     try:
         os.makedirs(DEFAULT_BOOK_DIR, exist_ok=True)
         raw_text = extract_text(DEFAULT_BOOK_SOURCE, "sherlock-holmes.md")
-        _, sentences, headings = await synthesize_document(
-            raw_text, DEFAULT_BOOK_VOICE, "+5%", "+0Hz", audio_path
+        # edge-tts 경로는 오디오 바이트를 돌려주므로 여기서 디스크에 쓴다
+        audio_bytes, sentences, headings = await synthesize_document(
+            raw_text, DEFAULT_BOOK_VOICE, "+5%", "+0Hz"
         )
+        if not audio_bytes:
+            raise RuntimeError("음성 합성 결과가 비어 있습니다.")
+        with open(audio_path, "wb") as f:
+            f.write(audio_bytes)
+        del audio_bytes
 
         with open(meta_path, "w", encoding="utf-8") as f:
             json.dump({
@@ -1015,15 +1062,15 @@ async def get_default_book_audio():
     audio_path, _ = default_book_paths()
     if not os.path.exists(audio_path):
         raise HTTPException(status_code=404, detail="기본 제공 오디오북이 아직 준비되지 않았습니다.")
-    return FileResponse(audio_path, media_type="audio/ogg", filename="sherlock-holmes.ogg")
+    return FileResponse(audio_path, media_type="audio/mpeg", filename="sherlock-holmes.mp3")
 
-@app.get("/api/audio/{job_id}.ogg")
+@app.get("/api/audio/{job_id}.mp3")
 async def download_audiobook(job_id: str):
-    audio_path = os.path.join(JOB_AUDIO_DIR, f"{job_id}.ogg")
+    audio_path = os.path.join(JOB_AUDIO_DIR, f"{job_id}.mp3")
     if not os.path.exists(audio_path):
         raise HTTPException(status_code=404, detail="Audio file not found")
         
-    return FileResponse(audio_path, media_type="audio/ogg")
+    return FileResponse(audio_path, media_type="audio/mpeg")
 
 
 async def cleanup_expired_files_loop():
