@@ -826,7 +826,8 @@ async def create_share(
         "title": title,
         "sentences": json.loads(sentences),
         "headings": json.loads(headings),
-        "created_at": time.time()
+        "created_at": time.time(),
+        "never_expire": title == "셜록 홈즈의 모험"
     }
     meta_path = os.path.join(share_dir, "meta.json")
     with open(meta_path, "w", encoding="utf-8") as f:
@@ -837,9 +838,14 @@ async def create_share(
 @app.get("/api/share/{share_id}")
 async def get_share_meta(share_id: str):
     """공유된 오디오북의 메타데이터 (제목 + 문장 타이밍) 반환"""
-    meta_path = os.path.join(SHARED_DIR, share_id, "meta.json")
-    if not os.path.exists(meta_path):
-        raise HTTPException(status_code=404, detail="공유 링크가 만료되었거나 존재하지 않습니다.")
+    if share_id == "default_book":
+        _, meta_path = default_book_paths()
+        if not os.path.exists(meta_path):
+            raise HTTPException(status_code=404, detail="기본 제공 오디오북을 아직 준비 중입니다.")
+    else:
+        meta_path = os.path.join(SHARED_DIR, share_id, "meta.json")
+        if not os.path.exists(meta_path):
+            raise HTTPException(status_code=404, detail="공유 링크가 만료되었거나 존재하지 않습니다.")
     with open(meta_path, "r", encoding="utf-8") as f:
         meta = json.load(f)
     return {
@@ -852,9 +858,14 @@ async def get_share_meta(share_id: str):
 @app.get("/api/share/{share_id}/audio")
 async def get_share_audio(share_id: str):
     """공유된 오디오 MP3 스트리밍"""
-    audio_path = os.path.join(SHARED_DIR, share_id, "audio.mp3")
-    if not os.path.exists(audio_path):
-        raise HTTPException(status_code=404, detail="공유 오디오가 만료되었거나 존재하지 않습니다.")
+    if share_id == "default_book":
+        audio_path, _ = default_book_paths()
+        if not os.path.exists(audio_path):
+            raise HTTPException(status_code=404, detail="기본 제공 오디오북을 아직 준비 중입니다.")
+    else:
+        audio_path = os.path.join(SHARED_DIR, share_id, "audio.mp3")
+        if not os.path.exists(audio_path):
+            raise HTTPException(status_code=404, detail="공유 오디오가 만료되었거나 존재하지 않습니다.")
     return FileResponse(audio_path, media_type="audio/mpeg", filename="audiobook.mp3")
 
 @app.get("/share/{share_id}")
@@ -1000,7 +1011,7 @@ async def cleanup_expired_files_loop():
                         try:
                             with open(meta_path, "r") as f:
                                 meta = json.load(f)
-                            if now - meta.get("created_at", 0) > 86400:  # 24 hours
+                            if not meta.get("never_expire", False) and now - meta.get("created_at", 0) > 86400:  # 24 hours
                                 shutil.rmtree(share_dir)
                                 print(f"Cleaned expired share: {share_id}")
                         except Exception:

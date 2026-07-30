@@ -1505,8 +1505,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             
             let needsUpload = true;
 
-            // 캐시된 shareId가 있고 만료기간(24시간)이 지나지 않았다면 서버에 존재하는지 실제 확인
-            if (share_id && freshAudio.shareExpiry && freshAudio.shareExpiry > now) {
+            if (freshAudio.id === "default_book") {
+                share_id = "default_book";
+                needsUpload = false;
+            } else if (share_id && freshAudio.shareExpiry && freshAudio.shareExpiry > now) {
                 try {
                     const checkRes = await fetch(`/api/share/${share_id}`);
                     if (checkRes.ok) {
