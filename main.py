@@ -840,7 +840,10 @@ async def serve_shared_page(share_id: str):
 # --------------------------------------------------
 
 DEFAULT_BOOK_DIR = os.path.join(BASE_DIR, "default_book")
-DEFAULT_BOOK_SOURCE = os.path.join(STATIC_DIR, "samples", "sherlock-holmes.md")
+# 데모용 축약본(3,784자)을 쓴다. 전문 15,487자는 공유 CPU 1개에서 합성이
+# 매우 오래 걸리고, 그동안 사용자 변환 요청까지 굶긴다. 실제로 이 작업 중
+# 머신이 "Exited abruptly"로 죽는 것을 확인했다.
+DEFAULT_BOOK_SOURCE = os.path.join(STATIC_DIR, "samples", "sherlock-holmes-sample.md")
 DEFAULT_BOOK_TITLE = "셜록 홈즈의 모험"
 DEFAULT_BOOK_VOICE = "F1"
 
@@ -908,19 +911,29 @@ def _upload_default_book_to_cloud(audio_path: str, meta_path: str) -> None:
         print(f"Default book cloud upload failed: {e}")
 
 
-async def generate_default_book():
-    """기본 제공 오디오북을 준비한다. 디스크 → 클라우드 → 생성 순으로 찾는다."""
+async def prepare_default_book_from_cache() -> bool:
+    """합성 없이 준비만 시도한다(디스크 → 클라우드). 부팅 시 호출된다."""
     audio_path, meta_path = default_book_paths()
 
     if os.path.exists(audio_path) and os.path.exists(meta_path):
         default_book_state["status"] = "ready"
-        print("Default audiobook already exists on disk. Skipping generation.")
-        return
+        print("Default audiobook already exists on disk.")
+        return True
 
-    # 디스크에 없으면 클라우드에서 복구를 먼저 시도한다. 36,000자 재합성은
-    # 공유 CPU 1개로 매우 오래 걸리고 그동안 사용자 변환이 막힌다.
     if await asyncio.to_thread(_restore_default_book_from_cloud, audio_path, meta_path):
         default_book_state["status"] = "ready"
+        return True
+
+    # 아직 없다. 합성은 실제 요청이 올 때 한 번만 한다.
+    default_book_state["status"] = "pending"
+    return False
+
+
+async def generate_default_book():
+    """기본 제공 오디오북을 준비한다. 디스크 → 클라우드 → 생성 순으로 찾는다."""
+    audio_path, meta_path = default_book_paths()
+
+    if await prepare_default_book_from_cache():
         return
 
     if not os.path.exists(DEFAULT_BOOK_SOURCE):
@@ -964,13 +977,15 @@ async def get_default_book():
     실패한 상태라면 요청이 들어올 때마다 재시도한다 (동시 중복 실행은 락으로 방지)."""
     audio_path, meta_path = default_book_paths()
 
-    if default_book_state["status"] == "error":
-        async def retry_generation():
+    # pending(부팅 시 캐시에 없었음) 또는 error(이전 시도 실패)면 여기서 한 번
+    # 생성한다. 부팅 시가 아니라 실제 요청 시점에 하는 이유는, 기동 직후
+    # 합성을 시작하면 공유 CPU를 점유해 사용자 변환이 막히기 때문이다.
+    if default_book_state["status"] in ("pending", "error"):
+        async def start_generation():
             async with default_book_lock:
-                if default_book_state["status"] == "error":
+                if default_book_state["status"] in ("pending", "error"):
                     await generate_default_book()
-        asyncio.create_task(retry_generation())
-        # Let the client know we are retrying
+        asyncio.create_task(start_generation())
         return JSONResponse(content={
             "status": "generating",
             "error": None,
@@ -1332,7 +1347,11 @@ async def social_login(provider: str, data: dict):
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(cleanup_expired_files_loop())
-    asyncio.create_task(generate_default_book())
+    # 부팅 시에는 클라우드에 있으면 내려받기만 하고 합성은 하지 않는다.
+    # 여기서 합성을 시작하면 공유 CPU 1개를 점유해 사용자 변환이 막힌다.
+    # 클라우드에 없으면 상태를 pending으로 두고, 실제로 요청이 올 때
+    # /api/default-book이 한 번만 생성한다(락으로 중복 방지).
+    asyncio.create_task(prepare_default_book_from_cache())
 
 if __name__ == "__main__":
     import uvicorn
