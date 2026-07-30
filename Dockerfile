@@ -8,6 +8,7 @@ WORKDIR /code
 COPY ./requirements.txt /code/requirements.txt
 
 # Install dependencies
+RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
 
 # Set up user 1000 for Hugging Face Space security requirements
@@ -24,6 +25,9 @@ COPY --chown=user:user . $HOME/app
 
 # Ensure uploads directory is present and writable
 RUN mkdir -p $HOME/app/uploads && chmod -R 777 $HOME/app/uploads
+
+# Cache supertonic model
+RUN python -c "from supertonic import TTS; TTS(auto_download=True)"
 
 # Expose Hugging Face Space default port
 EXPOSE 7860

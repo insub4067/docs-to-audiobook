@@ -826,7 +826,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     function toAudioFilename(originalName) {
         const dot = originalName.lastIndexOf('.');
         const base = dot > 0 ? originalName.substring(0, dot) : originalName;
-        return base + ".mp3";
+        return base + ".ogg";
     }
 
     // 오디오북 생성 + 저장. 단일 파일 경로와 배치 경로가 공유한다.
@@ -1057,7 +1057,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
                 await saveAudiobookToDB({
                     id: DEFAULT_BOOK_ID,
-                    title: meta.title + ".mp3",
+                    title: meta.title + ".ogg",
                     audioData: audioArrayBuffer,
                     sentences: meta.sentences,
                     headings: meta.headings,
@@ -1529,7 +1529,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
                 // 서버에 임시 업로드 (24시간 후 자동 삭제)
                 const formData = new FormData();
-                formData.append("audio", audioBlob, "audio.mp3");
+                formData.append("audio", audioBlob, "audio.ogg");
                 formData.append("title", target.title);
                 formData.append("sentences", JSON.stringify(freshAudio.sentences || []));
 
@@ -1597,10 +1597,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             const a = document.createElement("a");
             a.style.display = "none";
             a.href = url;
-            // 확장자가 없는 경우 .mp3 추가
+            // 확장자가 없는 경우 .ogg 추가
             let filename = target.title || "audiobook";
-            if (!filename.toLowerCase().endsWith(".mp3")) {
-                filename += ".mp3";
+            if (!filename.toLowerCase().endsWith(".ogg")) {
+                filename += ".ogg";
             }
             a.download = filename;
             
