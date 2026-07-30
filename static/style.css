@@ -1658,7 +1658,10 @@ input[type="range"]::-webkit-slider-thumb:active {
     align-items: flex-start;
     justify-content: space-between;
     gap: 16px;
-    padding: 12px 16px;
+    /* 이 파일에는 .app-header padding 선언이 여러 개 있고 실제로 이기는 것은
+       이 규칙(모바일/태블릿)과 아래 min-width:768 규칙이다. 앞쪽 76행의
+       safe-area 처리가 여기에 덮여 죽어 있어 헤더가 노치와 겹쳤다. */
+    padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
 }
 
 .header-left {
@@ -1698,7 +1701,7 @@ input[type="range"]::-webkit-slider-thumb:active {
 /* Desktop: show subtitle */
 @media (min-width: 768px) {
     .app-header {
-        padding: 24px 32px;
+        padding: calc(24px + env(safe-area-inset-top)) 32px 24px;
     }
 
     .header-left {
