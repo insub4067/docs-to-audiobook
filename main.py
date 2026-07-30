@@ -510,6 +510,12 @@ def clean_tts_text(text: str) -> str:
 
 def synthesize_supertonic_sync(text: str, voice: str, rate: float):
     """동기적으로 TTS를 실행하고 (wav_array, duration, text)를 반환"""
+    # 호환성 백업 (구버전 edge-tts 보이스가 넘어올 경우 기본 F1으로 맵핑)
+    valid_voices = ["F1", "F2", "F3", "F4", "F5", "M1", "M2", "M3", "M4", "M5"]
+    if voice not in valid_voices:
+        print(f"Unknown voice '{voice}', falling back to 'F1'")
+        voice = "F1"
+        
     # M1, F1 등 기본 내장된 목소리 스킨
     style = tts_engine.get_voice_style(voice_name=voice)
     # 텍스트 합성 수행
@@ -828,7 +834,7 @@ async def serve_shared_page(share_id: str):
 DEFAULT_BOOK_DIR = os.path.join(BASE_DIR, "default_book")
 DEFAULT_BOOK_SOURCE = os.path.join(STATIC_DIR, "samples", "sherlock-holmes.md")
 DEFAULT_BOOK_TITLE = "셜록 홈즈의 모험"
-DEFAULT_BOOK_VOICE = "ko-KR-HyunsuMultilingualNeural"
+DEFAULT_BOOK_VOICE = "F1"
 
 default_book_state = {"status": "pending", "error": None}
 default_book_lock = asyncio.Lock()
