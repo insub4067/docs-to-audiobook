@@ -176,12 +176,6 @@
             </div>
         </div>
 
-        <!-- Global Toast Notification -->
-        <div id="toast" class="toast">
-            <i id="toastIcon" data-lucide="info"></i>
-            <span id="toastMessage">알림 메시지</span>
-        </div>
-
         <!-- Conversion Overlay -->
         <div class="loading-overlay" id="loadingOverlay">
             <div class="loader-card">
@@ -291,6 +285,15 @@
             </div>
             <button class="action-sheet-btn action-sheet-btn-cancel" id="indexSheetCancelBtn">닫기</button>
         </div>
+    </div>
+
+    <!-- Global Toast Notification
+         body 직속에 둔다. 콘텐츠 계층(.app-container) 안에 있으면 조상에
+         transform/filter/backdrop-filter가 하나만 생겨도 position:fixed의
+         기준이 뷰포트에서 그 조상으로 바뀌어 스크롤을 따라 움직인다. -->
+    <div id="toast" class="toast">
+        <i id="toastIcon" data-lucide="info"></i>
+        <span id="toastMessage">알림 메시지</span>
     </div>
 
     <!-- Scripts -->

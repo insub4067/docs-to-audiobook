@@ -856,9 +856,13 @@ input[type="range"]::-webkit-slider-thumb:active {
 /* Toast Notifications (Elegant matching Toast) */
 .toast {
     position: fixed;
-    bottom: 24px;
+    /* 홈 인디케이터 위로 띄운다 */
+    bottom: max(24px, calc(env(safe-area-inset-bottom) + 12px));
     left: 50%;
     transform: translate(-50%, 100px);
+    /* 자체 합성 레이어로 올려 iOS 관성 스크롤 중에도 스크롤러와 함께
+       리페인트되지 않게 한다 */
+    will-change: transform, opacity;
     background-color: var(--primary-color);
     border: 1px solid var(--border-hover);
     color: #ffffff;
@@ -881,14 +885,15 @@ input[type="range"]::-webkit-slider-thumb:active {
     opacity: 1;
 }
 
-.reader-overlay.show .toast,
+/* 리더 모드에서는 상단에 띄운다. 토스트가 body 직속이라
+   .reader-overlay 하위 선택자는 성립하지 않으므로 toast-top만 쓴다
+   (JS가 리더가 열려 있을 때 붙인다). */
 .toast.toast-top {
     bottom: auto;
-    top: max(24px, env(safe-area-inset-top));
+    top: max(24px, calc(env(safe-area-inset-top) + 8px));
     transform: translate(-50%, -100px);
 }
 
-.reader-overlay.show .toast.show,
 .toast.toast-top.show {
     transform: translate(-50%, 0);
 }
