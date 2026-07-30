@@ -2350,6 +2350,38 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     checkSharedLink();
+
+    // iOS PWA Install Prompt
+    function initIosPwaPrompt() {
+        const promptEl = document.getElementById("iosPwaPrompt");
+        const closeBtn = document.getElementById("pwaCloseBtn");
+        if (!promptEl || !closeBtn) return;
+
+        // iOS 기기 감지
+        const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        // Safari 브라우저 감지 (Chrome 등 기타 웹뷰 제외)
+        const isSafari = isIos && /WebKit/.test(navigator.userAgent) && !/CriOS/.test(navigator.userAgent) && !/FxiOS/.test(navigator.userAgent);
+        
+        // PWA Standalone 모드 여부 감지
+        const isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+
+        // 이전에 닫기를 누른 기록이 있는지 확인 (7일)
+        const lastDismissed = localStorage.getItem("iosPwaPromptDismissed");
+        const isDismissedRecently = lastDismissed && (Date.now() - parseInt(lastDismissed, 10)) < (7 * 24 * 60 * 60 * 1000);
+
+        if (isSafari && !isStandalone && !isDismissedRecently) {
+            setTimeout(() => {
+                promptEl.classList.add("show");
+            }, 1500);
+        }
+
+        closeBtn.addEventListener("click", () => {
+            promptEl.classList.remove("show");
+            localStorage.setItem("iosPwaPromptDismissed", Date.now().toString());
+        });
+    }
+
+    initIosPwaPrompt();
 });
 
 // ============================================================
