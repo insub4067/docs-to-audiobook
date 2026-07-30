@@ -2401,6 +2401,21 @@ async function logout() {
     );
     if (!confirmed) return;
 
+    const loadingOverlay = document.getElementById("loadingOverlay");
+    if (loadingOverlay) {
+        const h3 = loadingOverlay.querySelector("h3");
+        const p = loadingOverlay.querySelector("p");
+        const status = loadingOverlay.querySelector(".loading-status");
+        const progress = loadingOverlay.querySelector(".progress-container");
+        
+        if (h3) h3.textContent = "로그아웃 처리 중...";
+        if (p) p.textContent = "클라우드에 데이터를 동기화하고 기기를 정리하고 있습니다.";
+        if (status) status.style.display = "none";
+        if (progress) progress.style.display = "none";
+        
+        loadingOverlay.classList.add("show");
+    }
+
     // 지우기 전에 아직 안 올라간 것을 먼저 올린다. 이 단계를 건너뛰면
     // 복구할 방법이 없다 — 이전 구현은 경고만 하고 실제로 막지 못했다.
     if (window.__syncAudiobooksToCloud) {
@@ -2418,13 +2433,17 @@ async function logout() {
                 "그래도 로그아웃할까요?\n" +
                 "(취소를 누르고 잠시 후 다시 시도하는 것을 권합니다)"
             );
-            if (!proceed) return;
+            if (!proceed) {
+                if (loadingOverlay) loadingOverlay.classList.remove("show");
+                return;
+            }
         }
     }
 
     try {
         await clearDeviceAudiobooks();
     } catch (error) {
+        if (loadingOverlay) loadingOverlay.classList.remove("show");
         // 삭제에 실패했는데 로그아웃만 되면 데이터가 남은 채 방치된다.
         console.error("기기 데이터 삭제 실패:", error);
         window.alert("기기 데이터를 삭제하지 못했습니다. 로그아웃을 취소합니다.");
