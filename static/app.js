@@ -505,14 +505,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     async function handleBatchFileSelect(files) {
-        // 문서 변환은 로그인 사용자 전용. 서버에서도 막지만, 파일을 고르고
-        // 나서 401을 받으면 헛수고이므로 여기서 먼저 안내한다.
-        if (!isLoggedIn()) {
-            showToast("문서 변환은 로그인 후 이용할 수 있습니다.", "info");
-            const loginBtn = document.getElementById("googleLoginBtn");
-            if (loginBtn) loginBtn.scrollIntoView({ behavior: "smooth", block: "center" });
-            return;
-        }
 
         const validFiles = [];
         for (let file of files) {
@@ -697,6 +689,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     // ----------------------------------------------------
     generateBtn.addEventListener("click", async () => {
         if (!currentTextId) return;
+
+        if (!isLoggedIn()) {
+            if (confirm("로그인이 필요합니다. 로그인하시겠습니까? (구글로 로그인)")) {
+                generationModal.classList.remove("show");
+                document.body.style.overflow = "";
+                const loginBtn = document.getElementById("googleLoginBtn");
+                if (loginBtn) {
+                    loginBtn.scrollIntoView({ behavior: "smooth", block: "center" });
+                    const googleBtn = loginBtn.querySelector('div[role="button"]');
+                    if (googleBtn) googleBtn.click();
+                }
+            }
+            return;
+        }
 
         generationModal.classList.remove("show");
         document.body.style.overflow = "";

@@ -393,9 +393,7 @@ def annotate_sentences_with_headings(sentences: list, headings: list) -> tuple:
 
 @app.post("/api/upload")
 async def upload_file(request: Request, file: UploadFile = File(...), authorization: str = Header(None)):
-    # 문서 변환은 로그인 사용자 전용이다. 기본 오디오북 체험과 공유 링크
-    # 열람은 로그인 없이 계속 가능하다.
-    require_user_id(authorization)
+    # 문서 텍스트 추출은 로그인 없이 가능 (미리보기 용도). 합성 시에만 차단.
     enforce_rate_limit(request, "upload", limit=100, window_sec=600)
 
     if not file.filename:
