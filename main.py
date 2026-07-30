@@ -130,6 +130,42 @@ def enforce_rate_limit(request: Request, name: str, limit: int, window_sec: int)
     hits.append(now)
     _rate_buckets[key] = hits
 
+
+# ---- 클라우드 보관함 ----
+AUDIOBOOK_BUCKET = "audiobooks"
+# 서명 URL 유효시간. 다운로드는 큰 파일이라 넉넉히 준다.
+SIGNED_URL_TTL = 3600
+
+
+def require_user_id(authorization: str) -> str:
+    """Bearer 토큰에서 user_id를 꺼낸다. 없거나 잘못되면 401."""
+    from auth import decode_token
+
+    if not authorization:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
+    token = authorization.split(" ")[-1] if " " in authorization else authorization
+    payload = decode_token(token)
+    if not payload or not payload.get("sub"):
+        raise HTTPException(status_code=401, detail="유효하지 않은 토큰입니다.")
+    return payload["sub"]
+
+
+def _supabase_or_503():
+    from auth import get_supabase_client
+
+    client = get_supabase_client(use_service_role=True)
+    if not client:
+        raise HTTPException(status_code=503, detail="클라우드 저장소에 연결할 수 없습니다.")
+    return client
+
+
+def _object_paths(user_id: str, audiobook_id: str):
+    """오디오와 문장 데이터를 나란히 둔다. audiobooks 테이블에 sentences
+    컬럼이 없어 스키마 변경 없이 버킷에 함께 보관한다."""
+    base = f"{user_id}/{audiobook_id}"
+    return f"{base}.mp3", f"{base}.sentences.json"
+
+
 # App build ID: generated once at server startup.
 # Changes on every redeploy (new process start), used by client to detect updates.
 APP_BUILD_ID = str(int(time.time()))
@@ -966,6 +1002,109 @@ async def cleanup_expired_files_loop():
             print(f"Error in cleanup background task: {e}")
         
         await asyncio.sleep(600)  # Every 10 minutes
+
+# ====================================================
+# 클라우드 보관함 (로컬 우선 + 클라우드 백업)
+#
+# IndexedDB가 재생 원본이고 여기는 백업 및 기기 간 전달 통로다.
+# 오디오북은 만든 뒤 편집이 없어 생성/삭제만 있으므로 충돌 병합이 필요 없다.
+# 파일 본체는 클라이언트가 서명 URL로 Supabase와 직접 주고받는다 —
+# 서버를 거치면 최대 90MB가 매번 인스턴스 메모리를 지나간다.
+# ====================================================
+
+@app.post("/api/audiobooks")
+async def create_audiobook(request: Request, payload: dict, authorization: str = Header(None)):
+    """메타데이터 행을 만들고 업로드용 서명 URL을 돌려준다."""
+    user_id = require_user_id(authorization)
+    enforce_rate_limit(request, "audiobook_create", limit=60, window_sec=600)
+
+    title = (payload.get("title") or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="제목이 필요합니다.")
+
+    supabase = _supabase_or_503()
+    audiobook_id = str(uuid.uuid4())
+    audio_path, sentences_path = _object_paths(user_id, audiobook_id)
+
+    try:
+        supabase.table("audiobooks").insert({
+            "id": audiobook_id,
+            "user_id": user_id,
+            "title": title[:255],
+            "file_name": (payload.get("file_name") or title)[:255],
+            "duration_seconds": payload.get("duration_seconds"),
+            "storage_path": audio_path,
+        }).execute()
+
+        storage = supabase.storage.from_(AUDIOBOOK_BUCKET)
+        return {
+            "id": audiobook_id,
+            "audio_upload": storage.create_signed_upload_url(audio_path),
+            "sentences_upload": storage.create_signed_upload_url(sentences_path),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"클라우드 등록에 실패했습니다: {e}")
+
+
+@app.get("/api/audiobooks")
+async def list_audiobooks(authorization: str = Header(None)):
+    """내 오디오북 목록. 각 항목에 다운로드용 서명 URL을 붙인다."""
+    user_id = require_user_id(authorization)
+    supabase = _supabase_or_503()
+
+    try:
+        rows = supabase.table("audiobooks").select("*").eq("user_id", user_id) \
+            .order("created_at", desc=True).execute().data or []
+        storage = supabase.storage.from_(AUDIOBOOK_BUCKET)
+
+        items = []
+        for row in rows:
+            audio_path, sentences_path = _object_paths(user_id, row["id"])
+            item = dict(row)
+            # 업로드가 중간에 끊긴 행은 서명 URL 발급이 실패한다. 목록 전체를
+            # 실패시키지 않고 해당 항목만 표시에서 제외한다.
+            try:
+                item["audio_url"] = storage.create_signed_url(audio_path, SIGNED_URL_TTL)["signedURL"]
+                item["sentences_url"] = storage.create_signed_url(sentences_path, SIGNED_URL_TTL)["signedURL"]
+            except Exception:
+                continue
+            items.append(item)
+        return {"audiobooks": items}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"목록을 불러오지 못했습니다: {e}")
+
+
+@app.delete("/api/audiobooks/{audiobook_id}")
+async def delete_audiobook(audiobook_id: str, authorization: str = Header(None)):
+    user_id = require_user_id(authorization)
+    supabase = _supabase_or_503()
+
+    try:
+        # user_id를 조건에 포함해 남의 항목을 지울 수 없게 한다
+        found = supabase.table("audiobooks").select("id") \
+            .eq("id", audiobook_id).eq("user_id", user_id).execute().data
+        if not found:
+            raise HTTPException(status_code=404, detail="해당 오디오북을 찾을 수 없습니다.")
+
+        audio_path, sentences_path = _object_paths(user_id, audiobook_id)
+        try:
+            supabase.storage.from_(AUDIOBOOK_BUCKET).remove([audio_path, sentences_path])
+        except Exception:
+            # 파일이 이미 없어도 행은 정리해야 한다
+            pass
+
+        supabase.table("audiobooks").delete() \
+            .eq("id", audiobook_id).eq("user_id", user_id).execute()
+        return {"deleted": audiobook_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"삭제에 실패했습니다: {e}")
+
 
 # ====================================================
 # P2: Authentication & User Management Routes
