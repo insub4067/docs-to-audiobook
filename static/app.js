@@ -174,15 +174,15 @@ document.addEventListener("DOMContentLoaded", async () => {
             isDragging = false;
             contentElement.classList.remove('ui-dragging');
             contentElement.style.transition = '';
-            
+
             const deltaY = currentY - startY;
             const dragDuration = Date.now() - dragStartTime;
             const velocity = deltaY / dragDuration;
-            
+
             const contentHeight = contentElement.offsetHeight;
             const passedThreshold = deltaY > contentHeight * 0.25;
             const isFlick = velocity > 0.6;
-            
+
             if (deltaY > 0 && (passedThreshold || (isFlick && deltaY > 30))) {
                 contentElement.style.transform = '';
                 backdropElement.classList.remove('show');
@@ -191,6 +191,30 @@ document.addEventListener("DOMContentLoaded", async () => {
                 contentElement.style.transform = '';
             }
         }, { passive: true });
+
+        // 시스템 제스처 충돌 등으로 touchend 없이 제스처가 강제 종료될 때
+        // 온다. 이걸 처리하지 않으면 마지막 러버밴드 위치(예: translateY(-59px))가
+        // 인라인 스타일로 그대로 남아, 카드가 화면 하단에 붙지 못하고 그
+        // 아래로 배경색 빈 공간이 보이는 상태로 고착된다.
+        contentElement.addEventListener('touchcancel', () => {
+            if (!isDragging) return;
+            isDragging = false;
+            contentElement.classList.remove('ui-dragging');
+            contentElement.style.transition = '';
+            contentElement.style.transform = '';
+        }, { passive: true });
+
+        // 이중 안전장치: 여는 지점이 여러 군데라(파일 업로드 후 자동으로,
+        // "더보기" 버튼으로, 목차 버튼으로) 그 각각에서 리셋하는 대신
+        // "show" 클래스가 다시 붙는 시점 자체를 감지해 한 곳에서 보장한다.
+        // touchcancel을 못 잡는 경로가 남아 있어도 다음에 열 때는 항상
+        // 깨끗한 상태로 시작한다.
+        new MutationObserver(() => {
+            if (backdropElement.classList.contains('show')) {
+                contentElement.style.transform = '';
+                contentElement.style.transition = '';
+            }
+        }).observe(backdropElement, { attributes: true, attributeFilter: ['class'] });
     }
 
     setupSwipeToDismiss(generationModal, '.modal-content');
