@@ -1161,10 +1161,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                         if (e.cancelable) e.preventDefault();
                         currentX = x;
                         if (deltaX < 0) {
-                            const moveX = Math.max(deltaX, -100);
-                            front.style.transform = `translateX(${moveX}px)`;
+                            // No hard cap, direct tracking
+                            front.style.transform = `translateX(${deltaX}px)`;
                         } else if (deltaX > 0) {
-                            front.style.transform = `translateX(${deltaX * 0.1}px)`;
+                            // Rubber band effect to the right
+                            front.style.transform = `translateX(${deltaX * 0.15}px)`;
                         }
                     }
                 }, { passive: false });
@@ -1175,7 +1176,17 @@ document.addEventListener("DOMContentLoaded", async () => {
                     front.classList.remove('ui-dragging');
                     const deltaX = currentX - startX;
                     
-                    if (deltaX < -40) {
+                    // Overswipe: -150px 이상 땡기면 즉각 삭제 애니메이션 발동
+                    if (deltaX < -150) {
+                        front.classList.add('deleting');
+                        item.classList.add('deleting-row');
+                        
+                        if (navigator.vibrate) navigator.vibrate(50);
+                        
+                        setTimeout(() => {
+                            deleteAudiobook(audio.id);
+                        }, 350);
+                    } else if (deltaX < -40) {
                         front.style.transform = `translateX(-80px)`;
                         item.classList.add('swipe-open');
                     } else {

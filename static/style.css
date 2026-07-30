@@ -614,10 +614,26 @@ input[type="range"]::-webkit-slider-thumb:active {
     justify-content: space-between;
     padding: 16px 20px;
     background-color: var(--card-bg-solid);
-    transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1), background-color 0.2s ease;
+    /* Apple Spring Bounce Effect */
+    transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1.15), background-color 0.2s ease;
     width: 100%;
     position: relative;
     z-index: 2;
+}
+
+.audio-item-front.deleting {
+    transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1) !important;
+    transform: translateX(-100%) !important;
+}
+
+.audio-item.deleting-row {
+    height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-color: transparent;
+    opacity: 0;
+    overflow: hidden;
+    transition: all 0.3s ease;
 }
 
 .audio-item-front.ui-dragging {
