@@ -503,6 +503,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     async function handleBatchFileSelect(files) {
+        // 문서 변환은 로그인 사용자 전용. 서버에서도 막지만, 파일을 고르고
+        // 나서 401을 받으면 헛수고이므로 여기서 먼저 안내한다.
+        if (!isLoggedIn()) {
+            showToast("문서 변환은 로그인 후 이용할 수 있습니다.", "info");
+            const loginBtn = document.getElementById("googleLoginBtn");
+            if (loginBtn) loginBtn.scrollIntoView({ behavior: "smooth", block: "center" });
+            return;
+        }
+
         const validFiles = [];
         for (let file of files) {
             if (file.size > 10 * 1024 * 1024) {
@@ -612,6 +621,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         const response = await fetch("/api/upload", {
             method: "POST",
+            headers: authHeaders(),
             body: formData
         });
 
@@ -757,6 +767,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             // 1. Request Job ID from server (Returns immediately)
             const response = await fetch("/api/synthesize", {
                 method: "POST",
+                headers: authHeaders(),
                 body: formData
             });
 
@@ -1147,7 +1158,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 formData.append("title", target.title);
                 formData.append("sentences", JSON.stringify(freshAudio.sentences || []));
 
-                const response = await fetch("/api/share", { method: "POST", body: formData });
+                const response = await fetch("/api/share", { method: "POST", headers: authHeaders(), body: formData });
                 if (!response.ok) throw new Error("서버 업로드 실패");
 
                 const result = await response.json();
@@ -2060,6 +2071,17 @@ document.addEventListener("DOMContentLoaded", async () => {
 // Authentication System
 // ============================================================
 
+// 변환 계열 요청에 붙일 인증 헤더. FormData 전송 시 Content-Type을 직접
+// 지정하면 boundary가 깨지므로 Authorization만 넣는다.
+function authHeaders() {
+    const token = localStorage.getItem("authToken");
+    return token ? { "Authorization": `Bearer ${token}` } : {};
+}
+
+function isLoggedIn() {
+    return !!localStorage.getItem("authToken");
+}
+
 async function initializeAuth() {
     const token = localStorage.getItem("authToken");
     const authContainer = document.getElementById("authContainer");
@@ -2202,9 +2224,16 @@ function setupAuthEventListeners() {
 
 async function handleGoogleLogin() {
     try {
-        // Initialize Google OAuth
+        // Client ID는 서버에서 받아온다. 코드에 박아두면 환경마다 달라질 수
+        // 없고, 실제로 플레이스홀더가 남아 로그인이 동작하지 않았다.
+        const config = await fetch("/api/config").then(r => r.json());
+        if (!config.google_client_id) {
+            showAuthError("로그인 설정이 준비되지 않았습니다. 잠시 후 다시 시도해 주세요.");
+            return;
+        }
+
         google.accounts.id.initialize({
-            client_id: "YOUR_GOOGLE_CLIENT_ID",
+            client_id: config.google_client_id,
             callback: onGoogleSignIn
         });
 

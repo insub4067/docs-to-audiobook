@@ -392,7 +392,10 @@ def annotate_sentences_with_headings(sentences: list, headings: list) -> tuple:
 
 
 @app.post("/api/upload")
-async def upload_file(request: Request, file: UploadFile = File(...)):
+async def upload_file(request: Request, file: UploadFile = File(...), authorization: str = Header(None)):
+    # 문서 변환은 로그인 사용자 전용이다. 기본 오디오북 체험과 공유 링크
+    # 열람은 로그인 없이 계속 가능하다.
+    require_user_id(authorization)
     enforce_rate_limit(request, "upload", limit=100, window_sec=600)
 
     if not file.filename:
@@ -668,8 +671,10 @@ async def synthesize_text(
     text_id: str = Form(...),
     voice: str = Form("ko-KR-SunHiNeural"),
     rate: str = Form("+0%"),
-    pitch: str = Form("+0Hz")
+    pitch: str = Form("+0Hz"),
+    authorization: str = Header(None)
 ):
+    require_user_id(authorization)
     # 가장 비싼 엔드포인트다. 배치 8개를 여러 번 돌릴 여유는 남긴다.
     enforce_rate_limit(request, "synthesize", limit=40, window_sec=600)
 
@@ -754,6 +759,16 @@ async def get_version():
     """Returns the server's build ID. Client polls this on foreground resume to detect redeployment."""
     return JSONResponse(content={"build_id": APP_BUILD_ID})
 
+
+@app.get("/api/config")
+async def get_config():
+    """클라이언트 설정. Google Client ID는 브라우저에 노출되는 공개 값이라
+    코드에 박지 않고 환경변수에서 내려준다(그동안 플레이스홀더가 박혀 있어
+    로그인이 아예 동작하지 않았다)."""
+    return JSONResponse(content={
+        "google_client_id": os.getenv("GOOGLE_CLIENT_ID", "")
+    })
+
 @app.get("/manifest.json")
 async def get_manifest():
     return FileResponse(os.path.join(STATIC_DIR, "manifest.json"), media_type="application/json")
@@ -779,10 +794,14 @@ async def create_share(
     audio: UploadFile = File(...),
     title: str = Form(...),
     sentences: str = Form(...),
-    headings: str = Form("[]")
+    headings: str = Form("[]"),
+    authorization: str = Header(None)
 ):
     """클라이언트가 오디오북을 공유할 때 서버에 임시 저장 (24시간 후 자동 삭제)"""
-    # 남의 도메인에 임의 콘텐츠를 올리는 통로가 되지 않게 조인다
+    # 오디오북 생성이 로그인 전용이므로 공유도 같이 맞춘다. 무인증으로 두면
+    # 남의 도메인에 임의 콘텐츠(최대 120MB)를 올리는 통로가 된다.
+    # 공유 링크 열람(GET)은 받는 사람을 위해 계속 공개로 둔다.
+    require_user_id(authorization)
     enforce_rate_limit(request, "share", limit=20, window_sec=3600)
 
     share_id = str(uuid.uuid4())[:12]
