@@ -840,6 +840,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             progressItem.remove();
             showToast("저장되었습니다!", "success");
             renderLibrary();
+            // 만들자마자 클라우드에 올린다. 예전에는 페이지 로드 때만
+            // 동기화해서, 만든 뒤 바로 로그아웃하면 복구 불가로 사라졌다.
+            if (isLoggedIn()) syncWithCloud();
             return true;
 
         } catch (error) {
@@ -1120,33 +1123,39 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     let syncing = false;
+    /**
+     * @returns {Promise<{uploaded:number, added:number, failed:number, ok:boolean}>}
+     * 로그아웃이 "안 올라간 게 남았는지"를 판단해야 하므로 결과를 돌려준다.
+     * 예전에는 실패를 조용히 삼켜서, 업로드가 안 된 채로 기기 데이터가
+     * 지워지는 일을 막지 못했다.
+     */
     async function syncWithCloud() {
-        if (!isLoggedIn() || syncing) return;
+        const result = { uploaded: 0, added: 0, failed: 0, ok: false };
+        if (!isLoggedIn() || syncing) return result;
         syncing = true;
         try {
             const res = await fetch("/api/audiobooks", { headers: authHeaders() });
-            if (!res.ok) return;
+            if (!res.ok) return result;
             const cloud = (await res.json()).audiobooks || [];
             const local = await getAllAudiobooksFromDB();
 
             // 1) 로컬에만 있는 것 올리기 (기본 제공본과 아직 안 받은 항목은 제외)
             const cloudIds = new Set(cloud.map(c => c.id));
-            let uploaded = 0;
             for (const item of local) {
                 if (item.isDefault || !item.audioData) continue;
                 if (item.cloudId && cloudIds.has(item.cloudId)) continue;
                 try {
                     const cloudId = await uploadAudiobookToCloud(item);
                     await saveAudiobookToDB({ ...item, cloudId });
-                    uploaded++;
+                    result.uploaded++;
                 } catch (e) {
                     console.error("업로드 실패:", item.title, e);
+                    result.failed++;
                 }
             }
 
             // 2) 클라우드에만 있는 것 목록에 추가 (오디오는 재생 시 받는다)
             const known = new Set(local.map(i => i.cloudId).filter(Boolean));
-            let added = 0;
             for (const c of cloud) {
                 if (known.has(c.id)) continue;
                 await saveAudiobookToDB({
@@ -1165,22 +1174,26 @@ document.addEventListener("DOMContentLoaded", async () => {
                     sizeBytes: 0,
                     charCount: 0
                 });
-                added++;
+                result.added++;
             }
 
-            if (uploaded || added) {
+            result.ok = result.failed === 0;
+            if (result.uploaded || result.added) {
                 renderLibrary();
-                showToast(`동기화 완료 (올림 ${uploaded}, 받음 ${added})`, "success");
+                showToast(`동기화 완료 (올림 ${result.uploaded}, 받음 ${result.added})`, "success");
             }
+            return result;
         } catch (e) {
             console.error("클라우드 동기화 실패:", e);
+            return result;
         } finally {
             syncing = false;
         }
     }
 
-    // 로그인/로그아웃은 최상위 스코프에서 일어나므로 이벤트로 연결한다
-    window.addEventListener("auth:changed", syncWithCloud);
+    // 로그아웃(최상위 스코프)이 삭제 전에 업로드를 끝까지 기다려야 하므로
+    // 함수를 노출한다. 이벤트 방식은 완료를 기다릴 수 없다.
+    window.__syncAudiobooksToCloud = syncWithCloud;
 
     // --- ActionSheet ---
     const actionSheetBackdrop = document.getElementById("actionSheetBackdrop");
@@ -2347,16 +2360,35 @@ function clearDeviceAudiobooks() {
 }
 
 async function logout() {
-    // 기기 데이터를 지우는 동작이라 반드시 확인을 받는다. 클라우드에 올라간
-    // 것은 다시 로그인하면 돌아오지만, 아직 업로드되지 않은 것은 사라진다.
+    // 기기 데이터를 지우는 동작이라 반드시 확인을 받는다.
     const confirmed = window.confirm(
         "로그아웃하면 이 기기에 저장된 오디오북이 모두 삭제됩니다.\n" +
         "기본 제공 오디오북만 남습니다.\n\n" +
-        "클라우드에 저장된 오디오북은 다시 로그인하면 복원됩니다.\n" +
-        "아직 업로드되지 않은 오디오북은 복구할 수 없습니다.\n\n" +
+        "삭제 전에 클라우드로 백업하며, 다시 로그인하면 복원됩니다.\n\n" +
         "계속하시겠습니까?"
     );
     if (!confirmed) return;
+
+    // 지우기 전에 아직 안 올라간 것을 먼저 올린다. 이 단계를 건너뛰면
+    // 복구할 방법이 없다 — 이전 구현은 경고만 하고 실제로 막지 못했다.
+    if (window.__syncAudiobooksToCloud) {
+        let result;
+        try {
+            result = await window.__syncAudiobooksToCloud();
+        } catch (error) {
+            console.error("로그아웃 전 백업 실패:", error);
+            result = { ok: false, failed: -1 };
+        }
+        if (!result.ok) {
+            const proceed = window.confirm(
+                "클라우드 백업에 실패했습니다.\n" +
+                "지금 로그아웃하면 백업되지 않은 오디오북은 복구할 수 없습니다.\n\n" +
+                "그래도 로그아웃할까요?\n" +
+                "(취소를 누르고 잠시 후 다시 시도하는 것을 권합니다)"
+            );
+            if (!proceed) return;
+        }
+    }
 
     try {
         await clearDeviceAudiobooks();
