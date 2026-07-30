@@ -11,3 +11,4 @@ shared/
 .env
 .env.local
 .env.*.local
+job_audio/

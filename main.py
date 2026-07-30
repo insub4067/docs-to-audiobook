@@ -15,6 +15,7 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Response, Ba
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.background import BackgroundTask
 import edge_tts
 import mimetypes
 mimetypes.add_type("text/css", ".css")
@@ -36,10 +37,13 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 SHARED_DIR = os.path.join(BASE_DIR, "shared")
+# 합성이 끝난 오디오를 클라이언트가 받아갈 때까지 잠시 두는 곳
+JOB_AUDIO_DIR = os.path.join(BASE_DIR, "job_audio")
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(STATIC_DIR, exist_ok=True)
 os.makedirs(SHARED_DIR, exist_ok=True)
+os.makedirs(JOB_AUDIO_DIR, exist_ok=True)
 
 # App build ID: generated once at server startup.
 # Changes on every redeploy (new process start), used by client to detect updates.
@@ -500,10 +504,15 @@ async def process_synthesis_task(job_id: str, raw_text: str, voice: str, rate: s
             jobs[job_id]["error"] = "음성 합성 결과가 비어 있습니다."
             return
 
-        import base64
-        audio_base64 = base64.b64encode(combined_audio).decode("utf-8")
+        # 완성된 오디오는 디스크로 내린다. base64로 메모리에 들고 있으면
+        # 문자당 약 900바이트 x 1.33배가 클라이언트가 가져갈 때까지 RAM에
+        # 남아, 동시 작업 수만큼 곱해져 인스턴스가 죽는다.
+        audio_path = os.path.join(JOB_AUDIO_DIR, f"{job_id}.mp3")
+        with open(audio_path, "wb") as f:
+            f.write(combined_audio)
+        del combined_audio
 
-        jobs[job_id]["audio"] = audio_base64
+        jobs[job_id]["audio_path"] = audio_path
         jobs[job_id]["sentences"] = annotated_sentences
         jobs[job_id]["headings"] = heading_index
         jobs[job_id]["status"] = "completed"
@@ -530,10 +539,11 @@ async def synthesize_text(
     job_id = str(uuid.uuid4())
     jobs[job_id] = {
         "status": "processing",
-        "audio": None,
+        "audio_path": None,
         "sentences": [],
         "headings": [],
-        "error": None
+        "error": None,
+        "created_at": time.time()
     }
     
     # Pass raw text — process_synthesis_task handles preprocessing internally
@@ -547,19 +557,43 @@ async def get_job_status(job_id: str):
         raise HTTPException(status_code=404, detail="해당 작업을 찾을 수 없습니다.")
         
     job = jobs[job_id]
-    
+
     if job["status"] == "completed":
-        # Return data and free memory
-        response = {
+        # 오디오는 별도 엔드포인트에서 파일로 스트리밍한다. 여기서는
+        # 메타데이터만 주고 job은 남겨둔다(오디오를 받아가야 정리된다).
+        return JSONResponse(content={
             "status": "completed",
-            "audio": job["audio"],
+            "audio_url": f"/api/job/{job_id}/audio",
             "sentences": job["sentences"],
             "headings": job.get("headings", [])
-        }
-        del jobs[job_id]
-        return JSONResponse(content=response)
-        
+        })
+
     return JSONResponse(content={"status": job["status"], "error": job.get("error")})
+
+
+@app.get("/api/job/{job_id}/audio")
+async def get_job_audio(job_id: str):
+    job = jobs.get(job_id)
+    if not job or job.get("status") != "completed":
+        raise HTTPException(status_code=404, detail="해당 작업의 오디오를 찾을 수 없습니다.")
+
+    audio_path = job.get("audio_path")
+    if not audio_path or not os.path.exists(audio_path):
+        raise HTTPException(status_code=404, detail="오디오 파일이 만료되었습니다.")
+
+    # 전송이 끝난 뒤에 파일과 job 항목을 정리한다
+    def _cleanup():
+        try:
+            os.remove(audio_path)
+        except OSError:
+            pass
+        jobs.pop(job_id, None)
+
+    return FileResponse(
+        audio_path,
+        media_type="audio/mpeg",
+        background=BackgroundTask(_cleanup)
+    )
 
 # Serve static files (HTML, CSS, JS)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -791,6 +825,27 @@ async def cleanup_expired_files_loop():
                                 print(f"Cleaned expired share: {share_id}")
                         except Exception:
                             pass
+
+            # 3. 클라이언트가 받아가지 않은 job 오디오 정리 (30분 경과)
+            for jid in [k for k, v in jobs.items()
+                        if now - v.get("created_at", now) > 1800]:
+                job = jobs.pop(jid, None)
+                if job and job.get("audio_path"):
+                    try:
+                        os.remove(job["audio_path"])
+                    except OSError:
+                        pass
+                print(f"Cleaned expired job: {jid}")
+
+            # 고아 파일(서버 재시작 등으로 jobs에 없는 파일)도 정리
+            if os.path.exists(JOB_AUDIO_DIR):
+                for fname in os.listdir(JOB_AUDIO_DIR):
+                    fpath = os.path.join(JOB_AUDIO_DIR, fname)
+                    try:
+                        if os.path.isfile(fpath) and now - os.path.getmtime(fpath) > 1800:
+                            os.remove(fpath)
+                    except OSError:
+                        pass
         except Exception as e:
             print(f"Error in cleanup background task: {e}")
         

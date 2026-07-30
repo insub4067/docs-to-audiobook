@@ -521,8 +521,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    // 동시에 처리할 파일 수
-    const BATCH_CONCURRENCY = 2;
+    // 동시에 처리할 파일 수. 서버가 오디오를 디스크로 내리므로 파일 수만큼
+    // RAM이 늘지 않고, TTS 동시 연결은 서버 세마포어가 따로 묶는다.
+    const BATCH_CONCURRENCY = 8;
 
     // 배치는 현재 음성 설정을 모든 파일에 공통 적용하고, 파일마다
     // 추출 → 생성까지 끝낸다. 진행 상황은 라이브러리의 파일별 진행 아이템으로 보여준다.
@@ -789,21 +790,17 @@ document.addEventListener("DOMContentLoaded", async () => {
             };
             
             const completedJobData = await pollJobStatus(jobId);
-            
+
             clearInterval(progressInterval);
 
-            const audioBase64 = completedJobData.audio;
             const sentences = completedJobData.sentences;
 
-            // Decode base64 to binary Blob
-            const byteCharacters = atob(audioBase64);
-            const byteNumbers = new Array(byteCharacters.length);
-            for (let i = 0; i < byteCharacters.length; i++) {
-                byteNumbers[i] = byteCharacters.charCodeAt(i);
-            }
-            const byteArray = new Uint8Array(byteNumbers);
-            const audioBlob = new Blob([byteArray], { type: "audio/mpeg" });
-            
+            // 오디오는 별도 엔드포인트에서 바이너리로 받는다. 서버가 base64로
+            // 메모리에 들고 있지 않으므로 동시 처리 수를 늘려도 안전하다.
+            const audioRes = await fetch(completedJobData.audio_url);
+            if (!audioRes.ok) throw new Error("오디오 파일 다운로드 실패");
+            const audioBlob = await audioRes.blob();
+
             inlineFill.style.width = "100%";
             inlineStatus.textContent = "저장 중...";
             
