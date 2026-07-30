@@ -710,30 +710,42 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     async function uploadFile(file) {
-        if (previewPlaceholder) previewPlaceholder.style.display = "none";
-        previewText.style.display = "block";
-        previewText.innerHTML = '<div style="color: var(--text-muted); text-align: center; margin-top: 40px;"><div class="spinner-container" style="width: 30px; height: 30px; margin: 0 auto 10px;"><div class="double-bounce1"></div><div class="double-bounce2"></div></div>서버에서 고속 문서 해독 중...</div>';
+        const dzNormal = document.getElementById("dropzoneNormal");
+        const dzLoading = document.getElementById("dropzoneLoading");
+        
+        if (dzNormal) dzNormal.style.display = "none";
+        if (dzLoading) dzLoading.style.display = "block";
 
         try {
             const data = await extractText(file);
             currentTextId = data.text_id;
 
             // Render text preview
+            if (previewPlaceholder) previewPlaceholder.style.display = "none";
+            previewText.style.display = "block";
             previewText.textContent = data.preview;
             charCountBadge.textContent = `${data.char_count.toLocaleString()} 자`;
             charCountBadge.style.display = "block";
             
             generateBtn.disabled = false;
             
-            // Show generation modal instead of confirm alert
+            // Restore dropzone state
+            if (dzNormal) dzNormal.style.display = "block";
+            if (dzLoading) dzLoading.style.display = "none";
+            
+            // Show generation modal
             setTimeout(() => {
                 generationModal.classList.add("show");
                 document.body.style.overflow = "hidden";
-            }, 300);
+            }, 50);
         } catch (error) {
             console.error(error);
             showToast(error.message, "error");
             if (removeFileBtn) removeFileBtn.click();
+            
+            // Restore dropzone state on error
+            if (dzNormal) dzNormal.style.display = "block";
+            if (dzLoading) dzLoading.style.display = "none";
         }
     }
 
