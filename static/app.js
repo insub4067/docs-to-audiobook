@@ -2288,7 +2288,7 @@ function showAppUI(user, token) {
         userEmail.textContent = user.email;
     } else {
         // 비로그인일 때만 구글 버튼을 그린다
-        setupGoogleLogin();
+        setupSocialLogin();
     }
 }
 
@@ -2304,55 +2304,6 @@ async function fetchCurrentUser(token) {
     }
 
     return await response.json();
-}
-
-async function login(email, password) {
-    try {
-        const response = await fetch("/api/auth/login", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ email, password })
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            return { success: false, error: data.detail || "로그인 실패" };
-        }
-
-        localStorage.setItem("authToken", data.access_token);
-        return { success: true, user: data.user };
-    } catch (error) {
-        return { success: false, error: error.message };
-    }
-}
-
-async function register(email, password, fullName) {
-    try {
-        const response = await fetch("/api/auth/register", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                email,
-                password,
-                full_name: fullName
-            })
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            return { success: false, error: data.detail || "가입 실패" };
-        }
-
-        return { success: true, message: data.message };
-    } catch (error) {
-        return { success: false, error: error.message };
-    }
 }
 
 /**
@@ -2427,7 +2378,7 @@ function setupAuthEventListeners() {
     const logoutBtn = document.getElementById("logoutBtn");
 
     // 로그인 버튼은 구글이 직접 그리고 클릭도 구글이 처리한다.
-    // 우리가 붙일 핸들러가 없다 — setupGoogleLogin()이 렌더만 담당한다.
+    // 우리가 붙일 핸들러가 없다 — setupSocialLogin()이 렌더만 담당한다.
     if (logoutBtn) {
         logoutBtn.addEventListener("click", logout);
     }
@@ -2449,42 +2400,33 @@ function waitForGoogleSdk(timeoutMs = 8000) {
     });
 }
 
-let googleInitialized = false;
-
 /**
- * 구글 공식 버튼을 렌더한다. GSI는 팝업을 프로그램으로 열 수 없고 구글이
- * 직접 그린 버튼을 눌러야만 열리므로, 버튼을 노출해 한 번 클릭에 팝업이
- * 뜨게 한다. One Tap(prompt)은 쓰지 않는다 — 팝업 방식으로 통일한다.
+ * 소셜 로그인 제공자 정의.
+ *
+ * 카카오/네이버/애플을 추가할 때 손댈 곳은 여기 하나다. 각 제공자는
+ * render(slot, clientId)만 구현하면 되고, 인증에 성공하면 공통 함수인
+ * completeSocialLogin(provider, token)을 부르면 된다.
+ *
+ * 서버도 대칭이다 — /api/auth/social/{provider} 하나로 받는다.
  */
-async function setupGoogleLogin() {
-    const slots = ["headerGoogleBtn", "googleLoginBtn"]
-        .map(id => document.getElementById(id))
-        .filter(Boolean);
-    if (slots.length === 0) return;
-
-    try {
-        // Client ID는 서버에서 받아온다. 코드에 박아두면 환경마다 달라질 수
-        // 없고, 실제로 플레이스홀더가 남아 로그인이 동작하지 않았다.
-        const config = await fetch("/api/config").then(r => r.json());
-        if (!config.google_client_id) {
-            showAuthError("로그인 설정이 준비되지 않았습니다. 관리자에게 문의해 주세요.");
-            return;
-        }
-        if (!(await waitForGoogleSdk())) {
-            showAuthError("Google 로그인 스크립트를 불러오지 못했습니다.");
-            return;
-        }
-
-        if (!googleInitialized) {
-            google.accounts.id.initialize({
-                client_id: config.google_client_id,
-                callback: onGoogleSignIn,
-                ux_mode: "popup"
-            });
-            googleInitialized = true;
-        }
-
-        for (const slot of slots) {
+const SOCIAL_PROVIDERS = {
+    google: {
+        // GSI는 팝업을 프로그램으로 열 수 없다. 구글이 직접 그린 버튼을
+        // 눌러야만 열리므로 공식 버튼을 그대로 노출한다.
+        // One Tap(prompt)은 쓰지 않는다 — 팝업 방식으로 통일한다.
+        initialized: false,
+        async render(slot, clientId) {
+            if (!(await waitForGoogleSdk())) {
+                throw new Error("Google 로그인 스크립트를 불러오지 못했습니다.");
+            }
+            if (!this.initialized) {
+                google.accounts.id.initialize({
+                    client_id: clientId,
+                    callback: (res) => completeSocialLogin("google", res.credential),
+                    ux_mode: "popup"
+                });
+                this.initialized = true;
+            }
             slot.innerHTML = "";
             google.accounts.id.renderButton(slot, {
                 type: "standard",
@@ -2494,31 +2436,59 @@ async function setupGoogleLogin() {
                 text: "signin_with"
             });
         }
+    }
+
+    // kakao: { async render(slot, jsKey) { ... completeSocialLogin("kakao", token) } },
+    // naver: { ... },
+    // apple: { ... },
+};
+
+/** 제공자별 버튼을 지정된 슬롯들에 그린다. */
+async function setupSocialLogin() {
+    const slots = ["headerGoogleBtn", "googleLoginBtn"]
+        .map(id => document.getElementById(id))
+        .filter(Boolean);
+    if (slots.length === 0) return;
+
+    try {
+        // 클라이언트 ID는 서버에서 받아온다. 코드에 박아두면 환경마다 달라질
+        // 수 없고, 실제로 플레이스홀더가 남아 로그인이 동작하지 않았다.
+        const config = await fetch("/api/config").then(r => r.json());
+        const providers = config.providers || {};
+        const enabled = Object.keys(providers).filter(p => SOCIAL_PROVIDERS[p]);
+
+        if (enabled.length === 0) {
+            showAuthError("로그인 설정이 준비되지 않았습니다. 관리자에게 문의해 주세요.");
+            return;
+        }
+
+        for (const name of enabled) {
+            for (const slot of slots) {
+                try {
+                    await SOCIAL_PROVIDERS[name].render(slot, providers[name]);
+                } catch (e) {
+                    console.error(`${name} 로그인 버튼 렌더 실패:`, e);
+                    showAuthError(e.message || "로그인을 준비하지 못했습니다.");
+                }
+            }
+        }
     } catch (error) {
-        console.error("Google login setup failed:", error);
-        showAuthError("Google 로그인을 준비하지 못했습니다.");
+        console.error("Social login setup failed:", error);
+        showAuthError("로그인을 준비하지 못했습니다.");
     }
 }
 
-async function onGoogleSignIn(response) {
-    const idToken = response.credential;
-
+/** 제공자가 발급한 토큰을 서버에 넘겨 우리 세션을 만든다. 제공자 공통 경로. */
+async function completeSocialLogin(provider, token) {
     try {
-        const result = await fetch("/api/auth/google", {
+        const res = await fetch(`/api/auth/social/${provider}`, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ token: idToken })
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token })
         });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "로그인 실패");
 
-        const data = await result.json();
-
-        if (!result.ok) {
-            throw new Error(data.detail || "로그인 실패");
-        }
-
-        // Save token and reload
         localStorage.setItem("authToken", data.access_token);
         setTimeout(() => location.reload(), 500);
     } catch (error) {
@@ -2526,6 +2496,8 @@ async function onGoogleSignIn(response) {
         showAuthError(error.message || "로그인에 실패했습니다.");
     }
 }
+
+
 
 function showAuthError(message) {
     const authMessage = document.getElementById("authMessage");

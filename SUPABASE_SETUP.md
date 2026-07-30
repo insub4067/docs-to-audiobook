@@ -235,3 +235,86 @@ print(response)
 - [Supabase 공식 문서](https://supabase.com/docs)
 - [Supabase Python 클라이언트](https://github.com/supabase-community/supabase-py)
 - [FastAPI + Supabase](https://supabase.com/docs/guides/integrations/fastapi)
+
+---
+
+## 소셜 로그인 제공자 추가하기 (카카오 / 네이버 / 애플)
+
+이메일 로그인은 제거했다. 소셜 로그인만 취급하며, 제공자를 늘릴 때
+손대는 곳은 아래 네 군데뿐이다.
+
+### 1. 스키마 마이그레이션 (선행 필요)
+
+현재 `users` 테이블은 `google_id` 컬럼이 제공자별로 박혀 있어 제공자마다
+컬럼이 늘어난다. 두 번째 제공자를 붙이기 전에 일반화한다.
+
+```sql
+ALTER TABLE users ADD COLUMN provider VARCHAR(20);
+ALTER TABLE users ADD COLUMN provider_id VARCHAR(255);
+CREATE UNIQUE INDEX idx_users_provider ON users(provider, provider_id);
+
+-- 기존 구글 사용자 이관
+UPDATE users SET provider = 'google', provider_id = google_id
+WHERE google_id IS NOT NULL;
+```
+
+그 뒤 `main.py`의 `_upsert_social_user()`에서 google_id 특수 처리를 지우고
+provider/provider_id를 쓰도록 바꾼다.
+
+### 2. 서버: 검증 함수 추가 (main.py)
+
+토큰을 검증해 공통 프로필로 바꾸는 함수를 만들고 `SOCIAL_VERIFIERS`에 등록한다.
+반환 형식은 제공자와 무관하게 동일하다.
+
+```python
+def _verify_kakao(token_string: str) -> dict:
+    # 카카오 API로 토큰 검증 후
+    return {
+        "provider": "kakao",
+        "provider_id": ...,
+        "email": ...,
+        "full_name": ...,
+        "avatar_url": ...,
+    }
+
+SOCIAL_VERIFIERS = {
+    "google": _verify_google,
+    "kakao": _verify_kakao,
+}
+```
+
+사용자 조회/생성과 JWT 발급은 `_upsert_social_user()`와
+`/api/auth/social/{provider}`가 공통으로 처리하므로 건드릴 필요가 없다.
+
+### 3. 서버: 클라이언트 키 노출 (main.py의 `/api/config`)
+
+```python
+providers = {
+    "google": os.getenv("GOOGLE_CLIENT_ID", ""),
+    "kakao": os.getenv("KAKAO_JS_KEY", ""),
+}
+```
+
+값이 빈 제공자는 클라이언트가 알아서 건너뛴다.
+
+### 4. 클라이언트: 버튼 렌더 (static/app.js의 `SOCIAL_PROVIDERS`)
+
+```js
+kakao: {
+    async render(slot, jsKey) {
+        // 버튼을 그리고, 인증 성공 시:
+        completeSocialLogin("kakao", token);
+    }
+}
+```
+
+`completeSocialLogin()`이 `/api/auth/social/{provider}`로 토큰을 넘겨
+세션을 만드는 공통 경로다. 제공자마다 다시 구현할 필요가 없다.
+
+### 참고: 제공자별 주의점
+
+- **애플**: 이메일 가리기(private relay)를 쓰면 실제 이메일이 오지 않는다.
+  계정 식별을 이메일에만 의존하면 안 되므로 위 1번 마이그레이션이 특히 중요하다.
+- **카카오**: 이메일이 선택 동의 항목이라 없을 수 있다. 같은 이유로 provider_id가 필요하다.
+- 현재 계정 식별은 이메일 기준이다. 같은 이메일로 다른 제공자를 쓰면 같은
+  계정이 된다(의도된 동작).
