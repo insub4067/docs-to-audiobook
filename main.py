@@ -855,13 +855,72 @@ def default_book_paths():
     )
 
 
+# 기본 제공 오디오북을 클라우드에 한 번만 만들어 두는 자리.
+# 디스크는 재배포마다 날아가므로 여기 없으면 부팅할 때마다 36,000자를
+# 다시 합성하게 되고, 공유 CPU 1개를 점유해 사용자 변환까지 굶긴다.
+DEFAULT_BOOK_REMOTE_AUDIO = "_default/sherlock-holmes.ogg"
+DEFAULT_BOOK_REMOTE_META = "_default/sherlock-holmes.meta.json"
+
+
+def _restore_default_book_from_cloud(audio_path: str, meta_path: str) -> bool:
+    """클라우드에 있으면 내려받아 디스크에 놓는다. 성공하면 True."""
+    try:
+        from auth import get_supabase_client
+
+        client = get_supabase_client(use_service_role=True)
+        if not client:
+            return False
+        storage = client.storage.from_(AUDIOBOOK_BUCKET)
+        audio = storage.download(DEFAULT_BOOK_REMOTE_AUDIO)
+        meta = storage.download(DEFAULT_BOOK_REMOTE_META)
+        if not audio or not meta:
+            return False
+        os.makedirs(DEFAULT_BOOK_DIR, exist_ok=True)
+        with open(audio_path, "wb") as f:
+            f.write(audio)
+        with open(meta_path, "wb") as f:
+            f.write(meta)
+        print("Default audiobook restored from cloud.")
+        return True
+    except Exception as e:
+        print(f"Default book not in cloud yet ({e}).")
+        return False
+
+
+def _upload_default_book_to_cloud(audio_path: str, meta_path: str) -> None:
+    """다음 부팅부터 다시 만들지 않도록 클라우드에 올려둔다."""
+    try:
+        from auth import get_supabase_client
+
+        client = get_supabase_client(use_service_role=True)
+        if not client:
+            return
+        storage = client.storage.from_(AUDIOBOOK_BUCKET)
+        with open(audio_path, "rb") as f:
+            storage.upload(DEFAULT_BOOK_REMOTE_AUDIO, f.read(),
+                           {"content-type": "audio/ogg", "upsert": "true"})
+        with open(meta_path, "rb") as f:
+            storage.upload(DEFAULT_BOOK_REMOTE_META, f.read(),
+                           {"content-type": "application/json", "upsert": "true"})
+        print("Default audiobook uploaded to cloud.")
+    except Exception as e:
+        # 올리기 실패해도 이번 부팅에서는 이미 로컬에 있으니 서비스는 된다
+        print(f"Default book cloud upload failed: {e}")
+
+
 async def generate_default_book():
-    """기본 제공 오디오북을 생성해 디스크에 캐시한다. 이미 있으면 재사용."""
+    """기본 제공 오디오북을 준비한다. 디스크 → 클라우드 → 생성 순으로 찾는다."""
     audio_path, meta_path = default_book_paths()
 
     if os.path.exists(audio_path) and os.path.exists(meta_path):
         default_book_state["status"] = "ready"
         print("Default audiobook already exists on disk. Skipping generation.")
+        return
+
+    # 디스크에 없으면 클라우드에서 복구를 먼저 시도한다. 36,000자 재합성은
+    # 공유 CPU 1개로 매우 오래 걸리고 그동안 사용자 변환이 막힌다.
+    if await asyncio.to_thread(_restore_default_book_from_cloud, audio_path, meta_path):
+        default_book_state["status"] = "ready"
         return
 
     if not os.path.exists(DEFAULT_BOOK_SOURCE):
@@ -890,6 +949,8 @@ async def generate_default_book():
         default_book_state["status"] = "ready"
         default_book_state["error"] = None
         print(f"Default book generated.")
+        # 다음 부팅부터는 재합성 없이 이걸 그대로 쓴다
+        await asyncio.to_thread(_upload_default_book_to_cloud, audio_path, meta_path)
     except Exception as e:
         default_book_state["status"] = "error"
         default_book_state["error"] = str(e)

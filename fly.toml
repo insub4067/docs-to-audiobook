@@ -4,7 +4,7 @@
 #
 
 app = 'docs-to-audiobook'
-primary_region = 'iad'
+primary_region = 'nrt'
 
 [build]
 
