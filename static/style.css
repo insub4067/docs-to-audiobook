@@ -1569,33 +1569,12 @@ input[type="range"]::-webkit-slider-thumb:active {
     margin-left: auto;
 }
 
-.btn-header-login {
+/* 구글 공식 버튼이 들어가는 자리. 버튼 자체의 모양은 구글이 그리므로
+   위치만 잡아준다. */
+.header-login {
     margin-left: auto;
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 9px 16px;
-    border-radius: 20px;
-    background: var(--primary-color);
-    border: none;
-    color: #fff;
-    font-family: inherit;
-    font-size: 0.9rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: opacity 0.2s ease;
-    touch-action: manipulation;
-    -webkit-user-select: none;
-    user-select: none;
-}
-
-.btn-header-login:hover {
-    opacity: 0.88;
-}
-
-.btn-header-login svg {
-    width: 16px;
-    height: 16px;
 }
 
 .user-email {

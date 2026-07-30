@@ -2273,7 +2273,7 @@ function showAppUI(user, token) {
     const appMain = document.getElementById("appMain");
     const userInfo = document.getElementById("userInfo");
     const userEmail = document.getElementById("userEmail");
-    const headerLoginBtn = document.getElementById("headerLoginBtn");
+    const headerLoginSlot = document.getElementById("headerLoginSlot");
 
     // 메인 화면은 로그인 여부와 무관하게 항상 보인다 (기본 오디오북 체험용).
     // 전체를 덮는 auth 카드 대신 헤더의 로그인 버튼으로만 유도한다 —
@@ -2283,8 +2283,13 @@ function showAppUI(user, token) {
 
     const loggedIn = !!(user && token);
     userInfo.style.display = loggedIn ? "flex" : "none";
-    if (headerLoginBtn) headerLoginBtn.style.display = loggedIn ? "none" : "flex";
-    if (loggedIn) userEmail.textContent = user.email;
+    if (headerLoginSlot) headerLoginSlot.style.display = loggedIn ? "none" : "flex";
+    if (loggedIn) {
+        userEmail.textContent = user.email;
+    } else {
+        // 비로그인일 때만 구글 버튼을 그린다
+        setupGoogleLogin();
+    }
 }
 
 async function fetchCurrentUser(token) {
@@ -2419,33 +2424,10 @@ async function logout() {
 }
 
 function setupAuthEventListeners() {
-    const googleLoginBtn = document.getElementById("googleLoginBtn");
     const logoutBtn = document.getElementById("logoutBtn");
-    const headerLoginBtn = document.getElementById("headerLoginBtn");
 
-    // Google Login Button
-    if (googleLoginBtn) {
-        googleLoginBtn.addEventListener("click", () => {
-            googleLoginBtn.disabled = true;
-            googleLoginBtn.textContent = "로그인 중...";
-            handleGoogleLogin();
-        });
-    }
-
-    // 헤더 로그인 버튼: 숨겨져 있던 로그인 카드를 펼치고 Google 로그인을 띄운다.
-    // GSI가 googleLoginBtn 자리에 실제 버튼을 그리므로 카드가 먼저 보여야 한다.
-    if (headerLoginBtn) {
-        headerLoginBtn.addEventListener("click", () => {
-            const authContainer = document.getElementById("authContainer");
-            if (authContainer) {
-                authContainer.style.display = "block";
-                authContainer.scrollIntoView({ behavior: "smooth", block: "center" });
-            }
-            handleGoogleLogin();
-        });
-    }
-
-    // Logout button
+    // 로그인 버튼은 구글이 직접 그리고 클릭도 구글이 처리한다.
+    // 우리가 붙일 핸들러가 없다 — setupGoogleLogin()이 렌더만 담당한다.
     if (logoutBtn) {
         logoutBtn.addEventListener("click", logout);
     }
@@ -2455,30 +2437,66 @@ function setupAuthEventListeners() {
 // Google OAuth Handler
 // ============================================================
 
-async function handleGoogleLogin() {
+/** GSI 스크립트는 async defer로 로드되므로 준비될 때까지 기다린다. */
+function waitForGoogleSdk(timeoutMs = 8000) {
+    return new Promise((resolve) => {
+        const start = Date.now();
+        (function check() {
+            if (window.google && google.accounts && google.accounts.id) return resolve(true);
+            if (Date.now() - start > timeoutMs) return resolve(false);
+            setTimeout(check, 100);
+        })();
+    });
+}
+
+let googleInitialized = false;
+
+/**
+ * 구글 공식 버튼을 렌더한다. GSI는 팝업을 프로그램으로 열 수 없고 구글이
+ * 직접 그린 버튼을 눌러야만 열리므로, 버튼을 노출해 한 번 클릭에 팝업이
+ * 뜨게 한다. One Tap(prompt)은 쓰지 않는다 — 팝업 방식으로 통일한다.
+ */
+async function setupGoogleLogin() {
+    const slots = ["headerGoogleBtn", "googleLoginBtn"]
+        .map(id => document.getElementById(id))
+        .filter(Boolean);
+    if (slots.length === 0) return;
+
     try {
         // Client ID는 서버에서 받아온다. 코드에 박아두면 환경마다 달라질 수
         // 없고, 실제로 플레이스홀더가 남아 로그인이 동작하지 않았다.
         const config = await fetch("/api/config").then(r => r.json());
         if (!config.google_client_id) {
-            showAuthError("로그인 설정이 준비되지 않았습니다. 잠시 후 다시 시도해 주세요.");
+            showAuthError("로그인 설정이 준비되지 않았습니다. 관리자에게 문의해 주세요.");
+            return;
+        }
+        if (!(await waitForGoogleSdk())) {
+            showAuthError("Google 로그인 스크립트를 불러오지 못했습니다.");
             return;
         }
 
-        google.accounts.id.initialize({
-            client_id: config.google_client_id,
-            callback: onGoogleSignIn
-        });
+        if (!googleInitialized) {
+            google.accounts.id.initialize({
+                client_id: config.google_client_id,
+                callback: onGoogleSignIn,
+                ux_mode: "popup"
+            });
+            googleInitialized = true;
+        }
 
-        google.accounts.id.renderButton(
-            document.getElementById("googleLoginBtn"),
-            { theme: "outline", size: "large" }
-        );
-
-        google.accounts.id.prompt();
+        for (const slot of slots) {
+            slot.innerHTML = "";
+            google.accounts.id.renderButton(slot, {
+                type: "standard",
+                theme: "outline",
+                size: "large",
+                shape: "pill",
+                text: "signin_with"
+            });
+        }
     } catch (error) {
-        console.error("Google login failed:", error);
-        showAuthError("Google 로그인에 실패했습니다.");
+        console.error("Google login setup failed:", error);
+        showAuthError("Google 로그인을 준비하지 못했습니다.");
     }
 }
 
@@ -2511,15 +2529,9 @@ async function onGoogleSignIn(response) {
 
 function showAuthError(message) {
     const authMessage = document.getElementById("authMessage");
-    const googleLoginBtn = document.getElementById("googleLoginBtn");
-    
+    // 버튼은 구글이 그린 것이라 여기서 건드리면 지워진다. 메시지만 표시한다.
     if (authMessage) {
         authMessage.textContent = message;
         authMessage.classList.add("error");
-    }
-    
-    if (googleLoginBtn) {
-        googleLoginBtn.disabled = false;
-        googleLoginBtn.textContent = "Google로 계속하기";
     }
 }
