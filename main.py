@@ -763,7 +763,7 @@ async def create_share(
     os.makedirs(share_dir, exist_ok=True)
 
     # Save audio file
-    audio_path = os.path.join(share_dir, "audio.mp3")
+    audio_path = os.path.join(share_dir, "audio.ogg")
     await save_upload_limited(audio, audio_path, MAX_SHARE_AUDIO_BYTES)
 
     # Save metadata
@@ -808,10 +808,10 @@ async def get_share_audio(share_id: str):
         if not os.path.exists(audio_path):
             raise HTTPException(status_code=404, detail="기본 제공 오디오북을 아직 준비 중입니다.")
     else:
-        audio_path = os.path.join(SHARED_DIR, share_id, "audio.mp3")
+        audio_path = os.path.join(SHARED_DIR, share_id, "audio.ogg")
         if not os.path.exists(audio_path):
             raise HTTPException(status_code=404, detail="공유 오디오가 만료되었거나 존재하지 않습니다.")
-    return FileResponse(audio_path, media_type="audio/mpeg", filename="audiobook.mp3")
+    return FileResponse(audio_path, media_type="audio/ogg", filename="audiobook.ogg")
 
 @app.get("/share/{share_id}")
 async def serve_shared_page(share_id: str):
@@ -836,7 +836,7 @@ default_book_lock = asyncio.Lock()
 
 def default_book_paths():
     return (
-        os.path.join(DEFAULT_BOOK_DIR, "audio.mp3"),
+        os.path.join(DEFAULT_BOOK_DIR, "audio.ogg"),
         os.path.join(DEFAULT_BOOK_DIR, "meta.json"),
     )
 
