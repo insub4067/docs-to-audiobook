@@ -195,11 +195,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     setupSwipeToDismiss(generationModal, '.modal-content');
     
-    const actionSheetBackdrop = document.getElementById("actionSheetBackdrop");
-    setupSwipeToDismiss(actionSheetBackdrop, '.action-sheet');
-    
-    const indexSheetBackdrop = document.getElementById("indexSheetBackdrop");
-    setupSwipeToDismiss(indexSheetBackdrop, '.index-sheet');
+    setupSwipeToDismiss(document.getElementById("actionSheetBackdrop"), '.action-sheet');
+    setupSwipeToDismiss(document.getElementById("indexSheetBackdrop"), '.index-sheet');
 
     // Close generation modal
     closeModalBtn.addEventListener("click", () => {
