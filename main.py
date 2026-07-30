@@ -516,12 +516,16 @@ def synthesize_supertonic_sync(text: str, voice: str, rate: float):
     if voice not in valid_voices:
         print(f"Unknown voice '{voice}', falling back to 'F1'")
         voice = "F1"
-        
+
     # M1, F1 등 기본 내장된 목소리 스킨
     style = tts_engine.get_voice_style(voice_name=voice)
     # 텍스트 합성 수행
     wav_array, duration = tts_engine.synthesize(text, voice_style=style, lang="ko", speed=rate)
-    return wav_array, duration, text
+    # synthesize는 duration을 스칼라가 아니라 ndarray로 준다(문서의 예제도
+    # dur[0]으로 꺼낸다). 바로 int()를 씌우면 numpy가
+    # "only 0-dimensional arrays can be converted to Python scalars"로 죽는다.
+    duration_sec = float(np.asarray(duration).reshape(-1)[0])
+    return wav_array, duration_sec, text
 
 async def synthesize_document(raw_text: str, voice: str, rate: str, pitch: str, audio_path: str) -> tuple:
     """Synthesize a full document into audio_path sequentially to save memory."""
@@ -558,7 +562,10 @@ async def synthesize_document(raw_text: str, voice: str, rate: str, pitch: str, 
     current_time_offset = 0
     
     # 디스크에 OGG 스트림으로 바로 기록 (메모리 OOM 방지)
-    with sf.SoundFile(audio_path, mode='w', samplerate=44100, channels=1, format='OGG') as f:
+    # 샘플레이트는 모델 설정에서 온다(엔진마다 다를 수 있다). 44100을 박아두면
+    # 모델이 다른 값을 내는 순간 재생 속도가 통째로 틀어진다.
+    samplerate = int(getattr(tts_engine, "sample_rate", 44100))
+    with sf.SoundFile(audio_path, mode='w', samplerate=samplerate, channels=1, format='OGG') as f:
         for chunk in chunks:
             tts_text = clean_tts_text(chunk)
             if not tts_text:

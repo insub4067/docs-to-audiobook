@@ -1304,7 +1304,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         // 파일 본체는 서버를 거치지 않고 Supabase로 직접 올린다
         const up = await fetch(audio_upload.signed_url, {
             method: "PUT",
-            headers: { "Content-Type": "audio/mpeg" },
+            headers: { "Content-Type": "audio/ogg" },
             body: entry.audioData
         });
         if (!up.ok) throw new Error("오디오 업로드 실패");
@@ -1525,7 +1525,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 
                 const audioBlob = freshAudio.audioData instanceof Blob
                     ? freshAudio.audioData
-                    : new Blob([freshAudio.audioData], { type: "audio/mpeg" });
+                    : new Blob([freshAudio.audioData], { type: "audio/ogg" });
 
                 // 서버에 임시 업로드 (24시간 후 자동 삭제)
                 const formData = new FormData();
@@ -1591,7 +1591,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             const audioBlob = freshAudio.audioData instanceof Blob
                 ? freshAudio.audioData
-                : new Blob([freshAudio.audioData], { type: "audio/mpeg" });
+                : new Blob([freshAudio.audioData], { type: "audio/ogg" });
 
             const url = URL.createObjectURL(audioBlob);
             const a = document.createElement("a");
@@ -1753,7 +1753,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         // ArrayBuffer(신규)든 Blob(구버전 호환)이든 항상 새 Blob으로 재구성
         const audioBlob = audio.audioData instanceof Blob
             ? audio.audioData
-            : new Blob([audio.audioData], { type: "audio/mpeg" });
+            : new Blob([audio.audioData], { type: "audio/ogg" });
 
         const localUrl = URL.createObjectURL(audioBlob);
         currentReaderObjectUrl = localUrl;
