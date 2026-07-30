@@ -65,9 +65,9 @@ MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 MAX_SYNTH_CHARS = 100_000
 
 # 글로벌 Supertonic 엔진 초기화 (부팅 시 모델 다운로드)
-print("Initializing Supertonic TTS engine...")
+print("Initializing Supertonic TTS engine (This takes ~1 min on 1 CPU)...", flush=True)
 tts_engine = TTS(auto_download=True)
-print("TTS engine initialized.")
+print("TTS engine initialized.", flush=True)
 
 
 # 공유되는 오디오는 오디오북 전체라 크다. MAX_SYNTH_CHARS(10만 자) 분량이
