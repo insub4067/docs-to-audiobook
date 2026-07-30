@@ -859,6 +859,7 @@ async def generate_default_book():
     default_book_state["status"] = "generating"
     print(f"Starting default audiobook generation from {DEFAULT_BOOK_SOURCE}...")
     try:
+        os.makedirs(DEFAULT_BOOK_DIR, exist_ok=True)
         raw_text = extract_text(DEFAULT_BOOK_SOURCE, "sherlock-holmes.md")
         _, sentences, headings = await synthesize_document(
             raw_text, DEFAULT_BOOK_VOICE, "+5%", "+0Hz", audio_path
