@@ -494,9 +494,9 @@ async def get_voices(tone: str = None, use_case: str = None):
     except Exception as e:
         # Fallback list if edge-tts call fails or no internet
         return [
+            {"name": "Microsoft Server Speech Text to Speech Voice (ko-KR, HyunsuMultilingualNeural)", "short_name": "ko-KR-HyunsuMultilingualNeural", "gender": "Male", "locale": "ko-KR", "friendly_name": "현수 (자연스러운 다국어 소설/에세이 - 남성)", "description": "가장 최신 모델로, 억양이 자연스럽고 감정선이 부드럽습니다."},
             {"name": "Microsoft Server Speech Text to Speech Voice (ko-KR, SunHiNeural)", "short_name": "ko-KR-SunHiNeural", "gender": "Female", "locale": "ko-KR", "friendly_name": "선희 (차분한 뉴스/정보 전달 - 여성)", "description": "단정하고 차분하며, 정보 전달이나 지적인 낭독에 적합합니다."},
-            {"name": "Microsoft Server Speech Text to Speech Voice (ko-KR, InJoonNeural)", "short_name": "ko-KR-InJoonNeural", "gender": "Male", "locale": "ko-KR", "friendly_name": "인준 (신뢰감 있는 소설/다큐 - 남성)", "description": "진중하고 신뢰감 있는 남성 톤으로, 다큐멘터리나 소설 낭독에 적합합니다."},
-            {"name": "Microsoft Server Speech Text to Speech Voice (ko-KR, JiMinNeural)", "short_name": "ko-KR-JiMinNeural", "gender": "Female", "locale": "ko-KR", "friendly_name": "지민 (밝고 상냥한 동화/안내 - 여성)", "description": "밝고 친근하며, 동화책 낭독이나 상냥한 안내 멘트에 잘 어울립니다."}
+            {"name": "Microsoft Server Speech Text to Speech Voice (ko-KR, InJoonNeural)", "short_name": "ko-KR-InJoonNeural", "gender": "Male", "locale": "ko-KR", "friendly_name": "인준 (신뢰감 있는 다큐 - 남성)", "description": "진중하고 신뢰감 있는 남성 톤으로, 다큐멘터리 낭독에 적합합니다."}
         ]
 
 def clean_tts_text(text: str) -> str:
@@ -667,8 +667,8 @@ async def synthesize_text(
     request: Request,
     background_tasks: BackgroundTasks,
     text_id: str = Form(...),
-    voice: str = Form("ko-KR-SunHiNeural"),
-    rate: str = Form("+0%"),
+    voice: str = Form("ko-KR-HyunsuMultilingualNeural"),
+    rate: str = Form("+5%"),
     pitch: str = Form("+0Hz"),
     authorization: str = Header(None)
 ):
@@ -872,7 +872,7 @@ async def serve_shared_page(share_id: str):
 DEFAULT_BOOK_DIR = os.path.join(BASE_DIR, "default_book")
 DEFAULT_BOOK_SOURCE = os.path.join(STATIC_DIR, "samples", "sherlock-holmes.md")
 DEFAULT_BOOK_TITLE = "셜록 홈즈의 모험"
-DEFAULT_BOOK_VOICE = "ko-KR-SunHiNeural"
+DEFAULT_BOOK_VOICE = "ko-KR-HyunsuMultilingualNeural"
 
 default_book_state = {"status": "pending", "error": None}
 default_book_lock = asyncio.Lock()
@@ -905,7 +905,7 @@ async def generate_default_book():
     try:
         raw_text = extract_text(DEFAULT_BOOK_SOURCE, "sherlock-holmes.md")
         audio_bytes, sentences, headings = await synthesize_document(
-            raw_text, DEFAULT_BOOK_VOICE, "+0%", "+0Hz"
+            raw_text, DEFAULT_BOOK_VOICE, "+5%", "+0Hz"
         )
 
         if not audio_bytes:
