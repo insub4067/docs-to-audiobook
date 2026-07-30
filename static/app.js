@@ -692,6 +692,17 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         if (!isLoggedIn()) {
             if (confirm("로그인이 필요합니다. 로그인하시겠습니까? (구글로 로그인)")) {
+                const originalName = uploadedFile ? uploadedFile.name : "unknown_doc";
+                const pendingGen = {
+                    textId: currentTextId,
+                    filename: toAudioFilename(originalName),
+                    charCount: parseInt(charCountBadge.textContent.replace(/[^0-9]/g, "")) || 0,
+                    voice: voiceSelect.value,
+                    rate: getFormattedSpeed(parseInt(speedSlider.value)),
+                    pitch: getFormattedPitch(parseInt(pitchSlider.value))
+                };
+                sessionStorage.setItem("pendingGeneration", JSON.stringify(pendingGen));
+
                 generationModal.classList.remove("show");
                 document.body.style.overflow = "";
                 const loginBtn = document.getElementById("googleLoginBtn");
@@ -2237,6 +2248,21 @@ document.addEventListener("DOMContentLoaded", async () => {
             showToast(`${mins}분 뒤에 재생이 자동 종료됩니다.`, "info");
         }
     });
+
+    // 미처리된 생성 예약(로그인 팝업 전 저장된 상태)이 있다면 실행
+    const pendingGen = sessionStorage.getItem("pendingGeneration");
+    if (pendingGen && isLoggedIn()) {
+        sessionStorage.removeItem("pendingGeneration");
+        try {
+            const args = JSON.parse(pendingGen);
+            // 비동기로 실행하여 메인 스레드 블로킹 방지
+            setTimeout(() => {
+                generateAudiobook(args);
+            }, 300);
+        } catch(e) {
+            console.error("Failed to parse pending generation args", e);
+        }
+    }
 
     checkSharedLink();
 });
