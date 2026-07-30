@@ -11,7 +11,7 @@ import time
 import re
 import json
 import shutil
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Response, BackgroundTasks, Header
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Response, BackgroundTasks, Header, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,12 +23,18 @@ mimetypes.add_type("application/javascript", ".js")
 
 app = FastAPI(title="Docs to Audiobook Converter - Hybrid")
 
-# CORS middleware for development
+# 프론트엔드는 같은 출처에서 상대 경로로만 API를 호출하므로 와일드카드가
+# 필요 없다. allow_origins=["*"] 와 allow_credentials=True 조합은 잘못된
+# 설정이기도 하다.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://docs-to-audiobook.onrender.com",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -44,6 +50,85 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(STATIC_DIR, exist_ok=True)
 os.makedirs(SHARED_DIR, exist_ok=True)
 os.makedirs(JOB_AUDIO_DIR, exist_ok=True)
+
+# ---- 리소스 상한 ----
+# 업로드는 지금까지 클라이언트에서만 검사했다. API를 직접 호출하면 그대로
+# 통과해 파일 전체가 메모리에 올라간다.
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+
+# 합성 문자 수 상한. 오디오는 문자당 약 903바이트이고 합성 피크는 그 2배쯤
+# 되므로, 10MB 텍스트(약 350만 자)를 그대로 받으면 오디오만 2.9GB가 되어
+# 반드시 죽는다. 10만 자면 약 4시간 분량이라 실사용에는 충분하다.
+MAX_SYNTH_CHARS = 100_000
+
+
+# 공유되는 오디오는 오디오북 전체라 크다. MAX_SYNTH_CHARS(10만 자) 분량이
+# 약 90MB이므로 여유를 둔다. 대신 메모리에 담지 않고 디스크로 흘려보낸다.
+MAX_SHARE_AUDIO_BYTES = 120 * 1024 * 1024
+
+
+def _too_large(max_bytes: int) -> HTTPException:
+    return HTTPException(
+        status_code=413,
+        detail=f"파일이 너무 큽니다. 최대 {max_bytes // (1024 * 1024)}MB까지 지원합니다."
+    )
+
+
+async def read_upload_limited(upload: UploadFile, max_bytes: int) -> bytes:
+    """상한을 넘으면 즉시 중단한다. 전체를 읽고 나서 검사하면 이미 늦다."""
+    parts = []
+    total = 0
+    while True:
+        chunk = await upload.read(1024 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise _too_large(max_bytes)
+        parts.append(chunk)
+    return b"".join(parts)
+
+
+async def save_upload_limited(upload: UploadFile, dest_path: str, max_bytes: int) -> int:
+    """업로드를 메모리에 모으지 않고 곧바로 파일에 쓴다."""
+    total = 0
+    try:
+        with open(dest_path, "wb") as f:
+            while True:
+                chunk = await upload.read(1024 * 1024)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > max_bytes:
+                    raise _too_large(max_bytes)
+                f.write(chunk)
+    except HTTPException:
+        # 상한 초과 시 쓰다 만 파일을 남기지 않는다
+        try:
+            os.remove(dest_path)
+        except OSError:
+            pass
+        raise
+    return total
+
+
+# ---- 레이트 리밋 ----
+# 모든 콘텐츠 엔드포인트가 무인증이라 합성 요청을 무제한으로 받을 수 있다.
+# 단일 인스턴스라 인메모리 슬라이딩 윈도우로 충분하다.
+_rate_buckets = {}
+
+def enforce_rate_limit(request: Request, name: str, limit: int, window_sec: int):
+    ip = request.client.host if request.client else "unknown"
+    key = (name, ip)
+    now = time.time()
+    hits = [t for t in _rate_buckets.get(key, []) if now - t < window_sec]
+    if len(hits) >= limit:
+        raise HTTPException(
+            status_code=429,
+            detail="요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요."
+        )
+    hits.append(now)
+    _rate_buckets[key] = hits
 
 # App build ID: generated once at server startup.
 # Changes on every redeploy (new process start), used by client to detect updates.
@@ -271,24 +356,31 @@ def annotate_sentences_with_headings(sentences: list, headings: list) -> tuple:
 
 
 @app.post("/api/upload")
-async def upload_file(file: UploadFile = File(...)):
+async def upload_file(request: Request, file: UploadFile = File(...)):
+    enforce_rate_limit(request, "upload", limit=100, window_sec=600)
+
     if not file.filename:
         raise HTTPException(status_code=400, detail="파일명이 존재하지 않습니다.")
-    
+
+    # 파일명이 경로에 그대로 들어가므로 디렉터리 성분을 제거한다
+    safe_name = os.path.basename(file.filename)
     file_id = str(uuid.uuid4())
-    temp_path = os.path.join(UPLOAD_DIR, f"{file_id}_{file.filename}")
-    
+    temp_path = os.path.join(UPLOAD_DIR, f"{file_id}_{safe_name}")
+
     # Save uploaded file
     try:
+        content = await read_upload_limited(file, MAX_UPLOAD_BYTES)
         with open(temp_path, "wb") as buffer:
-            content = await file.read()
             buffer.write(content)
+        del content
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"파일 임시 저장 중 에러가 발생했습니다: {str(e)}")
-    
+
     # Extract text
     try:
-        text = extract_text(temp_path, file.filename)
+        text = extract_text(temp_path, safe_name)
         if os.path.exists(temp_path):
             os.remove(temp_path)
             
@@ -535,18 +627,29 @@ async def process_synthesis_task(job_id: str, raw_text: str, voice: str, rate: s
 
 @app.post("/api/synthesize")
 async def synthesize_text(
+    request: Request,
     background_tasks: BackgroundTasks,
     text_id: str = Form(...),
     voice: str = Form("ko-KR-SunHiNeural"),
     rate: str = Form("+0%"),
     pitch: str = Form("+0Hz")
 ):
+    # 가장 비싼 엔드포인트다. 배치 8개를 여러 번 돌릴 여유는 남긴다.
+    enforce_rate_limit(request, "synthesize", limit=40, window_sec=600)
+
     if text_id not in text_storage:
         raise HTTPException(status_code=404, detail="요청한 텍스트 데이터를 찾을 수 없거나 만료되었습니다.")
-    
+
     data = text_storage[text_id]
     raw_text = data["text"]
-    
+
+    if len(raw_text) > MAX_SYNTH_CHARS:
+        raise HTTPException(
+            status_code=413,
+            detail=f"문서가 너무 깁니다. 최대 {MAX_SYNTH_CHARS:,}자까지 변환할 수 있습니다 "
+                   f"(현재 {len(raw_text):,}자)."
+        )
+
     job_id = str(uuid.uuid4())
     jobs[job_id] = {
         "status": "processing",
@@ -636,21 +739,23 @@ async def read_index():
 
 @app.post("/api/share")
 async def create_share(
+    request: Request,
     audio: UploadFile = File(...),
     title: str = Form(...),
     sentences: str = Form(...),
     headings: str = Form("[]")
 ):
     """클라이언트가 오디오북을 공유할 때 서버에 임시 저장 (24시간 후 자동 삭제)"""
+    # 남의 도메인에 임의 콘텐츠를 올리는 통로가 되지 않게 조인다
+    enforce_rate_limit(request, "share", limit=20, window_sec=3600)
+
     share_id = str(uuid.uuid4())[:12]
     share_dir = os.path.join(SHARED_DIR, share_id)
     os.makedirs(share_dir, exist_ok=True)
 
     # Save audio file
     audio_path = os.path.join(share_dir, "audio.mp3")
-    with open(audio_path, "wb") as f:
-        content = await audio.read()
-        f.write(content)
+    await save_upload_limited(audio, audio_path, MAX_SHARE_AUDIO_BYTES)
 
     # Save metadata
     meta = {
