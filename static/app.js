@@ -116,6 +116,91 @@ document.addEventListener("DOMContentLoaded", async () => {
         showReaderUi();
     }
     
+    // --- iOS Native Style Swipe-to-Dismiss ---
+    function setupSwipeToDismiss(backdropElement, contentElementSelector) {
+        if (!backdropElement) return;
+        const contentElement = backdropElement.matches(contentElementSelector) 
+            ? backdropElement 
+            : backdropElement.querySelector(contentElementSelector);
+        
+        if (!contentElement) return;
+
+        let startY = 0;
+        let currentY = 0;
+        let isDragging = false;
+        let dragStartTime = 0;
+
+        contentElement.addEventListener('touchstart', (e) => {
+            const scrollable = e.target.closest('.modal-scroll-area, .index-sheet-list');
+            if (scrollable && scrollable.scrollTop > 0) return;
+            
+            startY = e.touches[0].clientY;
+            currentY = startY;
+            isDragging = true;
+            dragStartTime = Date.now();
+            contentElement.classList.add('ui-dragging');
+            contentElement.style.transition = 'none';
+        }, { passive: true });
+
+        contentElement.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            
+            const scrollable = e.target.closest('.modal-scroll-area, .index-sheet-list');
+            const y = e.touches[0].clientY;
+            const deltaY = y - startY;
+            
+            if (scrollable) {
+                const isAtTop = scrollable.scrollTop <= 0;
+                if (!isAtTop || deltaY < 0) {
+                    isDragging = false;
+                    contentElement.classList.remove('ui-dragging');
+                    contentElement.style.transform = '';
+                    contentElement.style.transition = '';
+                    return;
+                }
+            }
+            
+            currentY = y;
+            if (deltaY > 0) {
+                contentElement.style.transform = `translateY(${deltaY}px)`;
+                if (e.cancelable && !scrollable) e.preventDefault();
+            } else {
+                contentElement.style.transform = `translateY(${deltaY * 0.2}px)`; // rubber band effect
+            }
+        }, { passive: false });
+
+        contentElement.addEventListener('touchend', (e) => {
+            if (!isDragging) return;
+            isDragging = false;
+            contentElement.classList.remove('ui-dragging');
+            contentElement.style.transition = '';
+            
+            const deltaY = currentY - startY;
+            const dragDuration = Date.now() - dragStartTime;
+            const velocity = deltaY / dragDuration;
+            
+            const contentHeight = contentElement.offsetHeight;
+            const passedThreshold = deltaY > contentHeight * 0.25;
+            const isFlick = velocity > 0.6;
+            
+            if (deltaY > 0 && (passedThreshold || (isFlick && deltaY > 30))) {
+                contentElement.style.transform = '';
+                backdropElement.classList.remove('show');
+                document.body.style.overflow = '';
+            } else {
+                contentElement.style.transform = '';
+            }
+        }, { passive: true });
+    }
+
+    setupSwipeToDismiss(generationModal, '.modal-content');
+    
+    const actionSheetBackdrop = document.getElementById("actionSheetBackdrop");
+    setupSwipeToDismiss(actionSheetBackdrop, '.action-sheet');
+    
+    const indexSheetBackdrop = document.getElementById("indexSheetBackdrop");
+    setupSwipeToDismiss(indexSheetBackdrop, '.index-sheet');
+
     // Close generation modal
     closeModalBtn.addEventListener("click", () => {
         generationModal.classList.remove("show");
