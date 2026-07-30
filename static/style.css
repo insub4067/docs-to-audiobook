@@ -576,24 +576,56 @@ input[type="range"]::-webkit-slider-thumb:active {
     opacity: 0.4;
 }
 
-/* Audiobook Item Card (iOS List Tile Style) */
+/* Audiobook Item Card (iOS List Tile Style with Swipe) */
 .audio-item {
+    position: relative;
+    overflow: hidden;
+    background-color: #ff3b30; /* iOS Delete Red */
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+}
+
+.audio-item:last-child {
+    border-bottom: none;
+}
+
+.audio-item-bg {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 28px;
+    color: white;
+    z-index: 1;
+}
+
+.audio-item-bg svg {
+    width: 24px;
+    height: 24px;
+}
+
+.audio-item-front {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 16px 20px;
     background-color: var(--card-bg-solid);
-    border-bottom: 1px solid var(--border-color);
-    cursor: pointer;
-    transition: background-color 0.2s ease;
+    transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1), background-color 0.2s ease;
+    width: 100%;
+    position: relative;
+    z-index: 2;
 }
 
-.audio-item:hover {
-    background-color: rgba(93, 75, 64, 0.03);
+.audio-item-front.ui-dragging {
+    transition: none !important;
 }
 
-.audio-item:last-child {
-    border-bottom: none;
+.audio-item:hover .audio-item-front {
+    background-color: rgba(0, 0, 0, 0.03);
 }
 
 /* Inline Generating Progress Item */

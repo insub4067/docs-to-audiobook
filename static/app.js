@@ -1106,20 +1106,106 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const needsDownload = !audio.audioData && !!audio.audioUrl;
 
                 item.innerHTML = `
-                    <div class="audio-title-group">
-                        <i data-lucide="play-circle"></i>
-                        <span class="audio-title" title="${audio.title}">${audio.title}</span>
-                        ${audio.isDefault ? '<span class="default-badge" title="기본 제공 오디오북">기본 제공</span>' : ''}
+                    <div class="audio-item-bg" data-action="delete" data-id="${audio.id}">
+                        <i data-lucide="trash-2"></i>
                     </div>
-                    <div class="audio-actions">
-                        <button class="btn-icon-round btn-more" data-id="${audio.id}" title="더보기">
-                            <i data-lucide="more-horizontal"></i>
-                        </button>
+                    <div class="audio-item-front">
+                        <div class="audio-title-group">
+                            <i data-lucide="play-circle"></i>
+                            <span class="audio-title" title="${audio.title}">${audio.title}</span>
+                            ${audio.isDefault ? '<span class="default-badge" title="기본 제공 오디오북">기본 제공</span>' : ''}
+                        </div>
+                        <div class="audio-actions">
+                            <button class="btn-icon-round btn-more" data-id="${audio.id}" title="더보기">
+                                <i data-lucide="more-horizontal"></i>
+                            </button>
+                        </div>
                     </div>
                 `;
 
+                const front = item.querySelector('.audio-item-front');
+                const bg = item.querySelector('.audio-item-bg');
+                let startX = 0;
+                let startY = 0;
+                let currentX = 0;
+                let isDragging = false;
+                let isSwipe = false;
+                
+                front.addEventListener('touchstart', (e) => {
+                    startX = e.touches[0].clientX;
+                    startY = e.touches[0].clientY;
+                    currentX = startX;
+                    isDragging = true;
+                    isSwipe = false;
+                    front.classList.add('ui-dragging');
+                }, { passive: true });
+                
+                front.addEventListener('touchmove', (e) => {
+                    if (!isDragging) return;
+                    const x = e.touches[0].clientX;
+                    const y = e.touches[0].clientY;
+                    const deltaX = x - startX;
+                    const deltaY = y - startY;
+                    
+                    if (!isSwipe) {
+                        if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 5) {
+                            isSwipe = true;
+                        } else if (Math.abs(deltaY) > 5) {
+                            isDragging = false;
+                            front.classList.remove('ui-dragging');
+                            return;
+                        }
+                    }
+                    
+                    if (isSwipe) {
+                        if (e.cancelable) e.preventDefault();
+                        currentX = x;
+                        if (deltaX < 0) {
+                            const moveX = Math.max(deltaX, -100);
+                            front.style.transform = `translateX(${moveX}px)`;
+                        } else if (deltaX > 0) {
+                            front.style.transform = `translateX(${deltaX * 0.1}px)`;
+                        }
+                    }
+                }, { passive: false });
+                
+                front.addEventListener('touchend', (e) => {
+                    if (!isDragging) return;
+                    isDragging = false;
+                    front.classList.remove('ui-dragging');
+                    const deltaX = currentX - startX;
+                    
+                    if (deltaX < -40) {
+                        front.style.transform = `translateX(-80px)`;
+                        item.classList.add('swipe-open');
+                    } else {
+                        front.style.transform = '';
+                        item.classList.remove('swipe-open');
+                    }
+                }, { passive: true });
+
+                // Click away to close
+                document.addEventListener('touchstart', (e) => {
+                    if (item.classList.contains('swipe-open') && !item.contains(e.target)) {
+                        front.style.transform = '';
+                        item.classList.remove('swipe-open');
+                    }
+                }, { passive: true });
+
+                // Delete action
+                bg.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (!confirm("정말 이 오디오북을 삭제하시겠습니까?")) return;
+                    deleteAudiobook(audio.id);
+                });
+
                 if (hasSentences || needsDownload) {
                     item.addEventListener("click", async (e) => {
+                        if (item.classList.contains('swipe-open')) {
+                            front.style.transform = '';
+                            item.classList.remove('swipe-open');
+                            return;
+                        }
                         if (e.target.closest('.btn-more')) return;
                         let freshAudio = await getAudiobookFromDB(audio.id);
                         if (!freshAudio) {
