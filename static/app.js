@@ -2544,6 +2544,21 @@ async function setupSocialLogin() {
 
 /** 제공자가 발급한 토큰을 서버에 넘겨 우리 세션을 만든다. 제공자 공통 경로. */
 async function completeSocialLogin(provider, token) {
+    const loadingOverlay = document.getElementById("loadingOverlay");
+    if (loadingOverlay) {
+        const h3 = loadingOverlay.querySelector("h3");
+        const p = loadingOverlay.querySelector("p");
+        const status = loadingOverlay.querySelector(".loading-status");
+        const progress = loadingOverlay.querySelector(".progress-container");
+        
+        if (h3) h3.textContent = "로그인 처리 중...";
+        if (p) p.textContent = "사용자 정보를 확인하고 있습니다.";
+        if (status) status.style.display = "none";
+        if (progress) progress.style.display = "none";
+        
+        loadingOverlay.classList.add("show");
+    }
+
     try {
         const res = await fetch(`/api/auth/social/${provider}`, {
             method: "POST",
@@ -2556,6 +2571,7 @@ async function completeSocialLogin(provider, token) {
         localStorage.setItem("authToken", data.access_token);
         setTimeout(() => location.reload(), 500);
     } catch (error) {
+        if (loadingOverlay) loadingOverlay.classList.remove("show");
         console.error("Auth error:", error);
         showAuthError(error.message || "로그인에 실패했습니다.");
     }
