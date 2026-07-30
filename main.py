@@ -33,6 +33,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://docs-to-audiobook.onrender.com",
+        "https://docs-to-audiobook.fly.dev",
         "http://localhost:8000",
         "http://127.0.0.1:8000",
     ],
