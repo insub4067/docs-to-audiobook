@@ -568,8 +568,8 @@ async def synthesize_document(raw_text: str, voice: str, rate: str, pitch: str, 
                 synthesize_supertonic_sync, tts_text, voice, speed_float
             )
             
-            # OGG 파일에 Append
-            f.write(wav_array)
+            # OGG 파일에 Append (1D array로 변환)
+            f.write(wav_array.squeeze())
             
             # 타임스탬프 계산 (문장 단위)
             combined_sentences.append({
