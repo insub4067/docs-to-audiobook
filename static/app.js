@@ -1162,9 +1162,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                         currentX = x;
                         if (deltaX < 0) {
                             // No hard cap, direct tracking
+                            bg.style.display = ''; // Show bg
                             front.style.transform = `translateX(${deltaX}px)`;
                         } else if (deltaX > 0) {
                             // Rubber band effect to the right
+                            bg.style.display = 'none'; // Hide red bg
                             front.style.transform = `translateX(${deltaX * 0.15}px)`;
                         }
                     }
@@ -1176,16 +1178,23 @@ document.addEventListener("DOMContentLoaded", async () => {
                     front.classList.remove('ui-dragging');
                     const deltaX = currentX - startX;
                     
-                    // Overswipe: -150px 이상 땡기면 즉각 삭제 애니메이션 발동
+                    // Overswipe: -150px 이상 땡기면 삭제 확인 후 애니메이션 발동
                     if (deltaX < -150) {
-                        front.classList.add('deleting');
-                        item.classList.add('deleting-row');
-                        
                         if (navigator.vibrate) navigator.vibrate(50);
                         
-                        setTimeout(() => {
-                            deleteAudiobook(audio.id);
-                        }, 350);
+                        // 풀 스와이프 시 팝업 띄우기 요청 반영
+                        if (confirm("정말 이 오디오북을 삭제하시겠습니까?")) {
+                            front.classList.add('deleting');
+                            item.classList.add('deleting-row');
+                            
+                            setTimeout(() => {
+                                deleteAudiobook(audio.id);
+                            }, 350);
+                        } else {
+                            // 취소 시 스냅 원상복구
+                            front.style.transform = '';
+                            item.classList.remove('swipe-open');
+                        }
                     } else if (deltaX < -40) {
                         front.style.transform = `translateX(-80px)`;
                         item.classList.add('swipe-open');
