@@ -723,7 +723,7 @@ async def get_config():
         "google_client_id": providers.get("google", "")
     })
 
-@app.manifest.json")
+@app.get("/manifest.json")
 async def get_manifest():
     return FileResponse(os.path.join(STATIC_DIR, "manifest.json"), media_type="application/json")
 
