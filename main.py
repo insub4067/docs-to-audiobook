@@ -178,42 +178,32 @@ text_storage = {}
 # Tracks the status of background edge-tts generation tasks
 jobs = {}
 
+# 실제로 제공할 음성. edge-tts가 주는 ko-KR 음성은 3개뿐이고, 예전
+# 메타데이터에 있던 지민/서현/순복/유진/현민은 존재하지 않아 선택할 수
+# 없었다. 낭독에 쓸 두 개만 남긴다. 목록의 첫 번째가 기본값이다.
+SUPPORTED_VOICES = [
+    "ko-KR-HyunsuMultilingualNeural",
+    "ko-KR-SunHiNeural",
+]
+
+# 음성 미리듣기. 짧은 한 문장이라 합성이 몇 초면 끝나고, 한 번 만들면
+# 디스크에 캐시해 재사용한다.
+VOICE_PREVIEW_TEXT = "안녕하세요. 이 목소리로 문서를 읽어 드릴게요. 오늘도 좋은 하루 보내세요."
+VOICE_PREVIEW_DIR = os.path.join(BASE_DIR, "voice_previews")
+os.makedirs(VOICE_PREVIEW_DIR, exist_ok=True)
+voice_preview_lock = asyncio.Lock()
+
 VOICE_METADATA = {
+    "ko-KR-HyunsuMultilingualNeural": {
+        "friendly_name": "현수 (자연스러운 낭독 - 남성)",
+        "description": "멀티링구얼 신형 모델로 억양이 자연스럽고, 한글과 영어가 섞인 문장도 매끄럽게 읽습니다.",
+        "tone": "natural", "use_case": ["novel", "audiobook", "documentation", "long_text"]
+    },
     "ko-KR-SunHiNeural": {
-        "friendly_name": "선희 (차분한 뉴스/정보 전달 - 여성)",
-        "description": "단정하고 차분하며, 정보 전달이나 지적인 낭독에 적합합니다.",
-        "tone": "formal", "use_case": ["news", "education", "documentation"]
+        "friendly_name": "선희 (차분한 낭독 - 여성)",
+        "description": "단정하고 차분한 여성 음성으로, 정보 전달이나 긴 호흡의 낭독에 적합합니다.",
+        "tone": "formal", "use_case": ["news", "education", "audiobook", "long_text"]
     },
-    "ko-KR-InJoonNeural": {
-        "friendly_name": "인준 (신뢰감 있는 소설/다큐 - 남성)",
-        "description": "진중하고 신뢰감 있는 남성 톤으로, 다큐멘터리나 소설 낭독에 적합합니다.",
-        "tone": "serious", "use_case": ["fiction", "documentary"]
-    },
-    "ko-KR-JiMinNeural": {
-        "friendly_name": "지민 (밝고 상냥한 동화/안내 - 여성)",
-        "description": "밝고 친근하며, 동화책 낭독이나 상냥한 안내 멘트에 잘 어울립니다.",
-        "tone": "friendly", "use_case": ["children", "guide", "instruction"]
-    },
-    "ko-KR-SeoHyeonNeural": {
-        "friendly_name": "서현 (부드러운 나레이션/뉴스 - 여성)",
-        "description": "부드럽고 지적인 중저음 성우 스타일의 낭독입니다.",
-        "tone": "soft", "use_case": ["narration", "news", "meditation"]
-    },
-    "ko-KR-SoonBokNeural": {
-        "friendly_name": "순복 (편안하고 단정한 책 낭독 - 여성)",
-        "description": "편안하고 정돈된 낭독으로, 긴 호흡의 책 읽기에 가장 편안합니다.",
-        "tone": "comfortable", "use_case": ["novel", "audiobook", "long_text"]
-    },
-    "ko-KR-YuJinNeural": {
-        "friendly_name": "유진 (활기차고 경쾌한 대화 - 여성)",
-        "description": "활기차고 생동감이 넘치며, 소설 속 대화체 구현에 뛰어납니다.",
-        "tone": "energetic", "use_case": ["dialogue", "drama", "entertainment"]
-    },
-    "ko-KR-HyunMinNeural": {
-        "friendly_name": "현민 (생동감 있는 동화/라디오 - 남성)",
-        "description": "생생하고 다이내믹하며, 아동 도서나 경쾌한 이야기에 적합합니다.",
-        "tone": "dynamic", "use_case": ["children", "radio", "entertainment"]
-    }
 }
 
 def extract_hwp_text(filepath: str) -> str:
@@ -460,8 +450,8 @@ async def get_voices(tone: str = None, use_case: str = None):
         filtered_voices = []
         for voice in voices:
             lang = voice.get("Locale", "")
-            if lang.startswith("ko-KR") or lang.startswith("en-US"):
-                short_name = voice.get("ShortName", "")
+            short_name = voice.get("ShortName", "")
+            if short_name in SUPPORTED_VOICES:
 
                 # Check if we have custom metadata for this Korean voice
                 meta = VOICE_METADATA.get(short_name, {})
@@ -488,16 +478,53 @@ async def get_voices(tone: str = None, use_case: str = None):
                     "use_case": voice_use_cases
                 })
 
-        # Sort so Korean voices are at the top
-        filtered_voices.sort(key=lambda x: 0 if x["locale"].startswith("ko-KR") else 1)
+        # SUPPORTED_VOICES에 적은 순서를 유지한다. 첫 번째가 기본값이다.
+        filtered_voices.sort(key=lambda x: SUPPORTED_VOICES.index(x["short_name"]))
         return filtered_voices
     except Exception as e:
-        # Fallback list if edge-tts call fails or no internet
+        # edge-tts 목록 조회가 실패해도 UI가 비지 않도록. SUPPORTED_VOICES와
+        # 같은 순서를 유지한다(첫 번째가 기본값).
+        print(f"Voice list fetch failed, using fallback: {e}")
         return [
-            {"name": "Microsoft Server Speech Text to Speech Voice (ko-KR, HyunsuMultilingualNeural)", "short_name": "ko-KR-HyunsuMultilingualNeural", "gender": "Male", "locale": "ko-KR", "friendly_name": "현수 (자연스러운 다국어 소설/에세이 - 남성)", "description": "가장 최신 모델로, 억양이 자연스럽고 감정선이 부드럽습니다."},
-            {"name": "Microsoft Server Speech Text to Speech Voice (ko-KR, SunHiNeural)", "short_name": "ko-KR-SunHiNeural", "gender": "Female", "locale": "ko-KR", "friendly_name": "선희 (차분한 뉴스/정보 전달 - 여성)", "description": "단정하고 차분하며, 정보 전달이나 지적인 낭독에 적합합니다."},
-            {"name": "Microsoft Server Speech Text to Speech Voice (ko-KR, InJoonNeural)", "short_name": "ko-KR-InJoonNeural", "gender": "Male", "locale": "ko-KR", "friendly_name": "인준 (신뢰감 있는 다큐 - 남성)", "description": "진중하고 신뢰감 있는 남성 톤으로, 다큐멘터리 낭독에 적합합니다."}
+            {
+                "name": short_name,
+                "short_name": short_name,
+                "gender": "Male" if "Hyunsu" in short_name else "Female",
+                "locale": "ko-KR",
+                "friendly_name": VOICE_METADATA[short_name]["friendly_name"],
+                "description": VOICE_METADATA[short_name]["description"],
+                "tone": VOICE_METADATA[short_name]["tone"],
+                "use_case": VOICE_METADATA[short_name]["use_case"],
+            }
+            for short_name in SUPPORTED_VOICES
         ]
+
+
+@app.get("/api/voices/{short_name}/preview")
+async def get_voice_preview(short_name: str):
+    """음성 미리듣기. 처음 요청될 때 한 번 만들고 디스크에 캐시한다."""
+    # 경로에 그대로 들어가므로 반드시 허용 목록으로 검증한다
+    if short_name not in SUPPORTED_VOICES:
+        raise HTTPException(status_code=404, detail="지원하지 않는 음성입니다.")
+
+    path = os.path.join(VOICE_PREVIEW_DIR, f"{short_name}.mp3")
+    if not os.path.exists(path):
+        async with voice_preview_lock:
+            # 락을 기다리는 동안 다른 요청이 이미 만들었을 수 있다
+            if not os.path.exists(path):
+                try:
+                    audio_bytes, _, _ = await synthesize_document(
+                        VOICE_PREVIEW_TEXT, short_name, "+5%", "+0Hz"
+                    )
+                    if not audio_bytes:
+                        raise RuntimeError("빈 오디오")
+                    with open(path, "wb") as f:
+                        f.write(audio_bytes)
+                except Exception as e:
+                    print(f"Voice preview generation failed ({short_name}): {e}")
+                    raise HTTPException(status_code=503, detail="미리듣기를 만들지 못했습니다.")
+
+    return FileResponse(path, media_type="audio/mpeg")
 
 def clean_tts_text(text: str) -> str:
     # 1. 마크다운 특수문자 제거 (#, *, _, ~, `, \, > 등)
@@ -886,24 +913,27 @@ DEFAULT_BOOK_DIR = os.path.join(BASE_DIR, "default_book")
 # 머신이 "Exited abruptly"로 죽는 것을 확인했다.
 DEFAULT_BOOK_SOURCE = os.path.join(STATIC_DIR, "samples", "sherlock-holmes-sample.md")
 DEFAULT_BOOK_TITLE = "셜록 홈즈의 모험"
-DEFAULT_BOOK_VOICE = "ko-KR-SunHiNeural"
+DEFAULT_BOOK_VOICE = SUPPORTED_VOICES[0]
 
 default_book_state = {"status": "pending", "error": None}
 default_book_lock = asyncio.Lock()
 
 
 def default_book_paths():
+    # 파일 이름에 음성을 넣어 둔다. 낭독 음성을 바꾸면 캐시 키가 자연히
+    # 달라져 예전 음성으로 만든 파일을 재사용하지 않는다.
     return (
-        os.path.join(DEFAULT_BOOK_DIR, "audio.mp3"),
-        os.path.join(DEFAULT_BOOK_DIR, "meta.json"),
+        os.path.join(DEFAULT_BOOK_DIR, f"audio.{DEFAULT_BOOK_VOICE}.mp3"),
+        os.path.join(DEFAULT_BOOK_DIR, f"meta.{DEFAULT_BOOK_VOICE}.json"),
     )
 
 
 # 기본 제공 오디오북을 클라우드에 한 번만 만들어 두는 자리.
 # 디스크는 재배포마다 날아가므로 여기 없으면 부팅할 때마다 36,000자를
 # 다시 합성하게 되고, 공유 CPU 1개를 점유해 사용자 변환까지 굶긴다.
-DEFAULT_BOOK_REMOTE_AUDIO = "_default/sherlock-holmes.mp3"
-DEFAULT_BOOK_REMOTE_META = "_default/sherlock-holmes.meta.json"
+# 로컬과 같은 이유로 클라우드 키에도 음성을 포함한다
+DEFAULT_BOOK_REMOTE_AUDIO = f"_default/sherlock-holmes.{DEFAULT_BOOK_VOICE}.mp3"
+DEFAULT_BOOK_REMOTE_META = f"_default/sherlock-holmes.{DEFAULT_BOOK_VOICE}.meta.json"
 
 
 def _restore_default_book_from_cloud(audio_path: str, meta_path: str) -> bool:

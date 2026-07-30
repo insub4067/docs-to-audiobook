@@ -202,6 +202,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     closeModalBtn.addEventListener("click", () => {
         generationModal.classList.remove("show");
         document.body.style.overflow = "";
+        // 모달을 닫아도 미리듣기가 계속 재생되면 안 된다
+        stopVoicePreview();
     });
     
     // Import Shared Link
@@ -372,7 +374,59 @@ document.addEventListener("DOMContentLoaded", async () => {
     voiceSelect.addEventListener("change", (e) => {
         const selectedVoiceShortName = e.target.value;
         updateVoiceDescription(selectedVoiceShortName);
+        stopVoicePreview();
     });
+
+    // --- 목소리 미리듣기 ---
+    const voicePreviewBtn = document.getElementById("voicePreviewBtn");
+    const voicePreviewLabel = document.getElementById("voicePreviewLabel");
+    let previewAudio = null;
+
+    function stopVoicePreview() {
+        if (previewAudio) {
+            previewAudio.pause();
+            previewAudio = null;
+        }
+        if (voicePreviewBtn) {
+            voicePreviewBtn.disabled = false;
+            if (voicePreviewLabel) voicePreviewLabel.textContent = "미리듣기";
+        }
+    }
+
+    if (voicePreviewBtn) {
+        voicePreviewBtn.addEventListener("click", async () => {
+            // 재생 중이면 정지 토글
+            if (previewAudio) {
+                stopVoicePreview();
+                return;
+            }
+            const voice = voiceSelect.value;
+            if (!voice) return;
+
+            voicePreviewBtn.disabled = true;
+            if (voicePreviewLabel) voicePreviewLabel.textContent = "준비 중...";
+            try {
+                // 서버가 처음 한 번만 합성하고 이후로는 캐시를 준다
+                const res = await fetch(`/api/voices/${encodeURIComponent(voice)}/preview`);
+                if (!res.ok) throw new Error("미리듣기를 불러오지 못했습니다.");
+                const blob = await res.blob();
+
+                previewAudio = new Audio(URL.createObjectURL(blob));
+                previewAudio.onended = stopVoicePreview;
+                previewAudio.onerror = () => {
+                    stopVoicePreview();
+                    showToast("미리듣기를 재생하지 못했습니다.", "error");
+                };
+                voicePreviewBtn.disabled = false;
+                if (voicePreviewLabel) voicePreviewLabel.textContent = "정지";
+                await previewAudio.play();
+            } catch (error) {
+                console.error(error);
+                stopVoicePreview();
+                showToast(error.message || "미리듣기에 실패했습니다.", "error");
+            }
+        });
+    }
 
     function updateVoiceDescription(shortName) {
         const voiceObj = availableVoices.find(v => v.short_name === shortName);
@@ -514,13 +568,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                 let displayName = voice.friendly_name;
                 
                 option.textContent = `${flag} ${displayName}`;
-                
-                if (voice.short_name === "ko-KR-SunHiNeural") {
-                    option.selected = true;
-                }
-                
                 voiceSelect.appendChild(option);
             });
+
+            // 서버가 SUPPORTED_VOICES 순서로 내려주고 첫 번째가 기본값이다
+            voiceSelect.selectedIndex = 0;
 
             updateVoiceDescription(voiceSelect.value);
 

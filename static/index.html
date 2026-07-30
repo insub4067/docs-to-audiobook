@@ -153,11 +153,17 @@
                             <!-- Voice Selector -->
                             <div class="form-group">
                                 <label for="voiceSelect">낭독자 목소리</label>
-                                <div class="select-wrapper">
-                                    <select id="voiceSelect">
-                                        <option value="" disabled selected>불러오는 중...</option>
-                                    </select>
-                                    <i data-lucide="chevron-down" class="select-arrow"></i>
+                                <div class="voice-row">
+                                    <div class="select-wrapper">
+                                        <select id="voiceSelect">
+                                            <option value="" disabled selected>불러오는 중...</option>
+                                        </select>
+                                        <i data-lucide="chevron-down" class="select-arrow"></i>
+                                    </div>
+                                    <button type="button" class="btn-voice-preview" id="voicePreviewBtn" title="선택한 목소리 미리듣기">
+                                        <i data-lucide="volume-2"></i>
+                                        <span id="voicePreviewLabel">미리듣기</span>
+                                    </button>
                                 </div>
                                 <div class="voice-desc" id="voiceDesc">음성 특징이 표시됩니다.</div>
                             </div>
