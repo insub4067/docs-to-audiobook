@@ -204,6 +204,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         loadVoices();
         renderLibrary();
         seedDefaultBookIfNeeded();
+        // DB가 열린 뒤에 동기화한다 — 먼저 돌면 db가 null이라 실패한다
+        if (isLoggedIn()) syncWithCloud();
     });
 
     // -------------------------------------------------------
@@ -997,6 +999,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const item = document.createElement("div");
                 item.className = "audio-item";
                 const hasSentences = audio.sentences && audio.sentences.length > 0;
+                // 클라우드에만 있는 항목은 오디오도 문장도 아직 안 받은 상태다.
+                // 받고 나면 둘 다 생기므로 재생 가능한 것으로 보고 클릭을 열어준다.
+                const needsDownload = !audio.audioData && !!audio.audioUrl;
 
                 item.innerHTML = `
                     <div class="audio-title-group">
@@ -1011,11 +1016,26 @@ document.addEventListener("DOMContentLoaded", async () => {
                     </div>
                 `;
 
-                if (hasSentences) {
+                if (hasSentences || needsDownload) {
                     item.addEventListener("click", async (e) => {
                         if (e.target.closest('.btn-more')) return;
-                        const freshAudio = await getAudiobookFromDB(audio.id);
-                        if (!freshAudio || !freshAudio.audioData) {
+                        let freshAudio = await getAudiobookFromDB(audio.id);
+                        if (!freshAudio) {
+                            showToast("오디오 데이터를 불러올 수 없습니다. 다시 생성해 주세요.", "error");
+                            return;
+                        }
+                        // 클라우드에만 있는 항목이면 이때 내려받아 캐시한다
+                        if (!freshAudio.audioData && freshAudio.audioUrl) {
+                            showToast("클라우드에서 불러오는 중...", "info");
+                            try {
+                                freshAudio = await ensureAudioData(freshAudio);
+                            } catch (e) {
+                                console.error(e);
+                                showToast("클라우드에서 오디오를 받지 못했습니다.", "error");
+                                return;
+                            }
+                        }
+                        if (!freshAudio.audioData) {
                             showToast("오디오 데이터를 불러올 수 없습니다. 다시 생성해 주세요.", "error");
                             return;
                         }
@@ -1038,6 +1058,129 @@ document.addEventListener("DOMContentLoaded", async () => {
             showToast("도서관 오디오북을 불러올 수 없습니다.", "error");
         }
     }
+
+    // ============================================================
+    // 클라우드 동기화 (로컬 우선 + 클라우드 백업)
+    //
+    // IndexedDB가 재생 원본이다. 클라우드는 백업이자 기기 간 전달 통로이며,
+    // 오디오북은 만든 뒤 편집이 없어 생성/삭제만 있으므로 충돌 병합이 없다.
+    // 클라우드에만 있는 항목은 목록에 먼저 띄우고 재생할 때 내려받는다 —
+    // 로그인하자마자 수십 MB를 몰아서 받지 않기 위해서다.
+    // ============================================================
+
+    async function uploadAudiobookToCloud(entry) {
+        const res = await fetch("/api/audiobooks", {
+            method: "POST",
+            headers: { ...authHeaders(), "Content-Type": "application/json" },
+            body: JSON.stringify({
+                title: entry.title,
+                file_name: entry.title,
+                duration_seconds: entry.durationSeconds || null
+            })
+        });
+        if (!res.ok) throw new Error("클라우드 등록 실패");
+        const { id, audio_upload, sentences_upload } = await res.json();
+
+        // 파일 본체는 서버를 거치지 않고 Supabase로 직접 올린다
+        const up = await fetch(audio_upload.signed_url, {
+            method: "PUT",
+            headers: { "Content-Type": "audio/mpeg" },
+            body: entry.audioData
+        });
+        if (!up.ok) throw new Error("오디오 업로드 실패");
+
+        await fetch(sentences_upload.signed_url, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(entry.sentences || [])
+        });
+        return id;
+    }
+
+    /** 클라우드에만 있는 항목의 오디오를 받아 IndexedDB에 캐시한다. */
+    async function ensureAudioData(entry) {
+        if (entry.audioData) return entry;
+        if (!entry.audioUrl) return entry;
+
+        const [audioRes, sentRes] = await Promise.all([
+            fetch(entry.audioUrl),
+            entry.sentencesUrl ? fetch(entry.sentencesUrl) : Promise.resolve(null)
+        ]);
+        if (!audioRes.ok) throw new Error("오디오 다운로드 실패");
+
+        const buffer = await audioRes.arrayBuffer();
+        let sentences = entry.sentences || [];
+        if (sentRes && sentRes.ok) {
+            try { sentences = await sentRes.json(); } catch (e) { /* 자막 없이도 재생은 된다 */ }
+        }
+
+        const filled = { ...entry, audioData: buffer, sentences, sizeBytes: buffer.byteLength, cloudOnly: false };
+        await saveAudiobookToDB(filled);
+        return filled;
+    }
+
+    let syncing = false;
+    async function syncWithCloud() {
+        if (!isLoggedIn() || syncing) return;
+        syncing = true;
+        try {
+            const res = await fetch("/api/audiobooks", { headers: authHeaders() });
+            if (!res.ok) return;
+            const cloud = (await res.json()).audiobooks || [];
+            const local = await getAllAudiobooksFromDB();
+
+            // 1) 로컬에만 있는 것 올리기 (기본 제공본과 아직 안 받은 항목은 제외)
+            const cloudIds = new Set(cloud.map(c => c.id));
+            let uploaded = 0;
+            for (const item of local) {
+                if (item.isDefault || !item.audioData) continue;
+                if (item.cloudId && cloudIds.has(item.cloudId)) continue;
+                try {
+                    const cloudId = await uploadAudiobookToCloud(item);
+                    await saveAudiobookToDB({ ...item, cloudId });
+                    uploaded++;
+                } catch (e) {
+                    console.error("업로드 실패:", item.title, e);
+                }
+            }
+
+            // 2) 클라우드에만 있는 것 목록에 추가 (오디오는 재생 시 받는다)
+            const known = new Set(local.map(i => i.cloudId).filter(Boolean));
+            let added = 0;
+            for (const c of cloud) {
+                if (known.has(c.id)) continue;
+                await saveAudiobookToDB({
+                    id: c.id,
+                    cloudId: c.id,
+                    title: c.title || c.file_name || "제목 없음",
+                    audioData: null,
+                    sentences: [],
+                    audioUrl: c.audio_url,
+                    sentencesUrl: c.sentences_url,
+                    cloudOnly: true,
+                    timestamp: Date.parse(c.created_at) || Date.now(),
+                    dateString: new Date(Date.parse(c.created_at) || Date.now()).toLocaleDateString("ko-KR", {
+                        year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit"
+                    }),
+                    sizeBytes: 0,
+                    charCount: 0
+                });
+                added++;
+            }
+
+            if (uploaded || added) {
+                renderLibrary();
+                showToast(`동기화 완료 (올림 ${uploaded}, 받음 ${added})`, "success");
+            }
+        } catch (e) {
+            console.error("클라우드 동기화 실패:", e);
+        } finally {
+            syncing = false;
+        }
+    }
+
+    // 로그인/로그아웃은 최상위 스코프에서 일어나므로 이벤트로 연결한다
+    window.addEventListener("auth:changed", syncWithCloud);
 
     // --- ActionSheet ---
     const actionSheetBackdrop = document.getElementById("actionSheetBackdrop");
@@ -1265,6 +1408,18 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     async function deleteAudiobook(id) {
         try {
+            // 클라우드에도 있으면 함께 지운다. 안 그러면 다음 동기화 때 되살아난다.
+            const entry = await getAudiobookFromDB(id);
+            if (entry && entry.cloudId && isLoggedIn()) {
+                try {
+                    await fetch(`/api/audiobooks/${entry.cloudId}`, {
+                        method: "DELETE",
+                        headers: authHeaders()
+                    });
+                } catch (e) {
+                    console.error("클라우드 삭제 실패:", e);
+                }
+            }
             await deleteAudiobookFromDB(id);
             if (objectUrls[id]) {
                 URL.revokeObjectURL(objectUrls[id]);
@@ -2118,15 +2273,18 @@ function showAppUI(user, token) {
     const appMain = document.getElementById("appMain");
     const userInfo = document.getElementById("userInfo");
     const userEmail = document.getElementById("userEmail");
+    const headerLoginBtn = document.getElementById("headerLoginBtn");
 
+    // 메인 화면은 로그인 여부와 무관하게 항상 보인다 (기본 오디오북 체험용).
+    // 전체를 덮는 auth 카드 대신 헤더의 로그인 버튼으로만 유도한다 —
+    // 이전에는 authContainer를 무조건 숨겨서 로그인할 방법이 아예 없었다.
     authContainer.style.display = "none";
     appMain.style.display = "flex";
-    if (user && token) {
-        userInfo.style.display = "flex";
-        userEmail.textContent = user.email;
-    } else {
-        userInfo.style.display = "none";
-    }
+
+    const loggedIn = !!(user && token);
+    userInfo.style.display = loggedIn ? "flex" : "none";
+    if (headerLoginBtn) headerLoginBtn.style.display = loggedIn ? "none" : "flex";
+    if (loggedIn) userEmail.textContent = user.email;
 }
 
 async function fetchCurrentUser(token) {
@@ -2192,14 +2350,78 @@ async function register(email, password, fullName) {
     }
 }
 
-function logout() {
+/**
+ * 이 기기에 저장된 오디오북을 지운다. 기본 제공 오디오북(isDefault)만 남기고,
+ * 그 재생 위치도 초기화한다 — 공용 기기에서 이전 사용자의 흔적이 남지 않게.
+ * db 핸들이 DOMContentLoaded 스코프 안에 있어 여기서는 따로 연결한다.
+ */
+function clearDeviceAudiobooks() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open("AudiobookMakerDB", 1);
+        req.onerror = () => reject(req.error);
+        req.onsuccess = () => {
+            const database = req.result;
+            if (!database.objectStoreNames.contains("audiobooks")) {
+                database.close();
+                resolve(0);
+                return;
+            }
+            const tx = database.transaction(["audiobooks"], "readwrite");
+            const store = tx.objectStore("audiobooks");
+            let removed = 0;
+
+            store.openCursor().onsuccess = (e) => {
+                const cursor = e.target.result;
+                if (!cursor) return;
+                if (cursor.value.isDefault) {
+                    if (cursor.value.lastPosition) {
+                        cursor.update({ ...cursor.value, lastPosition: 0 });
+                    }
+                } else {
+                    cursor.delete();
+                    removed++;
+                }
+                cursor.continue();
+            };
+
+            tx.oncomplete = () => { database.close(); resolve(removed); };
+            tx.onerror = () => { database.close(); reject(tx.error); };
+        };
+    });
+}
+
+async function logout() {
+    // 기기 데이터를 지우는 동작이라 반드시 확인을 받는다. 클라우드에 올라간
+    // 것은 다시 로그인하면 돌아오지만, 아직 업로드되지 않은 것은 사라진다.
+    const confirmed = window.confirm(
+        "로그아웃하면 이 기기에 저장된 오디오북이 모두 삭제됩니다.\n" +
+        "기본 제공 오디오북만 남습니다.\n\n" +
+        "클라우드에 저장된 오디오북은 다시 로그인하면 복원됩니다.\n" +
+        "아직 업로드되지 않은 오디오북은 복구할 수 없습니다.\n\n" +
+        "계속하시겠습니까?"
+    );
+    if (!confirmed) return;
+
+    try {
+        await clearDeviceAudiobooks();
+    } catch (error) {
+        // 삭제에 실패했는데 로그아웃만 되면 데이터가 남은 채 방치된다.
+        console.error("기기 데이터 삭제 실패:", error);
+        window.alert("기기 데이터를 삭제하지 못했습니다. 로그아웃을 취소합니다.");
+        return;
+    }
+
+    // 재생 설정 등 사용자 흔적도 함께 정리한다
     localStorage.removeItem("authToken");
+    localStorage.removeItem("textAudio_playbackSpeed");
+    localStorage.removeItem("textAudio_repeatMode");
     location.reload();
 }
 
 function setupAuthEventListeners() {
     const googleLoginBtn = document.getElementById("googleLoginBtn");
     const logoutBtn = document.getElementById("logoutBtn");
+    const headerLoginBtn = document.getElementById("headerLoginBtn");
 
     // Google Login Button
     if (googleLoginBtn) {
@@ -2210,7 +2432,18 @@ function setupAuthEventListeners() {
         });
     }
 
-
+    // 헤더 로그인 버튼: 숨겨져 있던 로그인 카드를 펼치고 Google 로그인을 띄운다.
+    // GSI가 googleLoginBtn 자리에 실제 버튼을 그리므로 카드가 먼저 보여야 한다.
+    if (headerLoginBtn) {
+        headerLoginBtn.addEventListener("click", () => {
+            const authContainer = document.getElementById("authContainer");
+            if (authContainer) {
+                authContainer.style.display = "block";
+                authContainer.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+            handleGoogleLogin();
+        });
+    }
 
     // Logout button
     if (logoutBtn) {
