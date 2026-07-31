@@ -33,7 +33,7 @@ h2 { margin-bottom: 0; font-size: 1.4rem; }
 .section-heading { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
 .metric-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .metric-grid-wide { grid-template-columns: repeat(4, 1fr); }
-.metric-card { min-height: 168px; padding: 22px; border: 1px solid var(--line); border-radius: 18px; background: var(--card); color: var(--ink); display: flex; flex-direction: column; justify-content: space-between; text-align: left; font: inherit; cursor: pointer; transition: transform 0.18s ease, border-color 0.18s ease; }
+.metric-card { min-height: 168px; padding: 22px; border: 1px solid var(--line); border-radius: 18px; background: var(--card); color: var(--ink); display: flex; flex-direction: column; justify-content: space-between; text-align: left; font: inherit; text-decoration: none; cursor: pointer; transition: transform 0.18s ease, border-color 0.18s ease; }
 .metric-card:hover, .metric-card:focus-visible { border-color: var(--accent); outline: none; transform: translateY(-2px); }
 .metric-card:active { transform: scale(0.985); }
 .metric-card p { margin-bottom: 18px; color: var(--muted); font-size: 0.88rem; }
@@ -43,23 +43,20 @@ h2 { margin-bottom: 0; font-size: 1.4rem; }
 .metric-card-primary { color: #fff; border-color: #805034; background: linear-gradient(135deg, #9f5936, #704330); }
 .metric-card-primary p, .metric-card-primary span { color: #f8e6d8; }
 
-.metric-detail-backdrop { position: fixed; z-index: 20; inset: 0; background: rgba(24, 20, 18, 0.52); backdrop-filter: blur(4px); }
-.metric-detail-sheet { position: fixed; z-index: 21; right: 0; bottom: 0; left: 0; max-width: 640px; margin: 0 auto; padding: 10px 24px calc(24px + env(safe-area-inset-bottom)); border: 1px solid var(--line); border-bottom: 0; border-radius: 24px 24px 0 0; background: var(--card); box-shadow: 0 -16px 48px rgba(0, 0, 0, 0.22); }
-.metric-detail-sheet header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 14px 0 20px; }
-.metric-detail-sheet header h2 { margin-top: 3px; }
-.metric-detail-sheet header button { border: 0; border-radius: 999px; padding: 8px 12px; background: var(--paper); color: var(--ink); font: inherit; font-size: 0.82rem; cursor: pointer; }
-.sheet-handle { width: 36px; height: 4px; margin: 0 auto; border-radius: 999px; background: var(--line); }
-.metric-detail-value { display: block; margin-bottom: 14px; font-family: Georgia, "Noto Serif KR", serif; font-size: clamp(2.4rem, 10vw, 4.2rem); letter-spacing: -0.06em; }
-.metric-detail-description { margin-bottom: 10px; color: var(--ink); font-size: 1rem; line-height: 1.6; }
-.metric-detail-basis { margin-bottom: 0; color: var(--muted); font-size: 0.84rem; line-height: 1.6; }
-.metric-detail-list-title { margin: 24px 0 8px; color: var(--muted); font-size: 0.76rem; font-weight: 800; letter-spacing: 0.08em; }
-.metric-detail-list { max-height: 30vh; margin: 0; padding: 0; overflow-y: auto; border-top: 1px solid var(--line); list-style: none; }
-.metric-detail-list li { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 12px 2px; border-bottom: 1px solid var(--line); }
-.metric-detail-list strong { display: block; font-size: 0.92rem; }
-.metric-detail-list span { display: block; overflow: hidden; color: var(--muted); font-size: 0.78rem; text-overflow: ellipsis; white-space: nowrap; }
-.metric-detail-list .metric-detail-meta { flex-shrink: 0; text-align: right; }
-.metric-detail-list .metric-detail-empty { display: block; color: var(--muted); font-size: 0.86rem; }
-body.metric-detail-open { overflow: hidden; }
+.metric-page-shell { max-width: 720px; margin: 0 auto; padding: 28px 20px 64px; }
+.metric-page-back { display: inline-flex; align-items: center; min-height: 44px; margin-bottom: 28px; color: var(--muted); font-size: 0.9rem; text-decoration: none; }
+.metric-page-header { padding-bottom: 24px; border-bottom: 1px solid var(--line); }
+.metric-page-header h1 { margin-bottom: 12px; font-size: clamp(2.2rem, 10vw, 4.3rem); }
+.metric-page-value { display: block; margin: 24px 0 14px; font-family: Georgia, "Noto Serif KR", serif; font-size: clamp(3.2rem, 15vw, 5.5rem); letter-spacing: -0.07em; }
+.metric-page-description { margin-bottom: 10px; font-size: 1rem; line-height: 1.65; }
+.metric-page-basis, .metric-page-status { color: var(--muted); font-size: 0.88rem; line-height: 1.6; }
+.metric-page-list-title { margin: 40px 0 8px; color: var(--muted); font-size: 0.76rem; font-weight: 800; letter-spacing: 0.08em; }
+.metric-page-list { margin: 0; padding: 0; border-top: 1px solid var(--line); list-style: none; }
+.metric-page-list li { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 16px 2px; border-bottom: 1px solid var(--line); }
+.metric-page-list strong { display: block; font-size: 1rem; }
+.metric-page-list span { display: block; overflow: hidden; color: var(--muted); font-size: 0.84rem; text-overflow: ellipsis; white-space: nowrap; }
+.metric-page-list .metric-page-meta { flex-shrink: 0; text-align: right; }
+.metric-page-list .metric-page-empty { display: block; color: var(--muted); }
 
 @media (max-width: 720px) {
     .dashboard-shell { padding: 32px 16px 56px; }

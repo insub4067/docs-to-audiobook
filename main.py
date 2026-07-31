@@ -1212,6 +1212,14 @@ async def read_admin_dashboard():
         return FileResponse(admin_path)
     return JSONResponse(status_code=404, content={"message": "관리자 대시보드를 찾을 수 없습니다."})
 
+
+@app.get("/admin/metrics/{metric_name}")
+async def read_admin_metric_page(metric_name: str):
+    metric_path = os.path.join(STATIC_DIR, "admin-metric.html")
+    if os.path.exists(metric_path):
+        return FileResponse(metric_path)
+    return JSONResponse(status_code=404, content={"message": "관리자 지표 화면을 찾을 수 없습니다."})
+
 # --------------------------------------------------
 # Share Feature: 24-hour temporary server storage
 # --------------------------------------------------
