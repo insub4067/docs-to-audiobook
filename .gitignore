@@ -13,3 +13,5 @@ shared/
 .env.*.local
 job_audio/
 voice_previews/
+.coverage
+.pytest_cache/

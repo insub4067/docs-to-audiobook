@@ -54,3 +54,77 @@ def test_extract_text_empty_hwp():
     finally:
         if os.path.exists(test_file_hwp):
             os.remove(test_file_hwp)
+
+def test_extract_text_docx():
+    from unittest.mock import patch, MagicMock
+    with patch("main.docx.Document") as mock_doc:
+        mock_instance = MagicMock()
+        mock_para = MagicMock()
+        mock_para.text = "Hello Docx"
+        mock_instance.paragraphs = [mock_para]
+        mock_doc.return_value = mock_instance
+        
+        test_file = "test.docx"
+        with open(test_file, "w") as f: f.write("dummy")
+        try:
+            content = extract_text(test_file, test_file)
+            assert content == "Hello Docx"
+        finally:
+            os.remove(test_file)
+
+def test_extract_text_pdf():
+    from unittest.mock import patch, MagicMock
+    with patch("main.pypdf.PdfReader") as mock_pdf:
+        mock_instance = MagicMock()
+        mock_page = MagicMock()
+        mock_page.extract_text.return_value = "Hello PDF"
+        mock_instance.pages = [mock_page]
+        mock_pdf.return_value = mock_instance
+        
+        test_file = "test.pdf"
+        with open(test_file, "w") as f: f.write("dummy")
+        try:
+            content = extract_text(test_file, test_file)
+            assert content == "Hello PDF"
+        finally:
+            os.remove(test_file)
+
+def test_extract_text_valid_hwp():
+    from unittest.mock import MagicMock
+    import sys
+    
+    # Global patch of the olefile module
+    mock_ole = MagicMock()
+    mock_instance = MagicMock()
+    mock_instance.listdir.return_value = [['FileHeader'], ['BodyText']]
+    # Mock FileHeader to be uncompressed
+    mock_header_stream = MagicMock()
+    mock_header_stream.read.return_value = b'\x00' * 36 + b'\x00' + b'\x00' * 200
+    # Mock BodyText
+    mock_body_stream = MagicMock()
+    mock_body_stream.read.return_value = b'\x43\x00\x40\x00A\x00B\x00'
+    
+    def openstream_mock(name):
+        if name == 'FileHeader' or name == ['FileHeader']: return mock_header_stream
+        if name == 'BodyText' or name == ['BodyText']: return mock_body_stream
+    mock_instance.openstream = openstream_mock
+    mock_ole.OleFileIO.return_value = mock_instance
+    
+    sys.modules['olefile'] = mock_ole
+    sys.modules['zlib'] = MagicMock()
+    sys.modules['struct'] = MagicMock()
+    
+    try:
+        import struct
+        struct.unpack.side_effect = [(4194371,), (4,)] # (header_val), (rec_len inside if)
+        test_file = "test_valid.hwp"
+        with open(test_file, "w") as f: f.write("dummy")
+        content = extract_text(test_file, test_file)
+        assert "AB" in content
+    finally:
+        if os.path.exists("test_valid.hwp"):
+            os.remove("test_valid.hwp")
+        # cleanup
+        sys.modules.pop('olefile', None)
+        sys.modules.pop('zlib', None)
+        sys.modules.pop('struct', None)
