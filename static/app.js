@@ -8,6 +8,15 @@ function escapeHtml(value) {
     })[character]);
 }
 
+function isHttpUrl(value) {
+    try {
+        const url = new URL(value);
+        return url.protocol === "http:" || url.protocol === "https:";
+    } catch {
+        return false;
+    }
+}
+
 
 document.addEventListener("DOMContentLoaded", async () => {
     // Initialize Lucide Icons
@@ -1006,6 +1015,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     // ----------------------------------------------------
     const urlInput = document.getElementById("urlInput");
     const urlFetchBtn = document.getElementById("urlFetchBtn");
+    const urlPasteBtn = document.getElementById("urlPasteBtn");
+    let clipboardUrl = "";
+
+    async function showUrlPasteButton() {
+        if (!urlPasteBtn || !navigator.clipboard?.readText) return;
+        try {
+            const value = (await navigator.clipboard.readText()).trim();
+            if (isHttpUrl(value)) {
+                clipboardUrl = value;
+                urlPasteBtn.hidden = false;
+            } else {
+                urlPasteBtn.hidden = true;
+            }
+        } catch {
+            urlPasteBtn.hidden = true;
+        }
+    }
 
     async function extractTextFromUrl(url) {
         const response = await fetch("/api/extract-url", {
@@ -1055,11 +1081,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     if (urlInput) {
+        urlInput.addEventListener("focus", showUrlPasteButton);
         urlInput.addEventListener("keydown", (e) => {
             if (e.key === "Enter") {
                 e.preventDefault();
                 urlFetchBtn.click();
             }
+        });
+    }
+
+    if (urlPasteBtn) {
+        urlPasteBtn.addEventListener("click", () => {
+            urlInput.value = clipboardUrl;
+            urlPasteBtn.hidden = true;
+            urlInput.focus();
         });
     }
 

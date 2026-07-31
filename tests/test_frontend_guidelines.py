@@ -74,3 +74,17 @@ def test_url_fetch_button_shows_a_spinner_while_loading():
     assert 'urlFetchBtn.classList.add("is-loading")' in source
     assert 'urlFetchBtn.classList.remove("is-loading")' in source
     assert ".btn-url-fetch.is-loading svg" in css
+
+
+def test_clipboard_url_check_accepts_only_http_links():
+    script = f"""
+const fs = require("fs");
+const source = fs.readFileSync({str(APP_JS)!r}, "utf8");
+const start = source.indexOf("function isHttpUrl(value)");
+const end = source.indexOf("\\n}}", start) + 2;
+if (start < 0 || end < 2) throw new Error("isHttpUrl 함수가 없습니다.");
+eval(source.slice(start, end));
+if (!isHttpUrl("https://m.yonhapnews.co.kr/news/article")) throw new Error("HTTPS 링크를 인식하지 못합니다.");
+if (isHttpUrl("not a link") || isHttpUrl("javascript:alert(1)")) throw new Error("HTTP가 아닌 값을 링크로 인식합니다.");
+"""
+    subprocess.run(["node", "-e", script], check=True)

@@ -255,6 +255,23 @@ html {
     border-color: var(--primary-color);
 }
 
+.btn-url-paste {
+    flex-shrink: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background-color: var(--card-bg-solid);
+    color: var(--primary-color);
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.btn-url-paste:hover {
+    border-color: var(--primary-color);
+}
+
 .btn-url-fetch {
     flex-shrink: 0;
     display: flex;
