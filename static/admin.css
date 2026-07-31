@@ -52,6 +52,13 @@ h2 { margin-bottom: 0; font-size: 1.4rem; }
 .metric-detail-value { display: block; margin-bottom: 14px; font-family: Georgia, "Noto Serif KR", serif; font-size: clamp(2.4rem, 10vw, 4.2rem); letter-spacing: -0.06em; }
 .metric-detail-description { margin-bottom: 10px; color: var(--ink); font-size: 1rem; line-height: 1.6; }
 .metric-detail-basis { margin-bottom: 0; color: var(--muted); font-size: 0.84rem; line-height: 1.6; }
+.metric-detail-list-title { margin: 24px 0 8px; color: var(--muted); font-size: 0.76rem; font-weight: 800; letter-spacing: 0.08em; }
+.metric-detail-list { max-height: 30vh; margin: 0; padding: 0; overflow-y: auto; border-top: 1px solid var(--line); list-style: none; }
+.metric-detail-list li { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 12px 2px; border-bottom: 1px solid var(--line); }
+.metric-detail-list strong { display: block; font-size: 0.92rem; }
+.metric-detail-list span { display: block; overflow: hidden; color: var(--muted); font-size: 0.78rem; text-overflow: ellipsis; white-space: nowrap; }
+.metric-detail-list .metric-detail-meta { flex-shrink: 0; text-align: right; }
+.metric-detail-list .metric-detail-empty { display: block; color: var(--muted); font-size: 0.86rem; }
 body.metric-detail-open { overflow: hidden; }
 
 @media (max-width: 720px) {

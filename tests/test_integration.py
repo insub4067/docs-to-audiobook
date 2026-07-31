@@ -155,6 +155,37 @@ def test_admin_metrics_normalize_naive_database_timestamps_to_utc():
     assert _parse_event_time("2026-08-01T07:00:00+00:00").tzinfo == timezone.utc
 
 
+def test_admin_metrics_include_named_users_for_detail_sheets():
+    from main import load_admin_metrics
+
+    class Query:
+        def __init__(self, data):
+            self.data = data
+
+        def select(self, *_):
+            return self
+
+        def gte(self, *_):
+            return self
+
+        def execute(self):
+            return MagicMock(data=self.data)
+
+    class Client:
+        def table(self, name):
+            return Query({
+                "users": [{"id": "user-1", "full_name": "인섭", "email": "insub@example.com", "created_at": "2026-08-01T00:00:00"}],
+                "audiobooks": [{"id": "book-1", "user_id": "user-1", "created_at": "2026-08-01T00:00:00"}],
+                "product_events": [{"user_id": "user-1", "event_name": "playback_started", "created_at": "2026-08-01T00:00:00+00:00"}],
+            }[name])
+
+    with patch("main._supabase_or_503", return_value=Client()):
+        metrics = load_admin_metrics()
+
+    assert metrics["metric_details"]["total_users"] == [{"name": "인섭", "email": "insub@example.com", "meta": "가입일 2026-08-01"}]
+    assert metrics["metric_details"]["playback_started_30d"][0]["name"] == "인섭"
+
+
 # ---- /api/auth/me ----
 # 이전에 커버리지 0%였던 엔드포인트. 오늘 세션에서 몇 시간을 쓴
 # "재로그인해도 세션이 끊기는" 버그의 클라이언트 쪽 원인이 바로 이

@@ -45,6 +45,33 @@ const metricDetails = {
 let latestMetrics = {};
 let metricDetailTrigger = null;
 
+function renderMetricPeople(metricName) {
+    const list = document.getElementById("metricDetailList");
+    const people = latestMetrics.metric_details?.[metricName] || [];
+    list.replaceChildren();
+    if (!people.length) {
+        const item = document.createElement("li");
+        item.className = "metric-detail-empty";
+        item.textContent = "현재 조건에 해당하는 사용자가 없습니다.";
+        list.append(item);
+        return;
+    }
+    people.forEach((person) => {
+        const item = document.createElement("li");
+        const identity = document.createElement("div");
+        const name = document.createElement("strong");
+        const email = document.createElement("span");
+        const meta = document.createElement("span");
+        name.textContent = person.name;
+        email.textContent = person.email;
+        meta.textContent = person.meta;
+        meta.className = "metric-detail-meta";
+        identity.append(name, email);
+        item.append(identity, meta);
+        list.append(item);
+    });
+}
+
 function openMetricDetail(metricName, trigger) {
     const detail = metricDetails[metricName];
     if (!detail) return;
@@ -53,6 +80,7 @@ function openMetricDetail(metricName, trigger) {
     document.getElementById("metricDetailValue").textContent = formatMetric(metricName, latestMetrics[metricName]);
     document.getElementById("metricDetailDescription").textContent = detail.description;
     document.getElementById("metricDetailBasis").textContent = detail.basis;
+    renderMetricPeople(metricName);
     document.getElementById("metricDetailBackdrop").hidden = false;
     document.getElementById("metricDetailSheet").hidden = false;
     document.body.classList.add("metric-detail-open");

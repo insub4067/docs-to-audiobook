@@ -236,15 +236,15 @@ def _parse_event_time(value: str | None):
 
 
 def load_admin_metrics():
-    """개인 콘텐츠를 조회하지 않고 사용자·이벤트 집계만 반환한다."""
+    """관리자에게만 사용자·이벤트 집계와 지표별 사용자 목록을 반환한다."""
     now = datetime.now(timezone.utc)
     week_ago = now - timedelta(days=7)
     two_weeks_ago = now - timedelta(days=14)
     thirty_days_ago = now - timedelta(days=30)
     supabase = _supabase_or_503()
     try:
-        users = supabase.table("users").select("id,created_at").execute().data or []
-        audiobooks = supabase.table("audiobooks").select("id,created_at").execute().data or []
+        users = supabase.table("users").select("id,full_name,email,created_at").execute().data or []
+        audiobooks = supabase.table("audiobooks").select("id,user_id,created_at").execute().data or []
         events = supabase.table("product_events").select("user_id,event_name,created_at") \
             .gte("created_at", thirty_days_ago.isoformat()).execute().data or []
     except Exception as e:
@@ -272,6 +272,67 @@ def load_admin_metrics():
         if event_time >= week_ago and event.get("user_id") in week_one_cohort
     }
 
+    users_by_id = {user["id"]: user for user in users}
+
+    def user_list(user_ids, meta_by_id=None):
+        people = []
+        for user_id in user_ids:
+            user = users_by_id.get(user_id)
+            if not user:
+                continue
+            people.append({
+                "name": user.get("full_name") or "이름 없음",
+                "email": user.get("email") or "",
+                "meta": (meta_by_id or {}).get(user_id, ""),
+            })
+        return sorted(people, key=lambda person: (person["name"], person["email"]))
+
+    generation_counts = {}
+    playback_counts = {}
+    for event, _ in recent_events:
+        user_id = event.get("user_id")
+        if not user_id:
+            continue
+        if event["event_name"] in {"generation_completed", "generation_failed"}:
+            counts = generation_counts.setdefault(user_id, {"completed": 0, "failed": 0})
+            counts["completed" if event["event_name"] == "generation_completed" else "failed"] += 1
+        if event["event_name"] == "playback_started":
+            playback_counts[user_id] = playback_counts.get(user_id, 0) + 1
+
+    audiobook_counts = {}
+    for audiobook in audiobooks:
+        user_id = audiobook.get("user_id")
+        if user_id:
+            audiobook_counts[user_id] = audiobook_counts.get(user_id, 0) + 1
+
+    metric_details = {
+        "total_users": user_list(
+            users_by_id,
+            {user["id"]: f"가입일 {str(user.get('created_at') or '')[:10]}" for user in users},
+        ),
+        "daily_active_users": user_list(daily_active_users, {user_id: "최근 24시간 활동" for user_id in daily_active_users}),
+        "weekly_active_users": user_list(weekly_active_users, {user_id: "최근 7일 활동" for user_id in weekly_active_users}),
+        "week_one_retention_rate": user_list(
+            week_one_cohort,
+            {user_id: "재방문" if user_id in returning_users else "미재방문" for user_id in week_one_cohort},
+        ),
+        "generation_success_rate": user_list(
+            generation_counts,
+            {
+                user_id: f"완료 {counts['completed']}회 · 실패 {counts['failed']}회"
+                for user_id, counts in generation_counts.items()
+            },
+        ),
+        "playback_started_30d": user_list(
+            playback_counts,
+            {user_id: f"재생 시작 {count}회" for user_id, count in playback_counts.items()},
+        ),
+        "total_audiobooks": user_list(
+            audiobook_counts,
+            {user_id: f"오디오북 {count}권" for user_id, count in audiobook_counts.items()},
+        ),
+    }
+
     return {
         "total_users": len(users),
         "new_users_7d": sum((_parse_event_time(user.get("created_at")) or now) >= week_ago for user in users),
@@ -285,6 +346,7 @@ def load_admin_metrics():
         "playback_started_30d": sum(event["event_name"] == "playback_started" for event, _ in recent_events),
         "week_one_retention_rate": round(len(returning_users) / len(week_one_cohort) * 100) if week_one_cohort else None,
         "retention_cohort_size": len(week_one_cohort),
+        "metric_details": metric_details,
     }
 
 

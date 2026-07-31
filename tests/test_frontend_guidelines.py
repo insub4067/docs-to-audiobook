@@ -149,6 +149,8 @@ def test_admin_metric_cards_open_an_accessible_detail_sheet():
     assert 'id="metricDetailSheet" role="dialog" aria-modal="true"' in html
     assert 'function openMetricDetail(metricName, trigger)' in source
     assert 'event.key === "Escape"' in source
+    assert 'id="metricDetailList"' in html
+    assert 'function renderMetricPeople(metricName)' in source
 
 
 def test_profile_menu_can_be_closed_outside_or_with_escape():
