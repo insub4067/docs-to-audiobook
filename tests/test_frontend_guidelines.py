@@ -6,6 +6,8 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 APP_JS = ROOT_DIR / "static" / "app.js"
 STYLE_CSS = ROOT_DIR / "static" / "style.css"
 INDEX_HTML = ROOT_DIR / "static" / "index.html"
+ADMIN_HTML = ROOT_DIR / "static" / "admin.html"
+ADMIN_JS = ROOT_DIR / "static" / "admin.js"
 
 
 def test_user_generated_titles_are_escaped_before_html_rendering():
@@ -112,3 +114,24 @@ if (getAudiobookDisplayTitle("데미안.mp3") !== "데미안") throw new Error("
 if (getAudiobookDisplayTitle("제목") !== "제목") throw new Error("확장자 없는 제목을 바꿉니다.");
 """
     subprocess.run(["node", "-e", script], check=True)
+
+
+def test_library_syncs_playback_and_can_edit_titles():
+    source = APP_JS.read_text(encoding="utf-8")
+    html = INDEX_HTML.read_text(encoding="utf-8")
+
+    assert 'fetch(`/api/audiobooks/${entry.cloudId}/playback`' in source
+    assert 'method: "PUT"' in source
+    assert 'fetch(`/api/audiobooks/${entry.cloudId}`, {' in source
+    assert 'method: "PATCH"' in source
+    assert 'id="actionEditTitleBtn"' in html
+
+
+def test_admin_dashboard_renders_retention_metrics():
+    html = ADMIN_HTML.read_text(encoding="utf-8")
+    source = ADMIN_JS.read_text(encoding="utf-8")
+
+    assert 'data-metric="weekly_active_users"' in html
+    assert 'data-metric="week_one_retention_rate"' in html
+    assert 'fetch("/api/admin/metrics"' in source
+    assert '관리자만 접근할 수 있습니다.' in source
