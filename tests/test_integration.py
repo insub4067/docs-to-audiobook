@@ -147,6 +147,14 @@ async def test_admin_metrics_are_available_only_through_admin_route():
     assert response.json() == metrics
 
 
+def test_admin_metrics_normalize_naive_database_timestamps_to_utc():
+    from datetime import timezone
+    from main import _parse_event_time
+
+    assert _parse_event_time("2026-08-01T07:00:00").tzinfo == timezone.utc
+    assert _parse_event_time("2026-08-01T07:00:00+00:00").tzinfo == timezone.utc
+
+
 # ---- /api/auth/me ----
 # 이전에 커버리지 0%였던 엔드포인트. 오늘 세션에서 몇 시간을 쓴
 # "재로그인해도 세션이 끊기는" 버그의 클라이언트 쪽 원인이 바로 이
