@@ -500,59 +500,6 @@ async def get_voices(tone: str = None, use_case: str = None):
         ]
 
 
-# ----------------------------------------------------------------
-# TEMP: TTS_CONCURRENCY 적정값을 실측하기 위한 임시 프로브.
-# 측정 끝나면 이 엔드포인트는 제거한다.
-#
-# 앱의 정상 경로(synthesize_chunk)는 실패 시 최대 3회 재시도하므로 낮은
-# 동시성에서의 실패가 가려진다. 여기서는 재시도 없이 단일 시도 성공률만
-# 재서, Fly 도쿄 IP에서 Microsoft 쪽이 실제로 몇 개부터 끊기 시작하는지
-# 있는 그대로 본다. require_user_id로 막아 아무나 두드리지 못하게 한다.
-# ----------------------------------------------------------------
-@app.post("/api/_debug/tts_probe")
-async def tts_probe(request: Request, concurrency: int = Form(...), chars: int = Form(20), authorization: str = Header(None)):
-    require_user_id(authorization)
-    if concurrency < 1 or concurrency > 100:
-        raise HTTPException(status_code=400, detail="concurrency는 1~100 사이여야 합니다.")
-    if chars < 1 or chars > 2000:
-        raise HTTPException(status_code=400, detail="chars는 1~2000 사이여야 합니다.")
-
-    # 실제 청크 크기(~800자)에 가깝게 재현하려면 chars를 키워야 한다.
-    # 문장이 짧으면 스트리밍이 즉시 끝나 동시 연결 부담이 거의 안 걸린다.
-    base = "안녕하세요. 동시성 테스트용 문장입니다. 충분히 길게 반복해 실제 청크와 비슷한 스트리밍 시간을 재현합니다. "
-    probe_text = (base * (chars // len(base) + 1))[:chars]
-
-    async def one_attempt(i: int):
-        t0 = time.time()
-        try:
-            communicate = edge_tts.Communicate(probe_text, voice="ko-KR-SunHiNeural", rate="+0%", pitch="+0Hz")
-            audio = b""
-            async for msg in communicate.stream():
-                if msg.get("type") == "audio":
-                    audio += msg.get("data")
-            return {"i": i, "ok": bool(audio), "elapsed": round(time.time() - t0, 2), "bytes": len(audio)}
-        except Exception as e:
-            return {"i": i, "ok": False, "elapsed": round(time.time() - t0, 2), "error": str(e)[:200]}
-
-    t0 = time.time()
-    results = await asyncio.gather(*[one_attempt(i) for i in range(concurrency)])
-    total_elapsed = round(time.time() - t0, 2)
-    ok = sum(1 for r in results if r["ok"])
-    errors = {}
-    for r in results:
-        if not r["ok"]:
-            errors[r.get("error", "unknown")] = errors.get(r.get("error", "unknown"), 0) + 1
-
-    return {
-        "concurrency": concurrency,
-        "success": ok,
-        "failed": concurrency - ok,
-        "success_rate": round(ok / concurrency, 3),
-        "total_elapsed": total_elapsed,
-        "error_summary": errors,
-    }
-
-
 @app.get("/api/voices/{short_name}/preview")
 async def get_voice_preview(short_name: str):
     """음성 미리듣기. 처음 요청될 때 한 번 만들고 디스크에 캐시한다."""
