@@ -3118,10 +3118,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (loggedIn) {
             const profileName = user.full_name || user.email || "사용자";
             userEmail.textContent = user.email || "";
-            profileInitial.textContent = profileName.trim().charAt(0).toUpperCase();
+            profileInitial.textContent = profileName.trim().split(/\s+/)[0].slice(0, 2);
             profileMenuBtn.setAttribute("aria-label", `${profileName} 계정 메뉴`);
-            profileImage.hidden = !user.avatar_url;
-            profileImage.src = user.avatar_url || "";
+            profileImage.hidden = true;
+            profileImage.removeAttribute("src");
         } else {
             // 비로그인일 때만 구글 버튼을 그린다
             setupSocialLogin();

@@ -146,3 +146,10 @@ def test_profile_menu_can_be_closed_outside_or_with_escape():
 
     assert 'if (!userInfo.contains(event.target)) closeProfileMenu();' in source
     assert 'if (event.key === "Escape") closeProfileMenu();' in source
+
+
+def test_profile_badge_uses_a_short_name_instead_of_google_avatar():
+    source = APP_JS.read_text(encoding="utf-8")
+
+    assert 'profileName.trim().split(/\\s+/)[0].slice(0, 2)' in source
+    assert 'profileImage.hidden = true;' in source
