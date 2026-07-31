@@ -1207,6 +1207,15 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const jobData = await pollRes.json();
                 
                 if (jobData.status === "processing") {
+                    const completedChunks = Number(jobData.completed_chunks) || 0;
+                    const totalChunks = Number(jobData.total_chunks) || 0;
+                    if (totalChunks > 0) {
+                        const progress = Math.round((completedChunks / totalChunks) * 100);
+                        inlineFill.style.width = `${Math.min(progress, 100)}%`;
+                        inlineStatus.textContent = `음성 변환 중... (${completedChunks}/${totalChunks})`;
+                    } else {
+                        inlineStatus.textContent = "음성 변환 준비 중...";
+                    }
                     // Wait 2 seconds and check again
                     return new Promise(resolve => {
                         setTimeout(() => resolve(pollJobStatus(id)), 2000);

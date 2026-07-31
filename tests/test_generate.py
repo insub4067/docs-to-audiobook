@@ -101,6 +101,26 @@ async def test_synthesize_document_chunk_failure_propagates():
 
 
 @pytest.mark.asyncio
+async def test_synthesize_document_reports_completed_chunks():
+    async def fake_synthesize_chunk(idx, text_chunk, voice, rate, pitch, max_attempts=3):
+        return idx, b"audio", [{"text": f"문장 {idx}", "start": 0, "end": 100}]
+
+    progress_updates = []
+    raw_text = ("가" * 500 + ". ") + ("나" * 500 + ". ")
+
+    with patch("main.synthesize_chunk", side_effect=fake_synthesize_chunk):
+        await synthesize_document(
+            raw_text,
+            "voice",
+            "+0%",
+            "+0Hz",
+            progress_callback=lambda completed, total: progress_updates.append((completed, total)),
+        )
+
+    assert progress_updates == [(1, 2), (2, 2)]
+
+
+@pytest.mark.asyncio
 async def test_process_synthesis_task_success(tmp_path, monkeypatch):
     monkeypatch.setattr("main.JOB_AUDIO_DIR", str(tmp_path))
     from main import jobs

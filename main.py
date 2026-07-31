@@ -774,7 +774,7 @@ async def synthesize_chunk(chunk_index: int, text_chunk: str, voice: str, rate: 
 
     raise last_error
 
-async def synthesize_document(raw_text: str, voice: str, rate: str, pitch: str) -> tuple:
+async def synthesize_document(raw_text: str, voice: str, rate: str, pitch: str, progress_callback=None) -> tuple:
     """Synthesize a full document into (audio_bytes, annotated_sentences, heading_index)."""
     # Extract heading metadata from original text (before preprocessing strips newlines)
     headings = extract_markdown_headings(raw_text)
@@ -800,9 +800,19 @@ async def synthesize_document(raw_text: str, voice: str, rate: str, pitch: str) 
     if not chunks:
         chunks = [text]
 
+    completed_chunks = 0
+
+    async def synthesize_with_progress(chunk_index: int, chunk: str):
+        nonlocal completed_chunks
+        result = await synthesize_chunk(chunk_index, chunk, voice, rate, pitch)
+        completed_chunks += 1
+        if progress_callback:
+            progress_callback(completed_chunks, len(chunks))
+        return result
+
     # Process all chunks concurrently using asyncio.gather
     tasks = [
-        synthesize_chunk(i, chunk, voice, rate, pitch)
+        synthesize_with_progress(i, chunk)
         for i, chunk in enumerate(chunks)
     ]
     results = await asyncio.gather(*tasks)
@@ -847,8 +857,12 @@ async def synthesize_document(raw_text: str, voice: str, rate: str, pitch: str) 
 
 async def process_synthesis_task(job_id: str, raw_text: str, voice: str, rate: str, pitch: str):
     try:
+        def update_progress(completed_chunks: int, total_chunks: int):
+            jobs[job_id]["completed_chunks"] = completed_chunks
+            jobs[job_id]["total_chunks"] = total_chunks
+
         combined_audio, annotated_sentences, heading_index = await synthesize_document(
-            raw_text, voice, rate, pitch
+            raw_text, voice, rate, pitch, progress_callback=update_progress
         )
 
         if not combined_audio:
@@ -910,6 +924,8 @@ async def synthesize_text(
         "audio_path": None,
         "sentences": [],
         "headings": [],
+        "completed_chunks": 0,
+        "total_chunks": 0,
         "error": None,
         "created_at": time.time(),
         "user_id": user_id,
@@ -934,7 +950,12 @@ async def get_job_status(job_id: str, authorization: str = Header(None)):
             "headings": job.get("headings", [])
         })
 
-    return JSONResponse(content={"status": job["status"], "error": job.get("error")})
+    return JSONResponse(content={
+        "status": job["status"],
+        "error": job.get("error"),
+        "completed_chunks": job.get("completed_chunks", 0),
+        "total_chunks": job.get("total_chunks", 0),
+    })
 
 
 @app.get("/api/job/{job_id}/audio")

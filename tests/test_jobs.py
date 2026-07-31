@@ -45,6 +45,30 @@ async def test_get_job_status_generating():
         
     del jobs[job_id]
 
+
+@pytest.mark.asyncio
+async def test_get_job_status_processing_includes_chunk_progress():
+    job_id = "test_job_progress"
+    jobs[job_id] = {
+        "status": "processing",
+        "completed_chunks": 2,
+        "total_chunks": 5,
+        "user_id": "owner",
+    }
+
+    with patch("main.require_user_id", side_effect=_owner_from_header):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get(f"/api/job/{job_id}", headers={"Authorization": "Bearer owner"})
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "processing",
+        "error": None,
+        "completed_chunks": 2,
+        "total_chunks": 5,
+    }
+    del jobs[job_id]
+
 @pytest.mark.asyncio
 async def test_get_job_status_not_found():
     with patch("main.require_user_id", return_value="owner"):
