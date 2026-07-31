@@ -15,6 +15,12 @@ def test_jwt_requires_secret_key(monkeypatch):
     with pytest.raises(RuntimeError, match="SECRET_KEY"):
         create_access_token({"sub": "user-1"})
 
+
+def test_default_token_lifetime_is_one_year():
+    import auth
+
+    assert auth.DEFAULT_ACCESS_TOKEN_EXPIRE_MINUTES == 525_600
+
 def test_password_hashing():
     pwd = "my_secure_password"
     hashed = hash_password(pwd)

@@ -188,7 +188,7 @@ SUPABASE_JWT_SECRET=your-jwt-secret-from-project-settings
 # JWT
 SECRET_KEY=your-secret-key-for-token-signing
 ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
+ACCESS_TOKEN_EXPIRE_MINUTES=525600
 
 # Google OAuth (선택)
 GOOGLE_CLIENT_ID=your-google-client-id
