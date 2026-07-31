@@ -913,44 +913,113 @@ document.addEventListener("DOMContentLoaded", async () => {
         return await response.json();
     }
 
+    // 업로드/URL 가져오기 둘 다 { text_id, filename, char_count, preview } 형태를
+    // 돌려주므로, 미리보기 렌더링과 모달 열기는 공통으로 뺀다.
+    function applyExtractedText(data) {
+        currentTextId = data.text_id;
+        uploadedFile = { name: data.filename };
+
+        if (previewPlaceholder) previewPlaceholder.style.display = "none";
+        previewText.style.display = "block";
+        previewText.textContent = data.preview;
+        charCountBadge.textContent = `${data.char_count.toLocaleString()} 자`;
+        charCountBadge.style.display = "block";
+
+        generateBtn.disabled = false;
+
+        setTimeout(() => {
+            generationModal.classList.add("show");
+            document.body.style.overflow = "hidden";
+        }, 50);
+    }
+
     async function uploadFile(file) {
         const dzNormal = document.getElementById("dropzoneNormal");
         const dzLoading = document.getElementById("dropzoneLoading");
-        
+
         if (dzNormal) dzNormal.style.display = "none";
         if (dzLoading) dzLoading.style.display = "block";
 
         try {
             const data = await extractText(file);
-            currentTextId = data.text_id;
+            applyExtractedText(data);
 
-            // Render text preview
-            if (previewPlaceholder) previewPlaceholder.style.display = "none";
-            previewText.style.display = "block";
-            previewText.textContent = data.preview;
-            charCountBadge.textContent = `${data.char_count.toLocaleString()} 자`;
-            charCountBadge.style.display = "block";
-            
-            generateBtn.disabled = false;
-            
             // Restore dropzone state
             if (dzNormal) dzNormal.style.display = "block";
             if (dzLoading) dzLoading.style.display = "none";
-            
-            // Show generation modal
-            setTimeout(() => {
-                generationModal.classList.add("show");
-                document.body.style.overflow = "hidden";
-            }, 50);
         } catch (error) {
             console.error(error);
             showToast(error.message, "error");
             if (removeFileBtn) removeFileBtn.click();
-            
+
             // Restore dropzone state on error
             if (dzNormal) dzNormal.style.display = "block";
             if (dzLoading) dzLoading.style.display = "none";
         }
+    }
+
+    // ----------------------------------------------------
+    // URL에서 기사 가져오기 (뉴스/커뮤니티 링크)
+    //
+    // 파일 업로드와 달리 서버가 이 요청에 로그인을 요구한다(SSRF/오픈 프록시
+    // 남용 방지). 그래서 요청 전에 먼저 로그인 여부를 확인해, 401을 받고
+    // 나서야 알리는 대신 미리 안내한다.
+    // ----------------------------------------------------
+    const urlInput = document.getElementById("urlInput");
+    const urlFetchBtn = document.getElementById("urlFetchBtn");
+
+    async function extractTextFromUrl(url) {
+        const response = await fetch("/api/extract-url", {
+            method: "POST",
+            headers: { ...authHeaders(), "Content-Type": "application/json" },
+            body: JSON.stringify({ url })
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.detail || "링크에서 텍스트를 가져오지 못했습니다.");
+        }
+        return data;
+    }
+
+    if (urlFetchBtn) {
+        urlFetchBtn.addEventListener("click", async () => {
+            const url = (urlInput.value || "").trim();
+            if (!url) return;
+
+            if (!isLoggedIn()) {
+                showToast("링크 가져오기는 로그인 후 이용할 수 있습니다.", "info");
+                const loginSlot = document.getElementById("headerLoginSlot");
+                if (loginSlot) loginSlot.scrollIntoView({ behavior: "smooth", block: "center" });
+                return;
+            }
+
+            urlFetchBtn.disabled = true;
+            const originalLabel = urlFetchBtn.querySelector("span");
+            const originalText = originalLabel ? originalLabel.textContent : "";
+            if (originalLabel) originalLabel.textContent = "가져오는 중...";
+
+            try {
+                const data = await extractTextFromUrl(url);
+                applyExtractedText(data);
+                urlInput.value = "";
+            } catch (error) {
+                console.error(error);
+                showToast(error.message, "error");
+            } finally {
+                urlFetchBtn.disabled = false;
+                if (originalLabel) originalLabel.textContent = originalText;
+            }
+        });
+    }
+
+    if (urlInput) {
+        urlInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                urlFetchBtn.click();
+            }
+        });
     }
 
     // ----------------------------------------------------

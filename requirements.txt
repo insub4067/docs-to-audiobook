@@ -6,6 +6,7 @@ pypdf>=4.2.0
 edge-tts>=7.2.8
 requests>=2.31.0
 olefile>=0.46
+trafilatura>=1.8.0
 
 # P2: Database & Authentication
 sqlalchemy>=2.0.0
