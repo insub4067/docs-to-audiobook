@@ -28,7 +28,7 @@
 - Consumes: `extract_markdown_headings(raw_text: str) -> list`
 - Produces: `{cleaned_text: str, display_text: str, level: int}` 항목의 기존 목차 메타데이터
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 def test_extract_markdown_headings_includes_clear_chapter_lines():
@@ -49,13 +49,13 @@ def test_extract_markdown_headings_includes_clear_chapter_lines():
     assert extract_markdown_headings("나는 열 살 무렵 이야기를 시작하려 한다.\n짧은 행") == []
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_text_processing.py::test_extract_markdown_headings_includes_clear_chapter_lines -v`
 
 Expected: FAIL because plain chapter and numbered lines are not currently returned.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 chapter_heading_pattern = re.compile(r"(?:^|\s)(?:제\s*\d+\s*(?:장|부|절)|\d+(?:\.\d+)*\.)\s*\S+")
@@ -72,45 +72,39 @@ else:
 
 Keep the existing `clean_tts_text` conversion and result object shape unchanged.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_text_processing.py::test_extract_markdown_headings_includes_clear_chapter_lines -v`
 
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add main.py tests/test_text_processing.py
 git commit -m "feat: 장 제목을 읽기 목차에 반영"
 ```
 
-### Task 2: PWA 캐시 갱신과 최종 확인
+### Task 2: 최종 확인
 
 **Files:**
-- Modify: `static/sw.js:1`
+- Modify: 없음
 
 **Interfaces:**
-- Consumes: `CACHE_NAME` 문자열
-- Produces: 새 프런트엔드 배포본을 받는 서비스 워커 캐시 키
+- Consumes: 제목 인식과 문장 전처리 결과
+- Produces: 읽기 모드가 소비하는 기존 목차 메타데이터
 
-- [ ] **Step 1: Bump the cache version**
-
-```javascript
-const CACHE_NAME = "2026.08.01.8";
-```
-
-- [ ] **Step 2: Run final verification**
+- [x] **Step 1: Run final verification**
 
 Run: `node --check static/app.js && pytest -q && git diff --check`
 
 Expected: PASS with no whitespace errors.
 
-- [ ] **Step 3: Commit and push**
+- [x] **Step 2: Commit and push**
 
 ```bash
-git add static/sw.js
-git commit -m "chore: 읽기 목차 캐시 갱신"
+git add main.py tests/test_text_processing.py
+git commit -m "feat: 장 제목을 읽기 목차에 반영"
 git push origin main
 ```
 
