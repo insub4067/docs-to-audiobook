@@ -1193,7 +1193,29 @@ document.addEventListener("DOMContentLoaded", async () => {
     async function seedDefaultBookIfNeeded() {
         try {
             const existing = await getAudiobookFromDB(DEFAULT_BOOK_ID);
-            if (existing && existing.audioData) return;
+            let needsUpdate = false;
+            let meta = null;
+
+            try {
+                const checkRes = await fetch("/api/default-book");
+                if (checkRes.ok) {
+                    const checkMeta = await checkRes.json();
+                    if (checkMeta.status === "ready") {
+                        meta = checkMeta;
+                        if (!existing || !existing.audioData || existing.version !== meta.version) {
+                            needsUpdate = true;
+                        }
+                    } else if (!existing || !existing.audioData) {
+                        needsUpdate = true;
+                    }
+                } else if (!existing || !existing.audioData) {
+                    needsUpdate = true;
+                }
+            } catch (e) {
+                if (!existing || !existing.audioData) needsUpdate = true;
+            }
+
+            if (!needsUpdate) return;
 
             // 라이브러리에 다운로드/생성 중 표시 아이템 미리 추가
             libraryEmpty.style.display = "none";
@@ -1213,10 +1235,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             `;
             audioList.prepend(progressItem);
 
-            let meta = null;
             let attempts = 0;
             const maxAttempts = 60; // Max 1 minute polling
-            while (attempts < maxAttempts) {
+            while (attempts < maxAttempts && (!meta || meta.status !== "ready")) {
                 try {
                     const metaRes = await fetch("/api/default-book");
                     if (!metaRes.ok) {
@@ -1271,7 +1292,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                     }),
                     sizeBytes: audioArrayBuffer.byteLength,
                     charCount: meta.char_count,
-                    isDefault: true
+                    isDefault: true,
+                    version: meta.version
                 });
 
                 progressItem.remove();
@@ -1551,7 +1573,7 @@ document.addEventListener("DOMContentLoaded", async () => {
      * 지워지는 일을 막지 못했다.
      */
     async function syncWithCloud() {
-        const result = { uploaded: 0, added: 0, failed: 0, ok: false };
+        const result = { uploaded: 0, added: 0, failed: 0, deleted: 0, ok: false };
         if (!isLoggedIn() || syncing) return result;
         syncing = true;
         try {
@@ -1560,11 +1582,25 @@ document.addEventListener("DOMContentLoaded", async () => {
             const cloud = (await res.json()).audiobooks || [];
             const local = await getAllAudiobooksFromDB();
 
-            // 1) 로컬에만 있는 것 올리기 (기본 제공본과 아직 안 받은 항목은 제외)
             const cloudIds = new Set(cloud.map(c => c.id));
+
+            // 0) 클라우드에 없는 로컬 오디오북 삭제 (동기화 반영)
+            // 단, 기본 오디오북은 제외하며, 클라우드에 한 번이라도 올라가서 cloudId를 부여받은 항목만 대상
+            for (const item of local) {
+                if (item.isDefault) continue;
+                if (item.cloudId && !cloudIds.has(item.cloudId)) {
+                    await deleteAudiobookFromDB(item.id);
+                    result.deleted++;
+                }
+            }
+
+            // 1) 로컬에만 있는 것 올리기 (기본 제공본과 아직 안 받은 항목은 제외)
             for (const item of local) {
                 if (item.isDefault || !item.audioData) continue;
                 if (item.cloudId && cloudIds.has(item.cloudId)) continue;
+                // 위 0번 단계에서 삭제되었을 수 있으므로 다시 체크
+                if (item.cloudId && !cloudIds.has(item.cloudId)) continue;
+
                 try {
                     const cloudId = await uploadAudiobookToCloud(item);
                     await saveAudiobookToDB({ ...item, cloudId });

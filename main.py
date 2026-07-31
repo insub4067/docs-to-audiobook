@@ -1109,6 +1109,7 @@ async def get_default_book():
         "headings": meta.get("headings", []),
         "char_count": meta.get("char_count", 0),
         "audio_url": "/api/default-book/audio",
+        "version": _default_book_fingerprint(),
     })
 
 
