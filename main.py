@@ -159,6 +159,16 @@ def require_user_id(authorization: str) -> str:
     return payload["sub"]
 
 
+def require_job_owner(job_id: str, authorization: str) -> dict:
+    user_id = require_user_id(authorization)
+    job = jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="해당 작업을 찾을 수 없습니다.")
+    if job.get("user_id") != user_id:
+        raise HTTPException(status_code=403, detail="이 작업에 접근할 권한이 없습니다.")
+    return job
+
+
 def _supabase_or_503():
     from auth import get_supabase_client
 
@@ -828,7 +838,7 @@ async def synthesize_text(
     pitch: str = Form("+0Hz"),
     authorization: str = Header(None)
 ):
-    require_user_id(authorization)
+    user_id = require_user_id(authorization)
     # 가장 비싼 엔드포인트다. 배치 8개를 여러 번 돌릴 여유는 남긴다.
     enforce_rate_limit(request, "synthesize", limit=40, window_sec=600)
 
@@ -852,7 +862,8 @@ async def synthesize_text(
         "sentences": [],
         "headings": [],
         "error": None,
-        "created_at": time.time()
+        "created_at": time.time(),
+        "user_id": user_id,
     }
     
     # Pass raw text — process_synthesis_task handles preprocessing internally
@@ -861,11 +872,8 @@ async def synthesize_text(
     return {"job_id": job_id}
 
 @app.get("/api/job/{job_id}")
-async def get_job_status(job_id: str):
-    if job_id not in jobs:
-        raise HTTPException(status_code=404, detail="해당 작업을 찾을 수 없습니다.")
-        
-    job = jobs[job_id]
+async def get_job_status(job_id: str, authorization: str = Header(None)):
+    job = require_job_owner(job_id, authorization)
 
     if job["status"] == "completed":
         # 오디오는 별도 엔드포인트에서 파일로 스트리밍한다. 여기서는
@@ -881,9 +889,9 @@ async def get_job_status(job_id: str):
 
 
 @app.get("/api/job/{job_id}/audio")
-async def get_job_audio(job_id: str):
-    job = jobs.get(job_id)
-    if not job or job.get("status") != "completed":
+async def get_job_audio(job_id: str, authorization: str = Header(None)):
+    job = require_job_owner(job_id, authorization)
+    if job.get("status") != "completed":
         raise HTTPException(status_code=404, detail="해당 작업의 오디오를 찾을 수 없습니다.")
 
     audio_path = job.get("audio_path")
@@ -983,7 +991,6 @@ async def create_share(
         "sentences": json.loads(sentences),
         "headings": json.loads(headings),
         "created_at": time.time(),
-        "never_expire": title == "셜록 홈즈의 모험"
     }
     meta_path = os.path.join(share_dir, "meta.json")
     with open(meta_path, "w", encoding="utf-8") as f:
@@ -1250,9 +1257,10 @@ async def get_default_book_audio():
     return FileResponse(audio_path, media_type="audio/mpeg", filename="sherlock-holmes.mp3")
 
 @app.get("/api/audio/{job_id}.mp3")
-async def download_audiobook(job_id: str):
-    audio_path = os.path.join(JOB_AUDIO_DIR, f"{job_id}.mp3")
-    if not os.path.exists(audio_path):
+async def download_audiobook(job_id: str, authorization: str = Header(None)):
+    job = require_job_owner(job_id, authorization)
+    audio_path = job.get("audio_path")
+    if not audio_path or not os.path.exists(audio_path):
         raise HTTPException(status_code=404, detail="Audio file not found")
         
     return FileResponse(audio_path, media_type="audio/mpeg")
@@ -1280,7 +1288,7 @@ async def cleanup_expired_files_loop():
                         try:
                             with open(meta_path, "r") as f:
                                 meta = json.load(f)
-                            if not meta.get("never_expire", False) and now - meta.get("created_at", 0) > 86400:  # 24 hours
+                            if now - meta.get("created_at", 0) > 86400:  # 24 hours
                                 shutil.rmtree(share_dir)
                                 print(f"Cleaned expired share: {share_id}")
                         except Exception:
@@ -1578,6 +1586,9 @@ async def social_login(provider: str, data: dict):
 
 @app.on_event("startup")
 async def startup_event():
+    from auth import get_secret_key
+
+    get_secret_key()
     asyncio.create_task(cleanup_expired_files_loop())
     # 부팅 시에는 클라우드에 있으면 내려받기만 하고 합성은 하지 않는다.
     # 여기서 합성을 시작하면 공유 CPU 1개를 점유해 사용자 변환이 막힌다.

@@ -37,7 +37,7 @@ async def test_cleanup_one_iteration(tmp_path, monkeypatch):
     main.jobs["expired_job"] = {"created_at": now - 2000, "audio_path": str(expired_audio)}
     main.jobs["fresh_job"] = {"created_at": now, "audio_path": None}
 
-    # 3) shared: 24시간(86400s) 넘으면 지워지되, never_expire가 있으면 예외
+    # 3) shared: 24시간(86400s)이 지나면 메타데이터와 무관하게 지워져야 한다
     def make_share(share_id, created_at, never_expire=False):
         d = shared_dir / share_id
         d.mkdir()
@@ -48,7 +48,7 @@ async def test_cleanup_one_iteration(tmp_path, monkeypatch):
 
     make_share("expired_share", now - 90000)
     make_share("fresh_share", now)
-    make_share("never_expire_share", now - 90000, never_expire=True)
+    make_share("legacy_never_expire_share", now - 90000, never_expire=True)
 
     # 4) job_audio 고아 파일: jobs에 없는 파일도 30분 지나면 지워져야 한다
     #    (서버 재시작 등으로 jobs 딕셔너리가 비어도 디스크에는 남는 경우)
@@ -79,10 +79,10 @@ async def test_cleanup_one_iteration(tmp_path, monkeypatch):
     assert "fresh_job" in main.jobs
     assert not expired_audio.exists()
 
-    # shared 검증 (never_expire 존중)
+    # shared 검증 (과거 never_expire 메타데이터도 보관 우회에 쓰이면 안 된다)
     assert not (shared_dir / "expired_share").exists()
     assert (shared_dir / "fresh_share").exists()
-    assert (shared_dir / "never_expire_share").exists()
+    assert not (shared_dir / "legacy_never_expire_share").exists()
 
     # job_audio 고아 파일 검증
     assert not orphan_old.exists()

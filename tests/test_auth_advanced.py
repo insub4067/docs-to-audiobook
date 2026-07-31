@@ -8,6 +8,13 @@ from auth import (
 )
 from datetime import timedelta
 
+
+def test_jwt_requires_secret_key(monkeypatch):
+    monkeypatch.delenv("SECRET_KEY", raising=False)
+
+    with pytest.raises(RuntimeError, match="SECRET_KEY"):
+        create_access_token({"sub": "user-1"})
+
 def test_password_hashing():
     pwd = "my_secure_password"
     hashed = hash_password(pwd)

@@ -1149,7 +1149,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             
             // 2. Poll job status until completed
             const pollJobStatus = async (id) => {
-                const pollRes = await fetch(`/api/job/${id}`);
+                const pollRes = await fetch(`/api/job/${id}`, { headers: authHeaders() });
                 if (!pollRes.ok) throw new Error("작업 상태 통신 실패");
                 
                 const jobData = await pollRes.json();
@@ -1176,7 +1176,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             // 오디오는 별도 엔드포인트에서 바이너리로 받는다. 서버가 base64로
             // 메모리에 들고 있지 않으므로 동시 처리 수를 늘려도 안전하다.
-            const audioRes = await fetch(completedJobData.audio_url);
+            const audioRes = await fetch(completedJobData.audio_url, { headers: authHeaders() });
             if (!audioRes.ok) throw new Error("오디오 파일 다운로드 실패");
             const audioBlob = await audioRes.blob();
 
