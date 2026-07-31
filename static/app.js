@@ -2603,8 +2603,18 @@ async function initializeAuth() {
             const user = await fetchCurrentUser(token);
             showAppUI(user, token);
         } catch (error) {
-            localStorage.removeItem("authToken");
-            showAppUI(null, null);
+            if (error.authFailed) {
+                // 토큰이 실제로 무효하다. 이때만 지운다.
+                localStorage.removeItem("authToken");
+                showAppUI(null, null);
+            } else {
+                // 네트워크 실패나 서버 일시 오류다. 토큰은 멀쩡하므로 지우지
+                // 않고 로그인 상태를 유지한다. 재배포 중이거나 오프라인에서
+                // 앱을 열었다는 이유로 세션이 사라지면 안 된다.
+                // 사용자 정보는 다음에 통신이 되면 채워진다.
+                console.warn("인증 확인 실패(일시적일 수 있음), 세션 유지:", error);
+                showAppUI({ email: "" }, token);
+            }
         }
     } else {
         showAppUI(null, null);
@@ -2647,6 +2657,12 @@ function showAppUI(user, token) {
     }
 }
 
+/**
+ * 토큰이 실제로 무효한지(401/403) 여부를 호출자가 구분할 수 있도록
+ * authFailed 플래그를 실어 던진다. 네트워크 실패나 5xx까지 로그아웃으로
+ * 취급하면 재배포 중이거나 전파가 끊긴 순간에 앱을 열었다는 이유만으로
+ * 세션이 사라진다.
+ */
 async function fetchCurrentUser(token) {
     const response = await fetch("/api/auth/me", {
         headers: {
@@ -2655,7 +2671,9 @@ async function fetchCurrentUser(token) {
     });
 
     if (!response.ok) {
-        throw new Error("Failed to fetch user");
+        const err = new Error(`Failed to fetch user (${response.status})`);
+        err.authFailed = response.status === 401 || response.status === 403;
+        throw err;
     }
 
     return await response.json();
