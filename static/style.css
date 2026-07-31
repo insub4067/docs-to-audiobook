@@ -2231,6 +2231,26 @@ input[type="range"]::-webkit-slider-thumb:active {
         background-color: #3a332f;
     }
 
+    .action-sheet {
+        background-color: #2f2926;
+    }
+
+    .action-sheet-handle {
+        background-color: rgba(247, 240, 233, 0.26);
+    }
+
+    .action-sheet-btn:hover {
+        background-color: rgba(247, 240, 233, 0.06);
+    }
+
+    .action-sheet-btn:active {
+        background-color: rgba(217, 166, 111, 0.16);
+    }
+
+    .action-sheet-btn-cancel {
+        border-color: rgba(247, 240, 233, 0.12);
+    }
+
     .reader-container,
     .reader-content {
         background-color: #211d1b;

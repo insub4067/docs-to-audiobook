@@ -44,6 +44,8 @@ def test_dark_mode_keeps_upload_and_reader_surfaces_dark():
     assert ".audio-item:active .audio-item-front" in dark_theme
     assert ".reader-container," in dark_theme
     assert ".reader-content" in dark_theme
+    assert ".action-sheet" in dark_theme
+    assert "background-color: #2f2926" in dark_theme
 
 
 def test_icon_buttons_and_modal_have_accessible_names_and_roles():
