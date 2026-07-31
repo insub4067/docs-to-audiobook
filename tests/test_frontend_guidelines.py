@@ -35,6 +35,13 @@ def test_css_supports_motion_and_dark_mode_preferences():
     assert "@media (prefers-color-scheme: dark)" in css
 
 
+def test_pull_refresh_spinner_moves_counterclockwise():
+    css = STYLE_CSS.read_text(encoding="utf-8")
+
+    assert "nth-child(1)  { animation-delay: -0.916s; }" in css
+    assert "nth-child(12) { animation-delay: -0.000s; }" in css
+
+
 def test_dark_mode_keeps_upload_and_reader_surfaces_dark():
     css = STYLE_CSS.read_text(encoding="utf-8")
     dark_theme = css.split("@media (prefers-color-scheme: dark)", 1)[1]
