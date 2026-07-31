@@ -35,13 +35,15 @@ async def test_get_audiobooks_success(mock_supabase, mock_auth):
 
 @pytest.mark.asyncio
 async def test_delete_audiobook_success(mock_supabase, mock_auth):
-    # Mock supabase response for getting the book owner
-    mock_supabase.table().select().eq().single().execute.return_value = MagicMock(
-        data={"id": "book1", "user_id": "test_user_id"} # user_id matches mocked auth!
+    # main.py의 실제 조회 체인은 select("id").eq("id", ..).eq("user_id", ..)이다.
+    # .single()을 모킹하면 이 체인과 어긋나 실제 코드는 설정 안 된(참으로 취급되는)
+    # MagicMock을 받게 되어, 소유권 검증이 아예 실행되지 않아도 테스트가 통과했다.
+    mock_supabase.table().select().eq().eq().execute.return_value = MagicMock(
+        data=[{"id": "book1", "user_id": "test_user_id"}]  # user_id matches mocked auth!
     )
-    
+
     # Mock deletion success
-    mock_supabase.table().delete().eq().execute.return_value = MagicMock(data=[{"id": "book1"}])
+    mock_supabase.table().delete().eq().eq().execute.return_value = MagicMock(data=[{"id": "book1"}])
     
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         response = await client.delete("/api/audiobooks/book1", headers={"Authorization": "Bearer fake_token"})
