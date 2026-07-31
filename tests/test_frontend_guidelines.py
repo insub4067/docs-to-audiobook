@@ -8,6 +8,7 @@ STYLE_CSS = ROOT_DIR / "static" / "style.css"
 INDEX_HTML = ROOT_DIR / "static" / "index.html"
 ADMIN_HTML = ROOT_DIR / "static" / "admin.html"
 ADMIN_JS = ROOT_DIR / "static" / "admin.js"
+MANIFEST = ROOT_DIR / "static" / "manifest.json"
 
 
 def test_user_generated_titles_are_escaped_before_html_rendering():
@@ -175,3 +176,12 @@ def test_admin_users_have_menu_and_triple_tap_entry_points():
     assert 'id="brandWordmark"' in html
     assert 'adminDashboardLink.hidden = !isAdmin;' in source
     assert 'if (logoTapCount === 3) window.location.assign("/admin");' in source
+
+
+def test_pwa_uses_the_textaudio_name_and_icon():
+    manifest = MANIFEST.read_text(encoding="utf-8")
+    html = INDEX_HTML.read_text(encoding="utf-8")
+
+    assert '"name": "TextAudio"' in manifest
+    assert '"src": "/static/textaudio-icon.png"' in manifest
+    assert 'apple-mobile-web-app-title" content="TextAudio"' in html

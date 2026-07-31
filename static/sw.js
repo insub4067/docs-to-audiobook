@@ -1,4 +1,4 @@
-const CACHE_NAME = "2026.08.01.17";
+const CACHE_NAME = "2026.08.01.18";
 
 const ASSETS_TO_CACHE = [
   "/",
@@ -6,7 +6,7 @@ const ASSETS_TO_CACHE = [
   "/static/app.js",
   "/static/admin.css",
   "/static/admin.js",
-  "/static/icon.jpg",
+  "/static/textaudio-icon.png",
   "https://unpkg.com/lucide@latest",
   "https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Noto+Sans+KR:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Noto+Serif+KR:wght@300;400;500;700&display=swap"
 ];
