@@ -1034,6 +1034,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
 
             urlFetchBtn.disabled = true;
+            urlFetchBtn.classList.add("is-loading");
             const originalLabel = urlFetchBtn.querySelector("span");
             const originalText = originalLabel ? originalLabel.textContent : "";
             if (originalLabel) originalLabel.textContent = "가져오는 중...";
@@ -1047,6 +1048,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 showToast(error.message, "error");
             } finally {
                 urlFetchBtn.disabled = false;
+                urlFetchBtn.classList.remove("is-loading");
                 if (originalLabel) originalLabel.textContent = originalText;
             }
         });

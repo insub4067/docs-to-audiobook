@@ -65,3 +65,12 @@ def test_modals_support_escape_and_restore_focus():
     assert "function restoreModalFocus" in source
     assert 'document.addEventListener("keydown"' in source
     assert 'event.key !== "Escape"' in source
+
+
+def test_url_fetch_button_shows_a_spinner_while_loading():
+    source = APP_JS.read_text(encoding="utf-8")
+    css = STYLE_CSS.read_text(encoding="utf-8")
+
+    assert 'urlFetchBtn.classList.add("is-loading")' in source
+    assert 'urlFetchBtn.classList.remove("is-loading")' in source
+    assert ".btn-url-fetch.is-loading svg" in css
