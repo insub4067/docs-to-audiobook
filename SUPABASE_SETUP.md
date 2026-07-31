@@ -29,6 +29,8 @@ Supabase를 사용하여 사용자 인증, 데이터베이스, 오디오북 스�
 SUPABASE_URL=https://xxxxx.supabase.co
 SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 SUPABASE_JWT_SECRET=your-jwt-secret-from-project-settings
+# 쉼표로 구분한 관리자 계정 이메일. 이 값이 없으면 /admin 접근이 모두 차단됩니다.
+ADMIN_EMAILS=admin@example.com
 ```
 
 ---
@@ -86,6 +88,21 @@ CREATE INDEX idx_playback_history_user_id ON playback_history(user_id);
 CREATE UNIQUE INDEX idx_playback_history_unique ON playback_history(user_id, audiobook_id);
 ```
 
+### 2.4 제품 이벤트 테이블
+```sql
+CREATE TABLE product_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  event_name VARCHAR(50) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_product_events_created_at ON product_events(created_at);
+CREATE INDEX idx_product_events_user_id ON product_events(user_id);
+```
+
+관리자 대시보드는 이 테이블의 생성 시작·완료·실패·재생 시작 이벤트만 집계하며, 문서 내용이나 제목은 저장하지 않는다.
+
 ---
 
 ## 🔐 3단계: Row Level Security (RLS) 정책 설정
@@ -127,6 +144,14 @@ CREATE POLICY "Users can manage own history" ON playback_history
 
 CREATE POLICY "Users can update own history" ON playback_history
   FOR UPDATE USING (auth.uid() = user_id);
+```
+
+### 3.4 제품 이벤트 테이블 정책
+```sql
+ALTER TABLE product_events ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can insert own events" ON product_events
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
 ```
 
 ---

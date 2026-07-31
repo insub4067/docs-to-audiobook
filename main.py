@@ -12,6 +12,7 @@ import re
 import json
 import shutil
 import secrets
+from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Response, BackgroundTasks, Header, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -197,6 +198,89 @@ def _supabase_or_503():
     if not client:
         raise HTTPException(status_code=503, detail="클라우드 저장소에 연결할 수 없습니다.")
     return client
+
+
+def require_admin_user(authorization: str) -> str:
+    """환경변수 허용 목록에 등록된 사용자만 관리자 통계를 볼 수 있게 한다."""
+    user_id = require_user_id(authorization)
+    allowed_emails = {
+        email.strip().lower()
+        for email in os.getenv("ADMIN_EMAILS", "").split(",")
+        if email.strip()
+    }
+    if not allowed_emails:
+        raise HTTPException(status_code=403, detail="관리자 계정이 설정되지 않았습니다.")
+
+    supabase = _supabase_or_503()
+    try:
+        user = supabase.table("users").select("email").eq("id", user_id).maybe_single().execute().data
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"관리자 권한을 확인하지 못했습니다: {e}")
+    if not user or (user.get("email") or "").lower() not in allowed_emails:
+        raise HTTPException(status_code=403, detail="관리자만 접근할 수 있습니다.")
+    return user_id
+
+
+def _parse_event_time(value: str | None):
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+
+
+def load_admin_metrics():
+    """개인 콘텐츠를 조회하지 않고 사용자·이벤트 집계만 반환한다."""
+    now = datetime.now(timezone.utc)
+    week_ago = now - timedelta(days=7)
+    two_weeks_ago = now - timedelta(days=14)
+    thirty_days_ago = now - timedelta(days=30)
+    supabase = _supabase_or_503()
+    try:
+        users = supabase.table("users").select("id,created_at").execute().data or []
+        audiobooks = supabase.table("audiobooks").select("id,created_at").execute().data or []
+        events = supabase.table("product_events").select("user_id,event_name,created_at") \
+            .gte("created_at", thirty_days_ago.isoformat()).execute().data or []
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"관리자 통계를 불러오지 못했습니다: {e}")
+
+    dated_events = [(event, _parse_event_time(event.get("created_at"))) for event in events]
+    recent_events = [(event, event_time) for event, event_time in dated_events if event_time]
+    weekly_active_users = {event["user_id"] for event, event_time in recent_events if event_time >= week_ago}
+    daily_active_users = {event["user_id"] for event, event_time in recent_events if event_time >= now - timedelta(days=1)}
+    started = sum(event["event_name"] == "generation_started" for event, _ in recent_events)
+    completed = sum(event["event_name"] == "generation_completed" for event, _ in recent_events)
+    failed = sum(event["event_name"] == "generation_failed" for event, _ in recent_events)
+
+    first_event_by_user = {}
+    for event, event_time in recent_events:
+        user_id = event.get("user_id")
+        if user_id and (user_id not in first_event_by_user or event_time < first_event_by_user[user_id]):
+            first_event_by_user[user_id] = event_time
+    week_one_cohort = {
+        user_id for user_id, event_time in first_event_by_user.items()
+        if two_weeks_ago <= event_time < week_ago
+    }
+    returning_users = {
+        event["user_id"] for event, event_time in recent_events
+        if event_time >= week_ago and event.get("user_id") in week_one_cohort
+    }
+
+    return {
+        "total_users": len(users),
+        "new_users_7d": sum((_parse_event_time(user.get("created_at")) or now) >= week_ago for user in users),
+        "total_audiobooks": len(audiobooks),
+        "daily_active_users": len(daily_active_users),
+        "weekly_active_users": len(weekly_active_users),
+        "generation_started_30d": started,
+        "generation_completed_30d": completed,
+        "generation_failed_30d": failed,
+        "generation_success_rate": round(completed / (completed + failed) * 100) if completed + failed else None,
+        "playback_started_30d": sum(event["event_name"] == "playback_started" for event, _ in recent_events),
+        "week_one_retention_rate": round(len(returning_users) / len(week_one_cohort) * 100) if week_one_cohort else None,
+        "retention_cohort_size": len(week_one_cohort),
+    }
 
 
 def _object_paths(user_id: str, audiobook_id: str):
@@ -1012,6 +1096,32 @@ async def get_config():
         "google_client_id": providers.get("google", "")
     })
 
+
+@app.post("/api/events")
+async def create_product_event(request: Request, payload: dict, authorization: str = Header(None)):
+    """개인 콘텐츠 없이 제품 이용 지표에 필요한 이벤트만 기록한다."""
+    user_id = require_user_id(authorization)
+    enforce_rate_limit(request, "product_event", limit=120, window_sec=600)
+    event_name = payload.get("event_name")
+    if event_name not in {"generation_started", "generation_completed", "generation_failed", "playback_started"}:
+        raise HTTPException(status_code=400, detail="지원하지 않는 이벤트입니다.")
+    try:
+        _supabase_or_503().table("product_events").insert({
+            "user_id": user_id,
+            "event_name": event_name,
+        }).execute()
+        return {"recorded": event_name}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"이벤트를 기록하지 못했습니다: {e}")
+
+
+@app.get("/api/admin/metrics")
+async def get_admin_metrics(authorization: str = Header(None)):
+    require_admin_user(authorization)
+    return load_admin_metrics()
+
 @app.get("/manifest.json")
 async def get_manifest():
     return FileResponse(os.path.join(STATIC_DIR, "manifest.json"), media_type="application/json")
@@ -1026,6 +1136,14 @@ async def read_index():
     if os.path.exists(index_path):
         return FileResponse(index_path)
     return JSONResponse(status_code=404, content={"message": "Frontend static file index.html not found. Build the frontend first."})
+
+
+@app.get("/admin")
+async def read_admin_dashboard():
+    admin_path = os.path.join(STATIC_DIR, "admin.html")
+    if os.path.exists(admin_path):
+        return FileResponse(admin_path)
+    return JSONResponse(status_code=404, content={"message": "관리자 대시보드를 찾을 수 없습니다."})
 
 # --------------------------------------------------
 # Share Feature: 24-hour temporary server storage
@@ -1467,6 +1585,84 @@ async def list_audiobooks(authorization: str = Header(None)):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"목록을 불러오지 못했습니다: {e}")
+
+
+@app.patch("/api/audiobooks/{audiobook_id}")
+async def update_audiobook(audiobook_id: str, payload: dict, authorization: str = Header(None)):
+    """내 오디오북 제목을 수정한다."""
+    user_id = require_user_id(authorization)
+    title = (payload.get("title") or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="제목이 필요합니다.")
+
+    supabase = _supabase_or_503()
+    try:
+        response = supabase.table("audiobooks").update({"title": title[:255]}) \
+            .eq("id", audiobook_id).eq("user_id", user_id).execute()
+        if not response.data:
+            raise HTTPException(status_code=404, detail="해당 오디오북을 찾을 수 없습니다.")
+        return {"id": audiobook_id, "title": title[:255]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"제목 수정에 실패했습니다: {e}")
+
+
+def _validate_playback_state(payload: dict) -> tuple[float, float, str]:
+    position = payload.get("current_time_seconds")
+    speed = payload.get("playback_speed", 1.0)
+    repeat_mode = payload.get("repeat_mode", "off")
+    if not isinstance(position, (int, float)) or isinstance(position, bool) or position < 0:
+        raise HTTPException(status_code=400, detail="재생 위치가 올바르지 않습니다.")
+    if speed not in (0.75, 1.0, 1.25, 1.5, 2.0):
+        raise HTTPException(status_code=400, detail="재생 속도가 올바르지 않습니다.")
+    if repeat_mode not in ("off", "all", "one"):
+        raise HTTPException(status_code=400, detail="반복 모드가 올바르지 않습니다.")
+    return position, speed, repeat_mode
+
+
+@app.get("/api/audiobooks/{audiobook_id}/playback")
+async def get_playback_state(audiobook_id: str, authorization: str = Header(None)):
+    """현재 계정의 오디오북 재생 상태를 반환한다."""
+    user_id = require_user_id(authorization)
+    supabase = _supabase_or_503()
+    try:
+        response = supabase.table("playback_history").select("*") \
+            .eq("audiobook_id", audiobook_id).eq("user_id", user_id).maybe_single().execute()
+        if response.data:
+            return response.data
+        return {
+            "audiobook_id": audiobook_id,
+            "current_time_seconds": 0,
+            "playback_speed": 1.0,
+            "repeat_mode": "off",
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"재생 상태를 불러오지 못했습니다: {e}")
+
+
+@app.put("/api/audiobooks/{audiobook_id}/playback")
+async def save_playback_state(audiobook_id: str, payload: dict, authorization: str = Header(None)):
+    """현재 계정의 오디오북 재생 상태를 최신 값으로 저장한다."""
+    user_id = require_user_id(authorization)
+    position, speed, repeat_mode = _validate_playback_state(payload)
+    supabase = _supabase_or_503()
+    state = {
+        "user_id": user_id,
+        "audiobook_id": audiobook_id,
+        "current_time_seconds": position,
+        "playback_speed": speed,
+        "repeat_mode": repeat_mode,
+        "last_played_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        response = supabase.table("playback_history").upsert(
+            state, on_conflict="user_id,audiobook_id"
+        ).execute()
+        return response.data[0] if response.data else state
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"재생 상태 저장에 실패했습니다: {e}")
 
 
 @app.delete("/api/audiobooks/{audiobook_id}")

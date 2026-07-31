@@ -15,4 +15,5 @@ job_audio/
 voice_previews/
 .coverage
 .pytest_cache/
+.worktrees/
 venv/

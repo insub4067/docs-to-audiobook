@@ -66,6 +66,87 @@ async def test_delete_audiobook_forbidden(mock_supabase, mock_auth):
         assert response.status_code == 404
 
 
+@pytest.mark.asyncio
+async def test_update_audiobook_title_for_owner(mock_supabase, mock_auth):
+    mock_supabase.table().update().eq().eq().execute.return_value = MagicMock(
+        data=[{"id": "book1", "title": "새 제목"}]
+    )
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.patch(
+            "/api/audiobooks/book1",
+            json={"title": " 새 제목 "},
+            headers={"Authorization": "Bearer fake_token"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"id": "book1", "title": "새 제목"}
+
+
+@pytest.mark.asyncio
+async def test_save_playback_state_for_owner(mock_supabase, mock_auth):
+    mock_supabase.table().upsert().execute.return_value = MagicMock(
+        data=[{
+            "audiobook_id": "book1",
+            "current_time_seconds": 120,
+            "playback_speed": 1.25,
+            "repeat_mode": "all",
+            "updated_at": "2026-08-01T00:00:00+00:00",
+        }]
+    )
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.put(
+            "/api/audiobooks/book1/playback",
+            json={"current_time_seconds": 120, "playback_speed": 1.25, "repeat_mode": "all"},
+            headers={"Authorization": "Bearer fake_token"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["current_time_seconds"] == 120
+    assert response.json()["playback_speed"] == 1.25
+    assert response.json()["repeat_mode"] == "all"
+
+
+@pytest.mark.asyncio
+async def test_get_playback_state_returns_saved_state(mock_supabase, mock_auth):
+    mock_supabase.table().select().eq().eq().maybe_single().execute.return_value = MagicMock(
+        data={
+            "audiobook_id": "book1",
+            "current_time_seconds": 120,
+            "playback_speed": 1.25,
+            "repeat_mode": "all",
+            "updated_at": "2026-08-01T00:00:00+00:00",
+        }
+    )
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(
+            "/api/audiobooks/book1/playback",
+            headers={"Authorization": "Bearer fake_token"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["current_time_seconds"] == 120
+
+
+@pytest.mark.asyncio
+async def test_admin_metrics_are_available_only_through_admin_route():
+    metrics = {
+        "total_users": 12,
+        "weekly_active_users": 5,
+        "week_one_retention_rate": 40,
+        "generation_success_rate": 92,
+    }
+    with patch("main.require_admin_user", return_value="admin-id"):
+        with patch("main.load_admin_metrics", return_value=metrics):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+                response = await client.get("/api/admin/metrics", headers={"Authorization": "Bearer admin"})
+
+    assert response.status_code == 200
+    assert response.json() == metrics
+
+
 # ---- /api/auth/me ----
 # 이전에 커버리지 0%였던 엔드포인트. 오늘 세션에서 몇 시간을 쓴
 # "재로그인해도 세션이 끊기는" 버그의 클라이언트 쪽 원인이 바로 이

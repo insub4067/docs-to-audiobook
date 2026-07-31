@@ -350,6 +350,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     let currentReadingAudioId = null;
     let currentAudioObject = null;
     let currentReaderObjectUrl = null; 
+    let lastPlaybackSyncTime = 0;
+    let lastPositionSaveSecond = -1;
 
     // Initialize Database and App
     initDB().then(() => {
@@ -712,9 +714,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const data = e.target.result;
                 if (data) {
                     data.lastPosition = lastPosition;
+                    data.playbackUpdatedAt = Date.now();
                     store.put(data);
                 }
-                resolve();
+                resolve(data);
             };
             request.onerror = (e) => reject(e.target.error);
         });
@@ -1182,6 +1185,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const inlineStatus = progressItem.querySelector(".generating-status");
 
         try {
+            trackProductEvent("generation_started");
             const formData = new FormData();
             formData.append("text_id", textId);
             formData.append("text_access_token", textAccessToken);
@@ -1268,6 +1272,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             // 진행 아이템 제거 후 라이브러리 다시 렌더링
             progressItem.remove();
             showToast("저장되었습니다!", "success");
+            trackProductEvent("generation_completed");
             renderLibrary();
             // 만들자마자 클라우드에 올린다. 예전에는 페이지 로드 때만
             // 동기화해서, 만든 뒤 바로 로그아웃하면 복구 불가로 사라졌다.
@@ -1282,6 +1287,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 libraryEmpty.style.display = "flex";
             }
             showToast(error.message, "error");
+            trackProductEvent("generation_failed");
             return false;
         }
     }
@@ -1679,6 +1685,49 @@ document.addEventListener("DOMContentLoaded", async () => {
         return filled;
     }
 
+    async function fetchPlaybackState(entry) {
+        if (!entry.cloudId || !isLoggedIn()) return entry;
+        try {
+            const res = await fetch(`/api/audiobooks/${entry.cloudId}/playback`, {
+                headers: authHeaders()
+            });
+            if (!res.ok) return entry;
+            const state = await res.json();
+            const updatedAt = Date.parse(state.updated_at || state.last_played_at || "") || 0;
+            if (updatedAt <= (entry.playbackUpdatedAt || 0)) return entry;
+
+            const synced = {
+                ...entry,
+                lastPosition: state.current_time_seconds || 0,
+                playbackSpeed: state.playback_speed || 1.0,
+                repeatMode: state.repeat_mode || "off",
+                playbackUpdatedAt: updatedAt,
+            };
+            await saveAudiobookToDB(synced);
+            return synced;
+        } catch (e) {
+            console.error("재생 상태 동기화 실패:", e);
+            return entry;
+        }
+    }
+
+    async function savePlaybackState(entry, position) {
+        if (!entry.cloudId || !isLoggedIn()) return;
+        const res = await fetch(`/api/audiobooks/${entry.cloudId}/playback`, {
+            method: "PUT",
+            headers: { ...authHeaders(), "Content-Type": "application/json" },
+            body: JSON.stringify({
+                current_time_seconds: position,
+                playback_speed: entry.playbackSpeed || speedOptions[currentSpeedIndex],
+                repeat_mode: entry.repeatMode || repeatModes[currentRepeatMode],
+            })
+        });
+        if (!res.ok) throw new Error("재생 상태 저장 실패");
+        const state = await res.json();
+        entry.playbackUpdatedAt = Date.parse(state.updated_at || state.last_played_at || "") || Date.now();
+        await saveAudiobookToDB(entry);
+    }
+
     let syncing = false;
     /**
      * @returns {Promise<{uploaded:number, added:number, failed:number, ok:boolean}>}
@@ -1726,10 +1775,20 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
 
             // 2) 클라우드에만 있는 것 목록에 추가 (오디오는 재생 시 받는다)
-            const known = new Set(local.map(i => i.cloudId).filter(Boolean));
+            const localByCloudId = new Map(local.filter(i => i.cloudId).map(i => [i.cloudId, i]));
             for (const c of cloud) {
-                if (known.has(c.id)) continue;
-                await saveAudiobookToDB({
+                const existing = localByCloudId.get(c.id);
+                if (existing) {
+                    const refreshed = await fetchPlaybackState({
+                        ...existing,
+                        title: c.title || c.file_name || existing.title,
+                        audioUrl: c.audio_url,
+                        sentencesUrl: c.sentences_url,
+                    });
+                    await saveAudiobookToDB(refreshed);
+                    continue;
+                }
+                const added = {
                     id: c.id,
                     cloudId: c.id,
                     title: c.title || c.file_name || "제목 없음",
@@ -1744,7 +1803,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                     }),
                     sizeBytes: 0,
                     charCount: 0
-                });
+                };
+                await saveAudiobookToDB(await fetchPlaybackState(added));
                 result.added++;
             }
 
@@ -1770,6 +1830,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const actionSheetBackdrop = document.getElementById("actionSheetBackdrop");
     const actionShareBtn = document.getElementById("actionShareBtn");
     const actionDownloadBtn = document.getElementById("actionDownloadBtn");
+    const actionEditTitleBtn = document.getElementById("actionEditTitleBtn");
     const actionDeleteBtn = document.getElementById("actionDeleteBtn");
     const actionCancelBtn = document.getElementById("actionCancelBtn");
     let actionSheetTarget = null; // 현재 선택된 오디오북 객체
@@ -1777,6 +1838,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     function openActionSheet(audio) {
         actionSheetTarget = audio;
         actionDeleteBtn.style.display = audio.isDefault ? "none" : "";
+        actionEditTitleBtn.style.display = audio.isDefault ? "none" : "";
         actionSheetBackdrop.classList.add("show");
         document.body.style.overflow = "hidden";
         rememberModalFocus(actionSheetBackdrop, actionShareBtn);
@@ -2037,6 +2099,36 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     });
 
+    actionEditTitleBtn.addEventListener("click", async () => {
+        if (!actionSheetTarget || actionSheetTarget.isDefault) return;
+        const target = actionSheetTarget;
+        closeActionSheet();
+        const title = window.prompt("오디오북 제목", getAudiobookDisplayTitle(target.title));
+        if (title === null) return;
+        const nextTitle = title.trim();
+        if (!nextTitle) {
+            showToast("제목을 입력해 주세요.", "error");
+            return;
+        }
+
+        try {
+            if (target.cloudId && isLoggedIn()) {
+                const res = await fetch(`/api/audiobooks/${target.cloudId}`, {
+                    method: "PATCH",
+                    headers: { ...authHeaders(), "Content-Type": "application/json" },
+                    body: JSON.stringify({ title: nextTitle })
+                });
+                if (!res.ok) throw new Error("제목 수정 실패");
+            }
+            await saveAudiobookToDB({ ...target, title: nextTitle });
+            renderLibrary();
+            showToast("제목을 수정했습니다.", "success");
+        } catch (e) {
+            console.error(e);
+            showToast("제목을 수정하지 못했습니다.", "error");
+        }
+    });
+
     if (readerShareBtn) {
         readerShareBtn.addEventListener("click", async () => {
             if (!currentAudioObject) return;
@@ -2178,6 +2270,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         currentReadingAudioId = audio.id;
         currentAudioObject = audio;
+        trackProductEvent("playback_started");
+        lastPositionSaveSecond = -1;
+        const savedSpeedIndex = speedOptions.indexOf(audio.playbackSpeed);
+        if (savedSpeedIndex !== -1) currentSpeedIndex = savedSpeedIndex;
+        const savedRepeatIndex = repeatModes.indexOf(audio.repeatMode);
+        if (savedRepeatIndex !== -1) currentRepeatMode = savedRepeatIndex;
+        applySpeedUI();
+        applyRepeatUI();
 
         // UI 리셋
         readerBookTitle.textContent = getAudiobookDisplayTitle(audio.title);
@@ -2387,9 +2487,19 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }
             }
             
-            // 재생 위치 주기적 저장 (5초마다)
-            if (currentAudioObject && Math.floor(currentSec) % 5 === 0 && currentSec > 0) {
+            // 로컬에는 5초마다 저장하고, 클라우드에는 30초마다만 동기화한다.
+            const currentSecond = Math.floor(currentSec);
+            if (currentAudioObject && currentSecond % 5 === 0 && currentSecond > 0 && currentSecond !== lastPositionSaveSecond) {
+                lastPositionSaveSecond = currentSecond;
+                currentAudioObject.playbackSpeed = speedOptions[currentSpeedIndex];
+                currentAudioObject.repeatMode = repeatModes[currentRepeatMode];
                 updateAudiobookPosition(currentAudioObject.id, currentSec);
+                if (Date.now() - lastPlaybackSyncTime >= 30000) {
+                    lastPlaybackSyncTime = Date.now();
+                    savePlaybackState(currentAudioObject, currentSec).catch((error) => {
+                        console.error("재생 상태 저장 실패:", error);
+                    });
+                }
             }
         };
     }
@@ -2400,7 +2510,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (currentAudioObject && readerAudio.currentTime > 0) {
             updateAudiobookPosition(currentAudioObject.id, readerAudio.currentTime);
             currentAudioObject.lastPosition = readerAudio.currentTime;
+            currentAudioObject.playbackSpeed = speedOptions[currentSpeedIndex];
+            currentAudioObject.repeatMode = repeatModes[currentRepeatMode];
+            savePlaybackState(currentAudioObject, readerAudio.currentTime).catch((error) => {
+                console.error("재생 상태 저장 실패:", error);
+            });
         }
+        lastPositionSaveSecond = -1;
         
         // closeReader 내부의 이벤트 초기화 부분
         readerAudio.pause();
@@ -2930,6 +3046,15 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function isLoggedIn() {
         return !!localStorage.getItem("authToken");
+    }
+
+    function trackProductEvent(eventName) {
+        if (!isLoggedIn()) return;
+        fetch("/api/events", {
+            method: "POST",
+            headers: { ...authHeaders(), "Content-Type": "application/json" },
+            body: JSON.stringify({ event_name: eventName }),
+        }).catch((error) => console.warn("제품 이벤트 기록 실패:", error));
     }
 
     // 설정을 다 마친 뒤 생성 버튼을 눌러서야 로그인이 필요하다는 걸 알면
