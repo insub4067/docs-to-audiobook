@@ -221,6 +221,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     
     setupSwipeToDismiss(document.getElementById("actionSheetBackdrop"), '.action-sheet');
     setupSwipeToDismiss(document.getElementById("indexSheetBackdrop"), '.index-sheet');
+    setupSwipeToDismiss(document.getElementById("loginPromptBackdrop"), '.action-sheet');
 
     // Close generation modal
     closeModalBtn.addEventListener("click", () => {
@@ -926,6 +927,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         charCountBadge.style.display = "block";
 
         generateBtn.disabled = false;
+        updateGenerateHint();
 
         setTimeout(() => {
             generationModal.classList.add("show");
@@ -1058,27 +1060,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (!currentTextId) return;
 
         if (!isLoggedIn()) {
-            if (confirm("로그인이 필요합니다. 로그인하시겠습니까? (구글로 로그인)")) {
-                const originalName = uploadedFile ? uploadedFile.name : "unknown_doc";
-                const pendingGen = {
-                    textId: currentTextId,
-                    filename: toAudioFilename(originalName),
-                    charCount: parseInt(charCountBadge.textContent.replace(/[^0-9]/g, "")) || 0,
-                    voice: voiceSelect.value,
-                    rate: getFormattedSpeed(parseInt(speedSlider.value)),
-                    pitch: getFormattedPitch(parseInt(pitchSlider.value))
-                };
-                sessionStorage.setItem("pendingGeneration", JSON.stringify(pendingGen));
-
-                generationModal.classList.remove("show");
-                document.body.style.overflow = "";
-                const loginBtn = document.getElementById("googleLoginBtn");
-                if (loginBtn) {
-                    loginBtn.scrollIntoView({ behavior: "smooth", block: "center" });
-                    const googleBtn = loginBtn.querySelector('div[role="button"]');
-                    if (googleBtn) googleBtn.click();
-                }
-            }
+            openLoginPromptSheet();
             return;
         }
 
@@ -1745,6 +1727,51 @@ document.addEventListener("DOMContentLoaded", async () => {
     actionCancelBtn.addEventListener("click", closeActionSheet);
     actionSheetBackdrop.addEventListener("click", (e) => {
         if (e.target === actionSheetBackdrop) closeActionSheet();
+    });
+
+    // --- Login Prompt ActionSheet ---
+    // 오디오북 생성을 시도했는데 비로그인 상태일 때 네이티브 confirm() 대신
+    // 앱의 다른 바텀시트와 같은 톤으로 로그인을 유도한다.
+    const loginPromptBackdrop = document.getElementById("loginPromptBackdrop");
+    const loginPromptConfirmBtn = document.getElementById("loginPromptConfirmBtn");
+    const loginPromptCancelBtn = document.getElementById("loginPromptCancelBtn");
+
+    function openLoginPromptSheet() {
+        loginPromptBackdrop.classList.add("show");
+        document.body.style.overflow = "hidden";
+    }
+
+    function closeLoginPromptSheet() {
+        loginPromptBackdrop.classList.remove("show");
+        document.body.style.overflow = "";
+    }
+
+    loginPromptCancelBtn.addEventListener("click", closeLoginPromptSheet);
+    loginPromptBackdrop.addEventListener("click", (e) => {
+        if (e.target === loginPromptBackdrop) closeLoginPromptSheet();
+    });
+
+    loginPromptConfirmBtn.addEventListener("click", () => {
+        const originalName = uploadedFile ? uploadedFile.name : "unknown_doc";
+        const pendingGen = {
+            textId: currentTextId,
+            filename: toAudioFilename(originalName),
+            charCount: parseInt(charCountBadge.textContent.replace(/[^0-9]/g, "")) || 0,
+            voice: voiceSelect.value,
+            rate: getFormattedSpeed(parseInt(speedSlider.value)),
+            pitch: getFormattedPitch(parseInt(pitchSlider.value))
+        };
+        sessionStorage.setItem("pendingGeneration", JSON.stringify(pendingGen));
+
+        closeLoginPromptSheet();
+        generationModal.classList.remove("show");
+        document.body.style.overflow = "";
+        const loginBtn = document.getElementById("googleLoginBtn");
+        if (loginBtn) {
+            loginBtn.scrollIntoView({ behavior: "smooth", block: "center" });
+            const googleBtn = loginBtn.querySelector('div[role="button"]');
+            if (googleBtn) googleBtn.click();
+        }
     });
 
 
@@ -2825,6 +2852,15 @@ function isLoggedIn() {
     return !!localStorage.getItem("authToken");
 }
 
+// 설정을 다 마친 뒤 생성 버튼을 눌러서야 로그인이 필요하다는 걸 알면
+// 이미 들인 노력이 헛수고처럼 느껴진다. 모달을 여는 시점에 미리 알려준다.
+// showAppUI(DOMContentLoaded 클로저 밖)와 applyExtractedText(클로저 안)
+// 양쪽에서 호출하므로 전역 스코프에 둔다.
+function updateGenerateHint() {
+    const hint = document.getElementById("generateHint");
+    if (hint) hint.style.display = isLoggedIn() ? "none" : "block";
+}
+
 async function initializeAuth() {
     const token = localStorage.getItem("authToken");
     const authContainer = document.getElementById("authContainer");
@@ -2888,6 +2924,8 @@ function showAppUI(user, token) {
         // 비로그인일 때만 구글 버튼을 그린다
         setupSocialLogin();
     }
+
+    updateGenerateHint();
 }
 
 /**

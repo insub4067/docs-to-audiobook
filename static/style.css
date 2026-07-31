@@ -6,7 +6,7 @@
     --card-bg: rgba(255, 255, 255, 0.8);
     --card-bg-solid: #FFFFFF;
     --text-color: #3B2F2F;
-    --text-muted: #8E7C71; /* Warm gray */
+    --text-muted: #7A6559; /* Warm gray - 배경(#FAF5E6) 대비 4.5:1 이상 확보 */
     --primary-color: #A67C52; /* Warm brown accent */
     --primary-hover: #8B5E33;
     --accent-color: #C5A981; /* Light brown */
@@ -360,7 +360,7 @@ html {
     border: none;
     cursor: pointer;
     color: var(--text-muted);
-    padding: 8px;
+    padding: 10px; /* 아이콘(24px) + 패딩으로 44pt 터치 타겟 확보 */
     border-radius: 50%;
     transition: all 0.2s ease;
 }
@@ -908,8 +908,8 @@ input[type="range"]::-webkit-slider-thumb:active {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: 44px; /* 44pt 터치 타겟 하한 */
+    height: 44px;
     background: rgba(93, 75, 64, 0.06);
     border-radius: 50%;
     border: none;
@@ -1733,6 +1733,30 @@ input[type="range"]::-webkit-slider-thumb:active {
     color: #c0392b;
 }
 
+.login-prompt-body {
+    padding: 4px 24px 18px;
+    text-align: center;
+}
+
+.login-prompt-title {
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--text-color);
+    margin-bottom: 6px;
+}
+
+.login-prompt-desc {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.generate-hint {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    text-align: center;
+    margin-bottom: 10px;
+}
+
 .action-sheet-btn-cancel {
     justify-content: center;
     font-weight: 600;
@@ -1785,8 +1809,8 @@ input[type="range"]::-webkit-slider-thumb:active {
 }
 
 .btn-logout {
-    width: 36px;
-    height: 36px;
+    width: 44px; /* 44pt 터치 타겟 하한 */
+    height: 44px;
     border-radius: 50%;
     background: var(--glass-bg);
     border: 1px solid var(--glass-border);
@@ -2018,6 +2042,17 @@ input[type="range"]::-webkit-slider-thumb:active {
     justify-content: center;
     cursor: pointer;
     color: var(--text-muted);
+}
+
+/* 시각적 크기(26px)는 유지하되, 탭 영역만 44pt로 넓힌다 */
+.pwa-close-btn::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    transform: translate(-50%, -50%);
 }
 
 .pwa-close-btn svg {
