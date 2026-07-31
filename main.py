@@ -322,16 +322,28 @@ def extract_text(file_path: str, filename: str) -> str:
     else:
         raise HTTPException(status_code=400, detail="지원하지 않는 파일 형식입니다. (지원: .docx, .pdf, .txt, .md, .hwp)")
 
+def parse_heading_line(line: str) -> tuple[int, str] | None:
+    stripped = line.strip().lstrip("\ufeff")
+    markdown_match = re.match(r'^(#{1,3})\s+(.+)$', stripped)
+    if markdown_match:
+        return len(markdown_match.group(1)), re.sub(r'[*_~`\\]', '', markdown_match.group(2)).strip()
+    if re.search(r'(?:^|[\s\-—:])제\s*\d+\s*(?:장|부|절)(?=\s|$)', stripped):
+        return 1, stripped
+    if re.match(r'^\d+(?:\.\d+)*[.)]\s+\S', stripped):
+        return 1, stripped
+    return None
+
+
 def preprocess_text(text: str) -> str:
     # 1. Clean line breaks: single newline to space, double newline to paragraph break with pause indicator
-    cleaned_text = text.replace("\r\n", "\n")
+    cleaned_text = text.lstrip("\ufeff").replace("\r\n", "\n")
     
     # 2. Prevent headings from merging with the next paragraph
     lines = cleaned_text.split('\n')
     for i in range(len(lines)):
         line = lines[i].strip()
-        # If the line is a markdown heading, ensure it ends with a period so TTS treats it as a separate sentence
-        if re.match(r'^(#{1,6})', line) and not line.endswith('.'):
+        # 제목을 별도 문장으로 유지해 다음 본문이 제목 처리되는 것을 막는다.
+        if parse_heading_line(line) and not line.endswith('.'):
             lines[i] = line + "."
     cleaned_text = '\n'.join(lines)
 
@@ -355,19 +367,19 @@ def extract_markdown_headings(raw_text: str) -> list:
         if not stripped:
             continue
 
-        # Match # Heading, ## Heading, ### Heading
-        m = re.match(r'^(#{1,3})\s+(.+)$', stripped)
-        if m:
-            level = len(m.group(1))
-            display = re.sub(r'[*_~`\\]', '', m.group(2)).strip()
-            cleaned = clean_tts_text(m.group(2))
-            if cleaned:
-                headings.append({
-                    "cleaned_text": cleaned,
-                    "display_text": display,
-                    "level": level
-                })
+        heading = parse_heading_line(stripped)
+        if not heading:
             continue
+
+        level, display = heading
+
+        cleaned = clean_tts_text(display)
+        if cleaned:
+            headings.append({
+                "cleaned_text": cleaned,
+                "display_text": display,
+                "level": level
+            })
     return headings
 
 

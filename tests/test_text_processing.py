@@ -43,6 +43,29 @@ Final text.
     assert headings[2]["display_text"] == "Subtitle 2"
     assert headings[2]["cleaned_text"] == "Subtitle 2"
 
+
+def test_extract_markdown_headings_includes_clear_chapter_lines():
+    raw_text = (
+        "\ufeff데미안 (Demian) - 제1장 두 세계 (Chapter 1: Two Worlds)\n"
+        "첫 문단입니다.\n"
+        "2. 다음 장\n"
+        "둘째 문단입니다."
+    )
+
+    headings = extract_markdown_headings(raw_text)
+
+    assert [(item["display_text"], item["level"]) for item in headings] == [
+        ("데미안 (Demian) - 제1장 두 세계 (Chapter 1: Two Worlds)", 1),
+        ("2. 다음 장", 1),
+    ]
+    assert extract_markdown_headings("나는 열 살 무렵 이야기를 시작하려 한다.\n짧은 행") == []
+
+
+def test_preprocess_text_keeps_clear_chapter_lines_separate_from_body():
+    text = preprocess_text("제1장 두 세계\n첫 문단입니다.")
+
+    assert text == "제1장 두 세계. 첫 문단입니다."
+
 def test_clean_tts_text_edge_cases():
     # Emojis and special characters
     assert clean_tts_text("Hello 😊 world! 🚀") == "Hello 😊 world! 🚀"
