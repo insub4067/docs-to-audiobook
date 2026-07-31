@@ -30,21 +30,21 @@
                     <h2 id="retentionHeading">다시 듣는가</h2>
                 </div>
                 <div class="metric-grid">
-                    <article class="metric-card metric-card-primary">
+                    <button type="button" class="metric-card metric-card-primary" data-metric-card="weekly_active_users">
                         <p>주간 활성 사용자</p>
                         <strong data-metric="weekly_active_users">—</strong>
                         <span>최근 7일 이벤트 기준</span>
-                    </article>
-                    <article class="metric-card">
+                    </button>
+                    <button type="button" class="metric-card" data-metric-card="daily_active_users">
                         <p>일간 활성 사용자</p>
                         <strong data-metric="daily_active_users">—</strong>
                         <span>최근 24시간 이벤트 기준</span>
-                    </article>
-                    <article class="metric-card">
+                    </button>
+                    <button type="button" class="metric-card" data-metric-card="week_one_retention_rate">
                         <p>1주 재방문율</p>
                         <strong data-metric="week_one_retention_rate">—</strong>
                         <span id="retentionCohort">측정 코호트 없음</span>
-                    </article>
+                    </button>
                 </div>
             </section>
 
@@ -54,30 +54,44 @@
                     <h2 id="funnelHeading">만들고 듣는가</h2>
                 </div>
                 <div class="metric-grid metric-grid-wide">
-                    <article class="metric-card">
+                    <button type="button" class="metric-card" data-metric-card="total_users">
                         <p>전체 사용자</p>
                         <strong data-metric="total_users">—</strong>
                         <span><b data-metric="new_users_7d">—</b>명 · 최근 7일 가입</span>
-                    </article>
-                    <article class="metric-card">
+                    </button>
+                    <button type="button" class="metric-card" data-metric-card="generation_success_rate">
                         <p>생성 성공률</p>
                         <strong data-metric="generation_success_rate">—</strong>
                         <span><b data-metric="generation_completed_30d">—</b>건 완료 · 최근 30일</span>
-                    </article>
-                    <article class="metric-card">
+                    </button>
+                    <button type="button" class="metric-card" data-metric-card="playback_started_30d">
                         <p>첫 재생</p>
                         <strong data-metric="playback_started_30d">—</strong>
                         <span>최근 30일 시작 횟수</span>
-                    </article>
-                    <article class="metric-card">
+                    </button>
+                    <button type="button" class="metric-card" data-metric-card="total_audiobooks">
                         <p>보관함 오디오북</p>
                         <strong data-metric="total_audiobooks">—</strong>
                         <span><b data-metric="generation_failed_30d">—</b>건 · 최근 30일 실패</span>
-                    </article>
+                    </button>
                 </div>
             </section>
         </section>
     </main>
+    <div class="metric-detail-backdrop" id="metricDetailBackdrop" hidden></div>
+    <section class="metric-detail-sheet" id="metricDetailSheet" role="dialog" aria-modal="true" aria-labelledby="metricDetailTitle" hidden>
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <header>
+            <div>
+                <p class="section-kicker">METRIC DETAIL</p>
+                <h2 id="metricDetailTitle"></h2>
+            </div>
+            <button id="closeMetricDetailBtn" type="button" aria-label="지표 상세 닫기">닫기</button>
+        </header>
+        <strong id="metricDetailValue" class="metric-detail-value"></strong>
+        <p id="metricDetailDescription" class="metric-detail-description"></p>
+        <p id="metricDetailBasis" class="metric-detail-basis"></p>
+    </section>
     <script src="/static/admin.js"></script>
 </body>
 </html>

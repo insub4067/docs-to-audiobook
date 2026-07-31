@@ -141,6 +141,16 @@ def test_admin_dashboard_renders_retention_metrics():
     assert '관리자만 접근할 수 있습니다.' in source
 
 
+def test_admin_metric_cards_open_an_accessible_detail_sheet():
+    html = ADMIN_HTML.read_text(encoding="utf-8")
+    source = ADMIN_JS.read_text(encoding="utf-8")
+
+    assert 'data-metric-card="weekly_active_users"' in html
+    assert 'id="metricDetailSheet" role="dialog" aria-modal="true"' in html
+    assert 'function openMetricDetail(metricName, trigger)' in source
+    assert 'event.key === "Escape"' in source
+
+
 def test_profile_menu_can_be_closed_outside_or_with_escape():
     source = APP_JS.read_text(encoding="utf-8")
 
