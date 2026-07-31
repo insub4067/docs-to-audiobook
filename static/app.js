@@ -1,3 +1,14 @@
+function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, (character) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+    })[character]);
+}
+
+
 document.addEventListener("DOMContentLoaded", async () => {
     // Initialize Lucide Icons
     lucide.createIcons();
@@ -1089,6 +1100,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // 성공하면 true, 실패하면 false를 반환한다.
     async function generateAudiobook({ textId, filename, charCount, voice, rate, pitch }) {
         const audioFilename = filename;
+        const safeAudioFilename = escapeHtml(audioFilename);
 
         // 라이브러리 섹션에 인라인 진행 아이템 추가
         libraryEmpty.style.display = "none";
@@ -1098,7 +1110,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             <div class="audio-title-group">
                 <div class="generating-spinner"></div>
                 <div class="generating-info">
-                    <span class="audio-title">${audioFilename}</span>
+                    <span class="audio-title">${safeAudioFilename}</span>
                     <div class="generating-progress-track">
                         <div class="generating-progress-fill" style="width: 0%"></div>
                     </div>
@@ -1393,6 +1405,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 // 클라우드에만 있는 항목은 오디오도 문장도 아직 안 받은 상태다.
                 // 받고 나면 둘 다 생기므로 재생 가능한 것으로 보고 클릭을 열어준다.
                 const needsDownload = !audio.audioData && !!audio.audioUrl;
+                const safeTitle = escapeHtml(audio.title);
 
                 item.innerHTML = `
                     <div class="audio-item-bg" data-action="delete" data-id="${audio.id}">
@@ -1401,7 +1414,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     <div class="audio-item-front">
                         <div class="audio-title-group">
                             <i data-lucide="play-circle"></i>
-                            <span class="audio-title" title="${audio.title}">${audio.title}</span>
+                            <span class="audio-title" title="${safeTitle}">${safeTitle}</span>
                             ${audio.isDefault ? '<span class="default-badge" title="기본 제공 오디오북">기본 제공</span>' : ''}
                         </div>
                         <div class="audio-actions">

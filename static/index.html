@@ -46,7 +46,7 @@
             <!-- User Info Section (Hidden when not logged in) -->
             <div class="user-info" id="userInfo" style="display: none;">
                 <span class="user-email" id="userEmail"></span>
-                <button class="btn-logout" id="logoutBtn" title="로그아웃">
+                <button class="btn-logout" id="logoutBtn" aria-label="로그아웃" title="로그아웃">
                     <i data-lucide="log-out"></i>
                 </button>
             </div>
@@ -118,7 +118,7 @@
                 <div class="card-header">
                     <i data-lucide="folder-heart" class="header-icon"></i>
                     <h2>내 오디오북</h2>
-                    <button class="btn-icon" id="importLinkBtn" title="공유 링크 불러오기" style="margin-left: auto; width: 44px; height: 44px; border-radius: 50%; background: var(--glass-bg); border: 1px solid var(--glass-border); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-color); transition: all 0.3s ease;">
+                    <button class="btn-icon" id="importLinkBtn" aria-label="공유 링크 불러오기" title="공유 링크 불러오기" style="margin-left: auto; width: 44px; height: 44px; border-radius: 50%; background: var(--glass-bg); border: 1px solid var(--glass-border); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-color); transition: all 0.3s ease;">
                         <i data-lucide="link" style="width: 18px; height: 18px;"></i>
                     </button>
                 </div>
@@ -142,11 +142,11 @@
         </footer>
 
         <!-- Generation Modal (Bottom Sheet style) -->
-        <div class="generation-modal" id="generationModal">
+        <div class="generation-modal" id="generationModal" role="dialog" aria-modal="true" aria-labelledby="generationTitle">
             <div class="modal-content glass-card">
                 <header class="modal-header">
-                    <h2>오디오북 설정 및 미리보기</h2>
-                    <button class="btn-icon" id="closeModalBtn" title="닫기">
+                    <h2 id="generationTitle">오디오북 설정 및 미리보기</h2>
+                    <button class="btn-icon" id="closeModalBtn" aria-label="닫기" title="닫기">
                         <i data-lucide="x"></i>
                     </button>
                 </header>
@@ -179,7 +179,7 @@
                                         </select>
                                         <i data-lucide="chevron-down" class="select-arrow"></i>
                                     </div>
-                                    <button type="button" class="btn-voice-preview" id="voicePreviewBtn" title="선택한 목소리 미리듣기">
+                                    <button type="button" class="btn-voice-preview" id="voicePreviewBtn" aria-label="선택한 목소리 미리듣기" title="선택한 목소리 미리듣기">
                                         <i data-lucide="volume-2"></i>
                                         <span id="voicePreviewLabel">미리듣기</span>
                                     </button>
@@ -217,7 +217,7 @@
         </div>
 
         <!-- Conversion Overlay -->
-        <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-overlay" id="loadingOverlay" role="status" aria-live="polite">
             <div class="loader-card">
                 <div class="spinner-container">
                     <div class="double-bounce1"></div>
@@ -233,21 +233,21 @@
         </div>
 
         <!-- Reader Overlay (Full-screen Synced Reader) -->
-        <div class="reader-overlay" id="readerOverlay">
+        <div class="reader-overlay" id="readerOverlay" role="dialog" aria-modal="true" aria-label="오디오북 듣기">
             <div class="reader-container">
                 <header class="reader-header">
                     <h3 id="readerBookTitle" class="reader-book-title">책 제목</h3>
                     <div class="reader-header-actions" style="display: flex; gap: 8px;">
-                        <button class="btn-reader-close" id="readerIndexBtn" title="목차 보기 (Index)" type="button" style="display: none;">
+                        <button class="btn-reader-close" id="readerIndexBtn" aria-label="목차 보기" title="목차 보기" type="button" style="display: none;">
                             <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
                         </button>
-                        <button class="btn-reader-close" id="readerShareBtn" title="공유하기" type="button" style="display: none;">
+                        <button class="btn-reader-close" id="readerShareBtn" aria-label="공유하기" title="공유하기" type="button" style="display: none;">
                             <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
                         </button>
-                        <button class="btn-reader-close" id="saveSharedBtn" title="내 오디오북에 저장" style="display: none;">
+                        <button class="btn-reader-close" id="saveSharedBtn" aria-label="내 오디오북에 저장" title="내 오디오북에 저장" style="display: none;">
                             <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                         </button>
-                        <button class="btn-reader-close" id="closeReaderBtn" title="독서 모드 종료" type="button">
+                        <button class="btn-reader-close" id="closeReaderBtn" aria-label="오디오북 듣기 닫기" title="오디오북 듣기 닫기" type="button">
                             <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                         </button>
                     </div>
@@ -258,14 +258,14 @@
                 <footer class="reader-controls">
                     <audio id="readerAudio"></audio>
                     <div class="reader-player-ui">
-                        <button class="btn-player-skip" id="readerSkipBackBtn" title="10초 뒤로" type="button">
+                        <button class="btn-player-skip" id="readerSkipBackBtn" aria-label="10초 뒤로" title="10초 뒤로" type="button">
                             <i data-lucide="skip-back"></i>
                         </button>
-                        <button class="btn-player-play" id="readerPlayPauseBtn" title="재생/일시정지" type="button">
+                        <button class="btn-player-play" id="readerPlayPauseBtn" aria-label="재생 또는 일시정지" title="재생 또는 일시정지" type="button">
                             <svg id="playIconSvg" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
                             <svg id="pauseIconSvg" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="display:none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
                         </button>
-                        <button class="btn-player-skip" id="readerSkipForwardBtn" title="10초 앞으로" type="button">
+                        <button class="btn-player-skip" id="readerSkipForwardBtn" aria-label="10초 앞으로" title="10초 앞으로" type="button">
                             <i data-lucide="skip-forward"></i>
                         </button>
                         <div class="reader-progress-wrapper">
@@ -277,13 +277,13 @@
                         </div>
                     </div>
                     <div class="reader-secondary-controls">
-                        <button class="btn-reader-secondary" id="readerRepeatBtn" title="반복 모드" type="button">
+                        <button class="btn-reader-secondary" id="readerRepeatBtn" aria-label="반복 모드" title="반복 모드" type="button">
                             <i data-lucide="repeat"></i> <span id="readerRepeatText">반복 안 함</span>
                         </button>
-                        <button class="btn-reader-secondary" id="readerSpeedBtn" title="재생 속도" type="button">
+                        <button class="btn-reader-secondary" id="readerSpeedBtn" aria-label="재생 속도" title="재생 속도" type="button">
                             <i data-lucide="gauge"></i> <span id="readerSpeedText">1.0x</span>
                         </button>
-                        <button class="btn-reader-secondary" id="readerTimerBtn" title="취침 타이머" type="button">
+                        <button class="btn-reader-secondary" id="readerTimerBtn" aria-label="취침 타이머" title="취침 타이머" type="button">
                             <i data-lucide="moon"></i> <span id="readerTimerText">타이머</span>
                         </button>
                     </div>
@@ -294,7 +294,7 @@
     </div>
 
     <!-- ActionSheet Overlay -->
-    <div class="action-sheet-backdrop" id="actionSheetBackdrop">
+    <div class="action-sheet-backdrop" id="actionSheetBackdrop" role="dialog" aria-modal="true" aria-label="오디오북 작업">
         <div class="action-sheet" id="actionSheet">
             <div class="action-sheet-handle"></div>
             <button class="action-sheet-btn" id="actionShareBtn">
@@ -309,12 +309,12 @@
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                 삭제
             </button>
-            <button class="action-sheet-btn action-sheet-btn-cancel" id="actionCancelBtn">취소</button>
+            <button class="action-sheet-btn action-sheet-btn-cancel" id="actionCancelBtn">닫기</button>
         </div>
     </div>
 
     <!-- Login Prompt ActionSheet (비로그인 상태에서 오디오북 생성 시도 시) -->
-    <div class="action-sheet-backdrop" id="loginPromptBackdrop">
+    <div class="action-sheet-backdrop" id="loginPromptBackdrop" role="dialog" aria-modal="true" aria-label="로그인 안내">
         <div class="action-sheet" id="loginPromptSheet">
             <div class="action-sheet-handle"></div>
             <div class="login-prompt-body">
@@ -330,7 +330,7 @@
     </div>
 
     <!-- Index ActionSheet Overlay -->
-    <div class="action-sheet-backdrop" id="indexSheetBackdrop">
+    <div class="action-sheet-backdrop" id="indexSheetBackdrop" role="dialog" aria-modal="true" aria-label="목차">
         <div class="action-sheet index-sheet" id="indexSheet">
             <div class="action-sheet-handle"></div>
             <div class="index-sheet-header">
@@ -345,7 +345,7 @@
 
     <!-- iOS PWA Install Prompt -->
     <div id="iosPwaPrompt" class="ios-pwa-prompt">
-        <button class="pwa-close-btn" id="pwaCloseBtn" title="닫기">
+        <button class="pwa-close-btn" id="pwaCloseBtn" aria-label="닫기" title="닫기">
             <i data-lucide="x"></i>
         </button>
         <div class="pwa-prompt-content">
@@ -363,7 +363,7 @@
          body 직속에 둔다. 콘텐츠 계층(.app-container) 안에 있으면 조상에
          transform/filter/backdrop-filter가 하나만 생겨도 position:fixed의
          기준이 뷰포트에서 그 조상으로 바뀌어 스크롤을 따라 움직인다. -->
-    <div id="toast" class="toast">
+    <div id="toast" class="toast" role="status" aria-live="polite">
         <i id="toastIcon" data-lucide="info"></i>
         <span id="toastMessage">알림 메시지</span>
     </div>
