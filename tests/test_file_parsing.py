@@ -1,130 +1,107 @@
 import pytest
-import os
 from fastapi import HTTPException
 from main import extract_text
 
-def test_extract_text_txt():
-    # Test UTF-8 and CP949 parsing
-    test_file_utf8 = "test_utf8.txt"
-    test_file_cp949 = "test_cp949.txt"
-    
-    with open(test_file_utf8, "w", encoding="utf-8") as f:
-        f.write("안녕 세계 UTF-8")
-        
-    with open(test_file_cp949, "w", encoding="cp949") as f:
-        f.write("안녕 세계 CP949")
-        
-    try:
-        content_utf8 = extract_text(test_file_utf8, "test_utf8.txt")
-        assert content_utf8 == "안녕 세계 UTF-8"
-        
-        content_cp949 = extract_text(test_file_cp949, "test_cp949.txt")
-        assert content_cp949 == "안녕 세계 CP949"
-    finally:
-        if os.path.exists(test_file_utf8):
-            os.remove(test_file_utf8)
-        if os.path.exists(test_file_cp949):
-            os.remove(test_file_cp949)
 
-def test_extract_text_unsupported():
-    test_file_png = "test_image.png"
-    with open(test_file_png, "wb") as f:
-        f.write(b"fake png data")
-        
-    try:
-        with pytest.raises(HTTPException) as exc_info:
-            extract_text(test_file_png, test_file_png)
-        assert exc_info.value.status_code == 400
-        assert "지원하지 않는 파일 형식입니다" in exc_info.value.detail
-    finally:
-        if os.path.exists(test_file_png):
-            os.remove(test_file_png)
+def test_extract_text_txt(tmp_path):
+    # UTF-8 / CP949 인코딩 자동 감지
+    utf8_file = tmp_path / "test_utf8.txt"
+    utf8_file.write_text("안녕 세계 UTF-8", encoding="utf-8")
 
-def test_extract_text_empty_hwp():
-    # We simulate a broken/empty HWP file being parsed
-    test_file_hwp = "test_broken.hwp"
-    with open(test_file_hwp, "wb") as f:
-        f.write(b"broken hwp")
-        
-    try:
-        with pytest.raises(HTTPException) as exc_info:
-            extract_text(test_file_hwp, test_file_hwp)
-        assert exc_info.value.status_code == 400
-        assert "HWP 파일 해석 실패" in exc_info.value.detail
-    finally:
-        if os.path.exists(test_file_hwp):
-            os.remove(test_file_hwp)
+    cp949_file = tmp_path / "test_cp949.txt"
+    cp949_file.write_text("안녕 세계 CP949", encoding="cp949")
 
-def test_extract_text_docx():
+    assert extract_text(str(utf8_file), "test_utf8.txt") == "안녕 세계 UTF-8"
+    assert extract_text(str(cp949_file), "test_cp949.txt") == "안녕 세계 CP949"
+
+
+def test_extract_text_unsupported(tmp_path):
+    png_file = tmp_path / "test_image.png"
+    png_file.write_bytes(b"fake png data")
+
+    with pytest.raises(HTTPException) as exc_info:
+        extract_text(str(png_file), png_file.name)
+    assert exc_info.value.status_code == 400
+    assert "지원하지 않는 파일 형식입니다" in exc_info.value.detail
+
+
+def test_extract_text_empty_hwp(tmp_path):
+    hwp_file = tmp_path / "test_broken.hwp"
+    hwp_file.write_bytes(b"broken hwp")
+
+    with pytest.raises(HTTPException) as exc_info:
+        extract_text(str(hwp_file), hwp_file.name)
+    assert exc_info.value.status_code == 400
+    assert "HWP 파일 해석 실패" in exc_info.value.detail
+
+
+def test_extract_text_docx(tmp_path):
     from unittest.mock import patch, MagicMock
+
     with patch("main.docx.Document") as mock_doc:
         mock_instance = MagicMock()
         mock_para = MagicMock()
         mock_para.text = "Hello Docx"
         mock_instance.paragraphs = [mock_para]
         mock_doc.return_value = mock_instance
-        
-        test_file = "test.docx"
-        with open(test_file, "w") as f: f.write("dummy")
-        try:
-            content = extract_text(test_file, test_file)
-            assert content == "Hello Docx"
-        finally:
-            os.remove(test_file)
 
-def test_extract_text_pdf():
+        docx_file = tmp_path / "test.docx"
+        docx_file.write_text("dummy")
+
+        content = extract_text(str(docx_file), docx_file.name)
+        assert content == "Hello Docx"
+
+
+def test_extract_text_pdf(tmp_path):
     from unittest.mock import patch, MagicMock
+
     with patch("main.pypdf.PdfReader") as mock_pdf:
         mock_instance = MagicMock()
         mock_page = MagicMock()
         mock_page.extract_text.return_value = "Hello PDF"
         mock_instance.pages = [mock_page]
         mock_pdf.return_value = mock_instance
-        
-        test_file = "test.pdf"
-        with open(test_file, "w") as f: f.write("dummy")
-        try:
-            content = extract_text(test_file, test_file)
-            assert content == "Hello PDF"
-        finally:
-            os.remove(test_file)
 
-def test_extract_text_valid_hwp():
+        pdf_file = tmp_path / "test.pdf"
+        pdf_file.write_text("dummy")
+
+        content = extract_text(str(pdf_file), pdf_file.name)
+        assert content == "Hello PDF"
+
+
+def test_extract_text_valid_hwp(tmp_path, monkeypatch):
     from unittest.mock import MagicMock
     import sys
-    
-    # Global patch of the olefile module
+
     mock_ole = MagicMock()
     mock_instance = MagicMock()
     mock_instance.listdir.return_value = [['FileHeader'], ['BodyText']]
-    # Mock FileHeader to be uncompressed
     mock_header_stream = MagicMock()
     mock_header_stream.read.return_value = b'\x00' * 36 + b'\x00' + b'\x00' * 200
-    # Mock BodyText
     mock_body_stream = MagicMock()
     mock_body_stream.read.return_value = b'\x43\x00\x40\x00A\x00B\x00'
-    
+
     def openstream_mock(name):
-        if name == 'FileHeader' or name == ['FileHeader']: return mock_header_stream
-        if name == 'BodyText' or name == ['BodyText']: return mock_body_stream
+        if name == 'FileHeader' or name == ['FileHeader']:
+            return mock_header_stream
+        if name == 'BodyText' or name == ['BodyText']:
+            return mock_body_stream
+
     mock_instance.openstream = openstream_mock
     mock_ole.OleFileIO.return_value = mock_instance
-    
-    sys.modules['olefile'] = mock_ole
-    sys.modules['zlib'] = MagicMock()
-    sys.modules['struct'] = MagicMock()
-    
-    try:
-        import struct
-        struct.unpack.side_effect = [(4194371,), (4,)] # (header_val), (rec_len inside if)
-        test_file = "test_valid.hwp"
-        with open(test_file, "w") as f: f.write("dummy")
-        content = extract_text(test_file, test_file)
-        assert "AB" in content
-    finally:
-        if os.path.exists("test_valid.hwp"):
-            os.remove("test_valid.hwp")
-        # cleanup
-        sys.modules.pop('olefile', None)
-        sys.modules.pop('zlib', None)
-        sys.modules.pop('struct', None)
+
+    # sys.modules를 직접 건드리지 않고 monkeypatch로 등록한다.
+    # 테스트가 실패하거나 예외로 중간에 빠져도 다른 테스트에 영향이 없다
+    # (기존 코드는 try/finally로 수동 정리했는데, 정리 로직 자체가
+    # 빠지거나 순서가 꼬이면 olefile/zlib/struct가 이후 테스트에도 가짜로 남는다).
+    monkeypatch.setitem(sys.modules, 'olefile', mock_ole)
+    monkeypatch.setitem(sys.modules, 'zlib', MagicMock())
+    mock_struct = MagicMock()
+    monkeypatch.setitem(sys.modules, 'struct', mock_struct)
+    mock_struct.unpack.side_effect = [(4194371,), (4,)]  # (header_val), (rec_len)
+
+    hwp_file = tmp_path / "test_valid.hwp"
+    hwp_file.write_text("dummy")
+
+    content = extract_text(str(hwp_file), hwp_file.name)
+    assert "AB" in content

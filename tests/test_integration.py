@@ -61,6 +61,59 @@ async def test_delete_audiobook_forbidden(mock_supabase, mock_auth):
     
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         response = await client.delete("/api/audiobooks/book1", headers={"Authorization": "Bearer fake_token"})
-        
+
         # 404 Not Found since the book doesn't belong to test_user_id (no row found matching both id and user_id)
         assert response.status_code == 404
+
+
+# ---- /api/auth/me ----
+# 이전에 커버리지 0%였던 엔드포인트. 오늘 세션에서 몇 시간을 쓴
+# "재로그인해도 세션이 끊기는" 버그의 클라이언트 쪽 원인이 바로 이
+# 엔드포인트의 401/오류 응답을 어떻게 다루는지였는데, 정작 서버 쪽
+# get_current_user 자체는 테스트가 하나도 없었다.
+#
+# get_current_user는 require_user_id가 아니라 직접 decode_token을 쓰므로
+# mock_auth 픽스처(require_user_id 패치)로는 우회할 수 없다. 실제 JWT를
+# 발급해 진짜 디코딩 경로를 태운다.
+
+@pytest.mark.asyncio
+async def test_auth_me_no_header():
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/auth/me")
+        assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_auth_me_invalid_token():
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/auth/me", headers={"Authorization": "Bearer not-a-real-jwt"})
+        assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_auth_me_user_not_found(mock_supabase):
+    from auth import create_access_token
+
+    token = create_access_token({"sub": "ghost-user"})
+    mock_supabase.table().select().eq().single().execute.return_value = MagicMock(data=None)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_auth_me_success(mock_supabase):
+    from auth import create_access_token
+
+    token = create_access_token({"sub": "user-1"})
+    mock_supabase.table().select().eq().single().execute.return_value = MagicMock(
+        data={"id": "user-1", "email": "a@b.com", "full_name": "A", "avatar_url": None, "created_at": "2026-01-01"}
+    )
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == "user-1"
+        assert data["email"] == "a@b.com"
