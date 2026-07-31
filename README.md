@@ -8,60 +8,60 @@ app_port: 8080
 pinned: false
 ---
 
-# Docs to Audiobook Converter
+# Docs to Audiobook (문서를 오디오북으로)
 
-FastAPI + Vanilla JS Audiobook generator utilizing Edge TTS, supporting smart text chunking, voice filtering, client-side IndexedDB persistent storage, and Supabase cloud synchronization.
+Edge TTS를 활용하여 다양한 문서를 스마트하게 변환해주는 FastAPI + Vanilla JS 기반의 오디오북 생성기입니다. 지능형 텍스트 청킹, 음성 필터링, 클라이언트 브라우저 로컬 저장소(IndexedDB) 캐싱 및 Supabase 클라우드 동기화 기능을 지원합니다.
 
-## 🚀 Features
+## 🚀 주요 기능
 
 ### 📄 문서 처리
 - **형식 지원**: DOCX, PDF, TXT, MD, HWP
-- **배치 변환**: 여러 문서 동시 업로드 & 순차 병렬 처리
-- **음성 선택**: 7개 한국어 음성 + 톤/용도별 필터링
-- **스마트 텍스트 처리**: HWP/Markdown 목차(Heading) 추출, 문장 단위 동기화 및 TTS용 특수문자 전처리
+- **배치 변환**: 여러 문서를 동시에 업로드하고 순차적으로 병렬 처리
+- **음성 선택**: 7가지 한국어 음성 제공 및 톤/용도별 맞춤형 필터링
+- **스마트 텍스트 처리**: HWP 및 Markdown 문서에서 목차(Heading)를 추출하고, 문장 단위 동기화 및 TTS(텍스트 음성 변환)에 방해되는 특수문자를 자동으로 전처리
 
 ### 🎵 플레이어 기능
-- **고급 컨트롤**: 시간 건너뛰기 (±10초), 재생 속도 (0.75x~2.0x)
+- **고급 컨트롤**: 시간 건너뛰기 (±10초), 재생 속도 조절 (0.75x ~ 2.0x)
 - **반복 모드**: 반복 안 함 / 전체 반복 / 한 곡 반복
-- **취침 타이머**: 15/30/60분 자동 정지
+- **취침 타이머**: 15분 / 30분 / 60분 후 자동 정지
 
 ### 🔧 신뢰성 & 성능
-- **재시도 로직**: 청크 단위 재시도로 Edge-TTS 간헐적 오류 극복
-- **폴백 시스템**: Web Speech API로 자동 전환
-- **테스트 커버리지**: 100% 테스트 자동화 (pytest) 및 GitHub Actions CI/CD 파이프라인
+- **재시도 로직**: 청크(텍스트 덩어리) 단위 재시도를 통해 Edge-TTS의 간헐적인 네트워크 오류 극복
+- **대체 시스템 (Fallback)**: 서버 오류 발생 시 브라우저 내장 Web Speech API로 자동 전환
+- **테스트 커버리지**: 100% 테스트 자동화 (pytest) 및 GitHub Actions CI/CD 파이프라인 연동
 
 ### 🎨 UI/UX 고도화
-- **사용성 개선**: 모바일 환경에 최적화된 스와이프 제스처 및 액션 모달
-- **새로고침 UX**: iOS 스타일의 12-Spokes 당겨서 새로고침(Pull-to-refresh) 지원
-- **오프라인/PWA**: 로컬 IndexedDB 저장, 온/오프라인 작동 및 앱 설치 가능
+- **사용성 개선**: 모바일 기기에 최적화된 스와이프 제스처 및 동작 액션 모달
+- **새로고침 UX**: iOS 스타일의 12-Spokes 애니메이션이 적용된 '당겨서 새로고침(Pull-to-refresh)' 기능
+- **오프라인 및 PWA**: 브라우저 로컬 저장소(IndexedDB)를 활용한 오프라인 작동 및 기기 홈 화면에 앱(PWA) 설치 지원
 
 ### ☁️ 클라우드 및 소셜 기능
-- **계정 및 동기화**: Google/Kakao 소셜 로그인 및 사용자 기기 간 오디오북 클라우드 동기화 (Supabase)
-- **공유 기능**: 고유 웹 링크를 통한 생성된 오디오북 공유 기능 지원
+- **계정 및 동기화**: Google 및 Kakao 소셜 로그인 지원, 로그인된 사용자의 기기 간 오디오북 클라우드 데이터 동기화 (Supabase 활용)
+- **공유 기능**: 고유 웹 링크를 통해 생성된 오디오북을 간편하게 공유할 수 있는 기능 지원
 
-## 🏗️ 아키텍처
+## 🏗️ 시스템 아키텍처
 
-- **Frontend**: Vanilla JS + IndexedDB (로컬 캐싱) + PWA
-- **Backend**: FastAPI + Edge TTS + asyncio 병렬 처리
-- **Cloud/DB**: Supabase (PostgreSQL, Auth Token, Meta Storage)
-- **Hosting**: Fly.io (Docker 배포)
-- **CI/CD**: GitHub Actions (병렬 테스트 및 자동 배포)
+- **프론트엔드 (Frontend)**: Vanilla JS + IndexedDB (로컬 캐싱) + PWA 기반
+- **백엔드 (Backend)**: FastAPI + Edge TTS + asyncio 기반 비동기 병렬 처리
+- **클라우드 / DB**: Supabase (PostgreSQL, 인증 토큰 관리, 메타데이터 저장)
+- **호스팅 및 배포**: Fly.io (Docker 컨테이너 배포)
+- **CI/CD 파이프라인**: GitHub Actions (병렬 테스트 및 자동 배포)
 
-## 📋 개발 현황
+## 📋 개발 현황 및 로드맵
 
 ### ✅ P0 & P1 (코어 기능 완료)
-- 문서 변환 (DOCX, PDF, TXT, MD, HWP)
-- 청크 단위 재시도 로직 및 Web Speech API 폴백
-- 음성 필터링 (tone/use_case) 및 다중 파일 업로드 처리
-- 고급 플레이어 (시간 건너뛰기, 반복 모드)
+- 문서 변환 지원 (DOCX, PDF, TXT, MD, HWP)
+- 청크 단위 재시도 로직 및 Web Speech API 대체 시스템 적용
+- 음성 필터링 (톤/용도별) 및 다중 파일 업로드 처리
+- 고급 플레이어 기능 (시간 건너뛰기, 반복 모드 등)
 
 ### ✅ P2 (클라우드 연동 완료)
-- 사용자 계정 시스템 (Google, Kakao OAuth)
-- Supabase 기반 메타데이터 동기화 (DB + Auth)
-- 오디오북 클라우드 데이터 백그라운드 동기화
+- 사용자 계정 시스템 적용 (Google, Kakao OAuth 소셜 로그인)
+- Supabase 기반 메타데이터 동기화 (데이터베이스 및 인증)
+- 오디오북 클라우드 데이터 백그라운드 자동 동기화
 
 ### 🚀 P3 (진행 중 / 향후 계획)
-- ✅ 오디오북 고유 링크 공유 기능 (완료)
-- 다기기 재생 상태(Playback History) 실시간 동기화
-- 오디오북 메타데이터 편집
-- 수익화 및 프론트엔드 프레임워크 고도화
+- ✅ 오디오북 고유 링크 웹 공유 기능 (완료)
+- 다중 기기 간 재생 상태(어디까지 들었는지) 실시간 동기화
+- 오디오북 메타데이터(제목, 작가 등) 편집 기능
+- 서비스 수익화 및 프론트엔드 프레임워크 고도화
