@@ -11,6 +11,7 @@ import time
 import re
 import json
 import shutil
+import secrets
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Response, BackgroundTasks, Header, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -69,6 +70,7 @@ MAX_SYNTH_CHARS = 100_000
 # 공유되는 오디오는 오디오북 전체라 크다. MAX_SYNTH_CHARS(10만 자) 분량이
 # 약 90MB이므로 여유를 둔다. 대신 메모리에 담지 않고 디스크로 흘려보낸다.
 MAX_SHARE_AUDIO_BYTES = 120 * 1024 * 1024
+MAX_SHARE_METADATA_BYTES = 2 * 1024 * 1024
 
 # URL에서 기사를 가져올 때의 상한. 파일 업로드와 동일한 기준을 쓴다.
 MAX_URL_FETCH_BYTES = 10 * 1024 * 1024
@@ -81,6 +83,25 @@ def _too_large(max_bytes: int) -> HTTPException:
         status_code=413,
         detail=f"파일이 너무 큽니다. 최대 {max_bytes // (1024 * 1024)}MB까지 지원합니다."
     )
+
+
+def validate_share_id(share_id: str) -> str:
+    if share_id == "default_book" or re.fullmatch(r"(?:[0-9a-f]{12}|[0-9a-f]{8}-[0-9a-f]{3})", share_id):
+        return share_id
+    raise HTTPException(status_code=404, detail="공유 링크가 만료되었거나 존재하지 않습니다.")
+
+
+def parse_share_metadata(sentences: str, headings: str) -> tuple[list, list]:
+    if len(sentences.encode("utf-8")) + len(headings.encode("utf-8")) > MAX_SHARE_METADATA_BYTES:
+        raise _too_large(MAX_SHARE_METADATA_BYTES)
+    try:
+        parsed_sentences = json.loads(sentences)
+        parsed_headings = json.loads(headings)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="문장 정보는 올바른 JSON 배열이어야 합니다.")
+    if not isinstance(parsed_sentences, list) or not isinstance(parsed_headings, list):
+        raise HTTPException(status_code=400, detail="문장 정보는 올바른 JSON 배열이어야 합니다.")
+    return parsed_sentences, parsed_headings
 
 
 async def read_upload_limited(upload: UploadFile, max_bytes: int) -> bytes:
@@ -509,6 +530,7 @@ async def extract_url(request: Request, payload: dict, authorization: str = Head
         "text": text,
         "char_count": len(text),
         "created_at": time.time(),
+        "access_token": uuid.uuid4().hex,
     }
 
     preview_len = min(500, len(text))
@@ -517,6 +539,7 @@ async def extract_url(request: Request, payload: dict, authorization: str = Head
         "filename": title,
         "char_count": len(text),
         "preview": text[:preview_len] + ("..." if len(text) > preview_len else ""),
+        "text_access_token": text_storage[file_id]["access_token"],
     }
 
 
@@ -558,7 +581,8 @@ async def upload_file(request: Request, file: UploadFile = File(...), authorizat
             "filename": file.filename,
             "text": text,
             "char_count": len(text),
-            "created_at": time.time()
+            "created_at": time.time(),
+            "access_token": uuid.uuid4().hex,
         }
         
         # Return summary preview
@@ -567,7 +591,8 @@ async def upload_file(request: Request, file: UploadFile = File(...), authorizat
             "text_id": file_id,
             "filename": file.filename,
             "char_count": len(text),
-            "preview": text[:preview_len] + ("..." if len(text) > preview_len else "")
+            "preview": text[:preview_len] + ("..." if len(text) > preview_len else ""),
+            "text_access_token": text_storage[file_id]["access_token"],
         }
     except HTTPException as he:
         if os.path.exists(temp_path):
@@ -833,6 +858,7 @@ async def synthesize_text(
     request: Request,
     background_tasks: BackgroundTasks,
     text_id: str = Form(...),
+    text_access_token: str = Form(""),
     voice: str = Form("ko-KR-HyunsuMultilingualNeural"),
     rate: str = Form("+5%"),
     pitch: str = Form("+0Hz"),
@@ -846,6 +872,8 @@ async def synthesize_text(
         raise HTTPException(status_code=404, detail="요청한 텍스트 데이터를 찾을 수 없거나 만료되었습니다.")
 
     data = text_storage[text_id]
+    if not secrets.compare_digest(data.get("access_token", ""), text_access_token):
+        raise HTTPException(status_code=403, detail="이 문서를 변환할 권한이 없습니다.")
     raw_text = data["text"]
 
     if len(raw_text) > MAX_SYNTH_CHARS:
@@ -977,7 +1005,9 @@ async def create_share(
     require_user_id(authorization)
     enforce_rate_limit(request, "share", limit=20, window_sec=3600)
 
-    share_id = str(uuid.uuid4())[:12]
+    parsed_sentences, parsed_headings = parse_share_metadata(sentences, headings)
+
+    share_id = uuid.uuid4().hex[:12]
     share_dir = os.path.join(SHARED_DIR, share_id)
     os.makedirs(share_dir, exist_ok=True)
 
@@ -988,8 +1018,8 @@ async def create_share(
     # Save metadata
     meta = {
         "title": title,
-        "sentences": json.loads(sentences),
-        "headings": json.loads(headings),
+        "sentences": parsed_sentences,
+        "headings": parsed_headings,
         "created_at": time.time(),
     }
     meta_path = os.path.join(share_dir, "meta.json")
@@ -1001,6 +1031,7 @@ async def create_share(
 @app.get("/api/share/{share_id}")
 async def get_share_meta(share_id: str):
     """공유된 오디오북의 메타데이터 (제목 + 문장 타이밍) 반환"""
+    share_id = validate_share_id(share_id)
     if share_id == "default_book":
         _, meta_path = default_book_paths()
         if not os.path.exists(meta_path):
@@ -1021,6 +1052,7 @@ async def get_share_meta(share_id: str):
 @app.get("/api/share/{share_id}/audio")
 async def get_share_audio(share_id: str):
     """공유된 오디오 MP3 스트리밍"""
+    share_id = validate_share_id(share_id)
     if share_id == "default_book":
         audio_path, _ = default_book_paths()
         if not os.path.exists(audio_path):

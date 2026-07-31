@@ -3,6 +3,17 @@ import httpx
 from unittest.mock import patch, MagicMock
 from main import app
 
+
+def test_share_id_and_metadata_validation():
+    from fastapi import HTTPException
+    from main import parse_share_metadata, validate_share_id
+
+    assert validate_share_id("a1b2c3d4e5f6") == "a1b2c3d4e5f6"
+    with pytest.raises(HTTPException, match="공유 링크"):
+        validate_share_id("../default_book")
+    with pytest.raises(HTTPException, match="올바른 JSON"):
+        parse_share_metadata("{}", "[]")
+
 @pytest.mark.asyncio
 async def test_get_voice_preview():
     # Test valid preview

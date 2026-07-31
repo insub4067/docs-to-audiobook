@@ -44,6 +44,32 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Generation Modal
     const generationModal = document.getElementById("generationModal");
     const closeModalBtn = document.getElementById("closeModalBtn");
+    const modalFocusOrigins = new WeakMap();
+
+    function rememberModalFocus(backdropElement, focusElement) {
+        modalFocusOrigins.set(backdropElement, document.activeElement);
+        requestAnimationFrame(() => focusElement?.focus());
+    }
+
+    function restoreModalFocus(backdropElement) {
+        const focusOrigin = modalFocusOrigins.get(backdropElement);
+        if (focusOrigin instanceof HTMLElement && document.contains(focusOrigin)) {
+            focusOrigin.focus();
+        }
+    }
+
+    function openGenerationModal() {
+        generationModal.classList.add("show");
+        document.body.style.overflow = "hidden";
+        rememberModalFocus(generationModal, closeModalBtn);
+    }
+
+    function closeGenerationModal() {
+        generationModal.classList.remove("show");
+        document.body.style.overflow = "";
+        stopVoicePreview();
+        restoreModalFocus(generationModal);
+    }
     
     const loadingOverlay = document.getElementById("loadingOverlay");
     
@@ -236,10 +262,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Close generation modal
     closeModalBtn.addEventListener("click", () => {
-        generationModal.classList.remove("show");
-        document.body.style.overflow = "";
-        // 모달을 닫아도 미리듣기가 계속 재생되면 안 된다
-        stopVoicePreview();
+        closeGenerationModal();
     });
     
     // Import Shared Link
@@ -310,6 +333,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // App State
     let currentTextId = null;
+    let currentTextAccessToken = null;
     let uploadedFile = null;
     let availableVoices = [];
     let db = null;
@@ -850,6 +874,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     const data = await extractText(file);
                     const ok = await generateAudiobook({
                         textId: data.text_id,
+                        textAccessToken: data.text_access_token,
                         filename: toAudioFilename(file.name),
                         charCount: data.char_count,
                         voice,
@@ -888,6 +913,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (removeFileBtn) {
         removeFileBtn.addEventListener("click", () => {
             currentTextId = null;
+            currentTextAccessToken = null;
             uploadedFile = null;
             fileInput.value = "";
             
@@ -929,6 +955,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // 돌려주므로, 미리보기 렌더링과 모달 열기는 공통으로 뺀다.
     function applyExtractedText(data) {
         currentTextId = data.text_id;
+        currentTextAccessToken = data.text_access_token;
         uploadedFile = { name: data.filename };
 
         if (previewPlaceholder) previewPlaceholder.style.display = "none";
@@ -941,8 +968,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         updateGenerateHint();
 
         setTimeout(() => {
-            generationModal.classList.add("show");
-            document.body.style.overflow = "hidden";
+            openGenerationModal();
         }, 50);
     }
 
@@ -1075,12 +1101,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
-        generationModal.classList.remove("show");
-        document.body.style.overflow = "";
+        closeGenerationModal();
 
         const originalName = uploadedFile ? uploadedFile.name : "unknown_doc";
         await generateAudiobook({
             textId: currentTextId,
+            textAccessToken: currentTextAccessToken,
             filename: toAudioFilename(originalName),
             charCount: parseInt(charCountBadge.textContent.replace(/[^0-9]/g, "")) || 0,
             voice: voiceSelect.value,
@@ -1098,7 +1124,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // 오디오북 생성 + 저장. 단일 파일 경로와 배치 경로가 공유한다.
     // 전역 상태 대신 인자만 사용하므로 루프에서 반복 호출해도 안전하다.
     // 성공하면 true, 실패하면 false를 반환한다.
-    async function generateAudiobook({ textId, filename, charCount, voice, rate, pitch }) {
+    async function generateAudiobook({ textId, textAccessToken, filename, charCount, voice, rate, pitch }) {
         const audioFilename = filename;
         const safeAudioFilename = escapeHtml(audioFilename);
 
@@ -1128,18 +1154,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         const inlineFill = progressItem.querySelector(".generating-progress-fill");
         const inlineStatus = progressItem.querySelector(".generating-status");
 
-        let simulatedProgress = 0;
-        const progressInterval = setInterval(() => {
-            if (simulatedProgress < 90) {
-                simulatedProgress += Math.random() * 6;
-                if (simulatedProgress > 90) simulatedProgress = 90;
-                inlineFill.style.width = `${simulatedProgress}%`;
-            }
-        }, 500);
-
         try {
             const formData = new FormData();
             formData.append("text_id", textId);
+            formData.append("text_access_token", textAccessToken);
             formData.append("voice", voice);
             formData.append("rate", rate);
             formData.append("pitch", pitch);
@@ -1152,7 +1170,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             });
 
             if (!response.ok) {
-                clearInterval(progressInterval);
                 throw new Error("오디오북 변환 요청 실패. 서버 연결을 확인하세요.");
             }
 
@@ -1181,8 +1198,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             };
             
             const completedJobData = await pollJobStatus(jobId);
-
-            clearInterval(progressInterval);
 
             const sentences = completedJobData.sentences;
 
@@ -1224,7 +1239,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             return true;
 
         } catch (error) {
-            clearInterval(progressInterval);
             console.error(error);
             progressItem.remove();
             // 리스트가 비었으면 empty 상태 복원
@@ -1729,12 +1743,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         actionDeleteBtn.style.display = audio.isDefault ? "none" : "";
         actionSheetBackdrop.classList.add("show");
         document.body.style.overflow = "hidden";
+        rememberModalFocus(actionSheetBackdrop, actionShareBtn);
     }
 
     function closeActionSheet() {
         actionSheetBackdrop.classList.remove("show");
         actionSheetTarget = null;
         document.body.style.overflow = "";
+        restoreModalFocus(actionSheetBackdrop);
     }
 
     actionCancelBtn.addEventListener("click", closeActionSheet);
@@ -1752,11 +1768,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     function openLoginPromptSheet() {
         loginPromptBackdrop.classList.add("show");
         document.body.style.overflow = "hidden";
+        rememberModalFocus(loginPromptBackdrop, loginPromptConfirmBtn);
     }
 
     function closeLoginPromptSheet() {
         loginPromptBackdrop.classList.remove("show");
         document.body.style.overflow = "";
+        restoreModalFocus(loginPromptBackdrop);
     }
 
     loginPromptCancelBtn.addEventListener("click", closeLoginPromptSheet);
@@ -1768,6 +1786,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const originalName = uploadedFile ? uploadedFile.name : "unknown_doc";
         const pendingGen = {
             textId: currentTextId,
+            textAccessToken: currentTextAccessToken,
             filename: toAudioFilename(originalName),
             charCount: parseInt(charCountBadge.textContent.replace(/[^0-9]/g, "")) || 0,
             voice: voiceSelect.value,
@@ -1777,8 +1796,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         sessionStorage.setItem("pendingGeneration", JSON.stringify(pendingGen));
 
         closeLoginPromptSheet();
-        generationModal.classList.remove("show");
-        document.body.style.overflow = "";
+        closeGenerationModal();
         const loginBtn = document.getElementById("googleLoginBtn");
         if (loginBtn) {
             loginBtn.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1823,12 +1841,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         indexSheetBackdrop.classList.add("show");
         document.body.style.overflow = "hidden";
+        rememberModalFocus(indexSheetBackdrop, document.getElementById("indexSheetCancelBtn"));
     }
 
     function closeIndexSheet() {
         const indexSheetBackdrop = document.getElementById("indexSheetBackdrop");
         if (indexSheetBackdrop) indexSheetBackdrop.classList.remove("show");
         document.body.style.overflow = "";
+        if (indexSheetBackdrop) restoreModalFocus(indexSheetBackdrop);
     }
 
     const indexSheetCancelBtn = document.getElementById("indexSheetCancelBtn");
@@ -1839,6 +1859,19 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (e.target === indexSheetBackdrop) closeIndexSheet();
         });
     }
+
+    document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        if (loginPromptBackdrop.classList.contains("show")) {
+            closeLoginPromptSheet();
+        } else if (actionSheetBackdrop.classList.contains("show")) {
+            closeActionSheet();
+        } else if (indexSheetBackdrop?.classList.contains("show")) {
+            closeIndexSheet();
+        } else if (generationModal.classList.contains("show")) {
+            closeGenerationModal();
+        }
+    });
 
     async function performShare(target) {
         try {

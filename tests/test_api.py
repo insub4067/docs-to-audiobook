@@ -81,12 +81,36 @@ async def test_api_synthesize_text_too_long():
         "text": "가" * (MAX_SYNTH_CHARS + 1),
         "char_count": MAX_SYNTH_CHARS + 1,
         "created_at": 0,
+        "access_token": "text-token",
     }
     with patch("main.require_user_id", return_value="test_user_id"):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post(
                 "/api/synthesize",
-                data={"text_id": "big"},
+                data={"text_id": "big", "text_access_token": "text-token"},
                 headers={"Authorization": "Bearer fake"},
             )
             assert response.status_code == 413
+
+
+@pytest.mark.asyncio
+async def test_api_synthesize_rejects_wrong_text_access_token():
+    from unittest.mock import patch
+    from main import text_storage
+
+    text_storage["private-text"] = {
+        "filename": "private.txt",
+        "text": "비공개 원문",
+        "char_count": 5,
+        "created_at": 0,
+        "access_token": "correct-token",
+    }
+    with patch("main.require_user_id", return_value="test_user_id"):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/synthesize",
+                data={"text_id": "private-text", "text_access_token": "wrong-token"},
+                headers={"Authorization": "Bearer fake"},
+            )
+
+    assert response.status_code == 403

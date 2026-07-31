@@ -35,6 +35,17 @@ def test_css_supports_motion_and_dark_mode_preferences():
     assert "@media (prefers-color-scheme: dark)" in css
 
 
+def test_dark_mode_keeps_upload_and_reader_surfaces_dark():
+    css = STYLE_CSS.read_text(encoding="utf-8")
+    dark_theme = css.split("@media (prefers-color-scheme: dark)", 1)[1]
+
+    assert ".upload-dropzone" in dark_theme
+    assert "background-color: #3a332f" in dark_theme
+    assert ".audio-item:active .audio-item-front" in dark_theme
+    assert ".reader-container," in dark_theme
+    assert ".reader-content" in dark_theme
+
+
 def test_icon_buttons_and_modal_have_accessible_names_and_roles():
     html = INDEX_HTML.read_text(encoding="utf-8")
 
@@ -43,3 +54,12 @@ def test_icon_buttons_and_modal_have_accessible_names_and_roles():
     assert 'id="generationModal" role="dialog" aria-modal="true"' in html
     assert 'id="actionSheetBackdrop" role="dialog" aria-modal="true"' in html
     assert 'id="actionCancelBtn">닫기</button>' in html
+
+
+def test_modals_support_escape_and_restore_focus():
+    source = APP_JS.read_text(encoding="utf-8")
+
+    assert "function rememberModalFocus" in source
+    assert "function restoreModalFocus" in source
+    assert 'document.addEventListener("keydown"' in source
+    assert 'event.key !== "Escape"' in source

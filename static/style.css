@@ -2215,4 +2215,44 @@ input[type="range"]::-webkit-slider-thumb:active {
         --border-color: rgba(247, 240, 233, 0.16);
         --border-hover: rgba(247, 240, 233, 0.3);
     }
+
+    .upload-dropzone {
+        background-color: #3a332f;
+        border-color: rgba(217, 166, 111, 0.38);
+    }
+
+    .upload-dropzone:hover,
+    .upload-dropzone.dragover {
+        background-color: #443a35;
+    }
+
+    .audio-item:hover .audio-item-front,
+    .audio-item:active .audio-item-front {
+        background-color: #3a332f;
+    }
+
+    .reader-container,
+    .reader-content {
+        background-color: #211d1b;
+    }
+
+    .reader-container::before,
+    .reader-header,
+    .reader-controls {
+        background-color: rgba(33, 29, 27, 0.9);
+        border-color: rgba(247, 240, 233, 0.12);
+    }
+
+    .reader-content {
+        color: #f7f0e9;
+    }
+
+    .reader-sentence:hover {
+        background-color: rgba(217, 166, 111, 0.12);
+    }
+
+    .reader-sentence.highlight {
+        color: #fff5eb;
+        background-color: rgba(217, 166, 111, 0.28);
+    }
 }
