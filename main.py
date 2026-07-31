@@ -908,10 +908,10 @@ async def serve_shared_page(share_id: str):
 # --------------------------------------------------
 
 DEFAULT_BOOK_DIR = os.path.join(BASE_DIR, "default_book")
-# 데모용 축약본(3,784자)을 쓴다. 전문 15,487자는 공유 CPU 1개에서 합성이
-# 매우 오래 걸리고, 그동안 사용자 변환 요청까지 굶긴다. 실제로 이 작업 중
-# 머신이 "Exited abruptly"로 죽는 것을 확인했다.
-DEFAULT_BOOK_SOURCE = os.path.join(STATIC_DIR, "samples", "sherlock-holmes-sample.md")
+# 전문(12챕터, 15,487자)을 쓴다. supertonic 시절에는 이 분량이 공유 CPU
+# 하나를 오래 점유해 축약본(3챕터)으로 줄였지만, edge-tts는 네트워크
+# 기반이라 실측 3,000자에 4.9초 수준이라 전문도 30초 안에 끝난다.
+DEFAULT_BOOK_SOURCE = os.path.join(STATIC_DIR, "samples", "sherlock-holmes.md")
 DEFAULT_BOOK_TITLE = "셜록 홈즈의 모험"
 DEFAULT_BOOK_VOICE = SUPPORTED_VOICES[0]
 
@@ -919,21 +919,44 @@ default_book_state = {"status": "pending", "error": None}
 default_book_lock = asyncio.Lock()
 
 
+def _default_book_fingerprint() -> str:
+    """음성 + 원문 내용으로 캐시 키를 만든다.
+
+    음성만 넣었을 때는 원문을 바꿔도 키가 그대로라, 예전 내용으로 만든
+    오디오가 계속 재사용됐다(축약본 3챕터가 전문으로 바꾼 뒤에도 남았다).
+    내용 해시를 함께 넣어 원문이 바뀌면 자동으로 다시 만들게 한다."""
+    import hashlib
+
+    h = hashlib.sha256()
+    h.update(DEFAULT_BOOK_VOICE.encode())
+    try:
+        with open(DEFAULT_BOOK_SOURCE, "rb") as f:
+            h.update(f.read())
+    except OSError:
+        pass
+    return f"{DEFAULT_BOOK_VOICE}.{h.hexdigest()[:10]}"
+
+
 def default_book_paths():
-    # 파일 이름에 음성을 넣어 둔다. 낭독 음성을 바꾸면 캐시 키가 자연히
-    # 달라져 예전 음성으로 만든 파일을 재사용하지 않는다.
+    fp = _default_book_fingerprint()
     return (
-        os.path.join(DEFAULT_BOOK_DIR, f"audio.{DEFAULT_BOOK_VOICE}.mp3"),
-        os.path.join(DEFAULT_BOOK_DIR, f"meta.{DEFAULT_BOOK_VOICE}.json"),
+        os.path.join(DEFAULT_BOOK_DIR, f"audio.{fp}.mp3"),
+        os.path.join(DEFAULT_BOOK_DIR, f"meta.{fp}.json"),
     )
 
 
 # 기본 제공 오디오북을 클라우드에 한 번만 만들어 두는 자리.
 # 디스크는 재배포마다 날아가므로 여기 없으면 부팅할 때마다 36,000자를
 # 다시 합성하게 되고, 공유 CPU 1개를 점유해 사용자 변환까지 굶긴다.
-# 로컬과 같은 이유로 클라우드 키에도 음성을 포함한다
-DEFAULT_BOOK_REMOTE_AUDIO = f"_default/sherlock-holmes.{DEFAULT_BOOK_VOICE}.mp3"
-DEFAULT_BOOK_REMOTE_META = f"_default/sherlock-holmes.{DEFAULT_BOOK_VOICE}.meta.json"
+# 로컬과 같은 키(음성 + 원문 해시)를 클라우드에도 쓴다
+
+
+def default_book_remote_keys():
+    fp = _default_book_fingerprint()
+    return (
+        f"_default/sherlock-holmes.{fp}.mp3",
+        f"_default/sherlock-holmes.{fp}.meta.json",
+    )
 
 
 def _restore_default_book_from_cloud(audio_path: str, meta_path: str) -> bool:
@@ -944,9 +967,10 @@ def _restore_default_book_from_cloud(audio_path: str, meta_path: str) -> bool:
         client = get_supabase_client(use_service_role=True)
         if not client:
             return False
+        remote_audio, remote_meta = default_book_remote_keys()
         storage = client.storage.from_(AUDIOBOOK_BUCKET)
-        audio = storage.download(DEFAULT_BOOK_REMOTE_AUDIO)
-        meta = storage.download(DEFAULT_BOOK_REMOTE_META)
+        audio = storage.download(remote_audio)
+        meta = storage.download(remote_meta)
         if not audio or not meta:
             return False
         os.makedirs(DEFAULT_BOOK_DIR, exist_ok=True)
@@ -969,12 +993,13 @@ def _upload_default_book_to_cloud(audio_path: str, meta_path: str) -> None:
         client = get_supabase_client(use_service_role=True)
         if not client:
             return
+        remote_audio, remote_meta = default_book_remote_keys()
         storage = client.storage.from_(AUDIOBOOK_BUCKET)
         with open(audio_path, "rb") as f:
-            storage.upload(DEFAULT_BOOK_REMOTE_AUDIO, f.read(),
+            storage.upload(remote_audio, f.read(),
                            {"content-type": "audio/mpeg", "upsert": "true"})
         with open(meta_path, "rb") as f:
-            storage.upload(DEFAULT_BOOK_REMOTE_META, f.read(),
+            storage.upload(remote_meta, f.read(),
                            {"content-type": "application/json", "upsert": "true"})
         print("Default audiobook uploaded to cloud.")
     except Exception as e:
