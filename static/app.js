@@ -8,6 +8,10 @@ function escapeHtml(value) {
     })[character]);
 }
 
+function getAudiobookDisplayTitle(title) {
+    return String(title).replace(/\.[^/.]+$/, "");
+}
+
 function syncUrlClearButton(input, button) {
     button.hidden = input.value.length === 0;
 }
@@ -1149,7 +1153,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // 성공하면 true, 실패하면 false를 반환한다.
     async function generateAudiobook({ textId, textAccessToken, filename, charCount, voice, rate, pitch }) {
         const audioFilename = filename;
-        const safeAudioFilename = escapeHtml(audioFilename);
+        const safeAudioFilename = escapeHtml(getAudiobookDisplayTitle(audioFilename));
 
         // 라이브러리 섹션에 인라인 진행 아이템 추가
         libraryEmpty.style.display = "none";
@@ -1451,7 +1455,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 // 클라우드에만 있는 항목은 오디오도 문장도 아직 안 받은 상태다.
                 // 받고 나면 둘 다 생기므로 재생 가능한 것으로 보고 클릭을 열어준다.
                 const needsDownload = !audio.audioData && !!audio.audioUrl;
-                const safeTitle = escapeHtml(audio.title);
+                const safeTitle = escapeHtml(getAudiobookDisplayTitle(audio.title));
 
                 item.innerHTML = `
                     <div class="audio-item-bg" data-action="delete" data-id="${audio.id}">
@@ -2176,7 +2180,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         currentAudioObject = audio;
 
         // UI 리셋
-        readerBookTitle.textContent = audio.title.replace(/\.[^/.]+$/, "");
+        readerBookTitle.textContent = getAudiobookDisplayTitle(audio.title);
         showPlayIcon();
         if (readerShareBtn) readerShareBtn.style.display = "flex";
         readerCurrentTime.textContent = "00:00";
@@ -2455,7 +2459,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         currentReadingAudioId = null;
         currentAudioObject = null;
 
-        readerBookTitle.textContent = title;
+        readerBookTitle.textContent = getAudiobookDisplayTitle(title);
         showPlayIcon();
         if (readerShareBtn) readerShareBtn.style.display = "none";
         readerCurrentTime.textContent = "00:00";

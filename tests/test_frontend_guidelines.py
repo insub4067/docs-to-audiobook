@@ -18,7 +18,7 @@ eval(match[0]);
 if (escapeHtml('<img src=x onerror=alert(1)>') !== '&lt;img src=x onerror=alert(1)&gt;') {{
   throw new Error("HTML 특수문자를 이스케이프하지 않습니다.");
 }}
-if (!source.includes('escapeHtml(audioFilename)') || !source.includes('escapeHtml(audio.title)')) {{
+if (!source.includes('escapeHtml(getAudiobookDisplayTitle(audioFilename))') || !source.includes('escapeHtml(getAudiobookDisplayTitle(audio.title))')) {{
   throw new Error("사용자 제목을 안전하게 렌더링하지 않습니다.");
 }}
 """
@@ -96,5 +96,19 @@ syncUrlClearButton({{ value: "https://example.com" }}, button);
 if (button.hidden) throw new Error("입력값이 있는데 초기화 버튼이 숨겨졌습니다.");
 syncUrlClearButton({{ value: "" }}, button);
 if (!button.hidden) throw new Error("빈 입력값인데 초기화 버튼이 보입니다.");
+"""
+    subprocess.run(["node", "-e", script], check=True)
+
+
+def test_audiobook_display_title_hides_file_extension():
+    script = f"""
+const fs = require("fs");
+const source = fs.readFileSync({str(APP_JS)!r}, "utf8");
+const start = source.indexOf("function getAudiobookDisplayTitle(title)");
+const end = source.indexOf("\\n}}", start) + 2;
+if (start < 0 || end < 2) throw new Error("오디오북 표시 제목 함수가 없습니다.");
+eval(source.slice(start, end));
+if (getAudiobookDisplayTitle("데미안.mp3") !== "데미안") throw new Error("MP3 확장자를 숨기지 않습니다.");
+if (getAudiobookDisplayTitle("제목") !== "제목") throw new Error("확장자 없는 제목을 바꿉니다.");
 """
     subprocess.run(["node", "-e", script], check=True)
