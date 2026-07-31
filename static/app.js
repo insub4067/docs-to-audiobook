@@ -3101,6 +3101,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         const appMain = document.getElementById("appMain");
         const userInfo = document.getElementById("userInfo");
         const userEmail = document.getElementById("userEmail");
+        const profileImage = document.getElementById("profileImage");
+        const profileInitial = document.getElementById("profileInitial");
+        const profileMenuBtn = document.getElementById("profileMenuBtn");
         const headerLoginSlot = document.getElementById("headerLoginSlot");
 
         // 메인 화면은 로그인 여부와 무관하게 항상 보인다 (기본 오디오북 체험용).
@@ -3113,7 +3116,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         userInfo.style.display = loggedIn ? "flex" : "none";
         if (headerLoginSlot) headerLoginSlot.style.display = loggedIn ? "none" : "flex";
         if (loggedIn) {
-            userEmail.textContent = user.email;
+            const profileName = user.full_name || user.email || "사용자";
+            userEmail.textContent = user.email || "";
+            profileInitial.textContent = profileName.trim().charAt(0).toUpperCase();
+            profileMenuBtn.setAttribute("aria-label", `${profileName} 계정 메뉴`);
+            profileImage.hidden = !user.avatar_url;
+            profileImage.src = user.avatar_url || "";
         } else {
             // 비로그인일 때만 구글 버튼을 그린다
             setupSocialLogin();
@@ -3252,11 +3260,32 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function setupAuthEventListeners() {
         const logoutBtn = document.getElementById("logoutBtn");
+        const userInfo = document.getElementById("userInfo");
+        const profileMenuBtn = document.getElementById("profileMenuBtn");
+        const profileMenu = document.getElementById("profileMenu");
+
+        function closeProfileMenu() {
+            profileMenu.hidden = true;
+            profileMenuBtn.setAttribute("aria-expanded", "false");
+        }
 
         // 로그인 버튼은 구글이 직접 그리고 클릭도 구글이 처리한다.
         // 우리가 붙일 핸들러가 없다 — setupSocialLogin()이 렌더만 담당한다.
         if (logoutBtn) {
             logoutBtn.addEventListener("click", logout);
+        }
+        if (profileMenuBtn && profileMenu && userInfo) {
+            profileMenuBtn.addEventListener("click", () => {
+                const isOpen = !profileMenu.hidden;
+                profileMenu.hidden = isOpen;
+                profileMenuBtn.setAttribute("aria-expanded", String(!isOpen));
+            });
+            document.addEventListener("click", (event) => {
+                if (!userInfo.contains(event.target)) closeProfileMenu();
+            });
+            document.addEventListener("keydown", (event) => {
+                if (event.key === "Escape") closeProfileMenu();
+            });
         }
     }
 

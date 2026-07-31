@@ -60,7 +60,11 @@ def test_dark_mode_keeps_upload_and_reader_surfaces_dark():
 def test_icon_buttons_and_modal_have_accessible_names_and_roles():
     html = INDEX_HTML.read_text(encoding="utf-8")
 
-    assert 'id="logoutBtn" aria-label="로그아웃"' in html
+    assert 'id="logoutBtn"' in html
+    assert 'aria-label="로그아웃"' in html
+    assert 'id="profileMenuBtn"' in html
+    assert 'aria-haspopup="menu"' in html
+    assert 'id="profileMenu" role="menu" hidden' in html
     assert 'id="closeModalBtn" aria-label="닫기"' in html
     assert 'id="generationModal" role="dialog" aria-modal="true"' in html
     assert 'id="actionSheetBackdrop" role="dialog" aria-modal="true"' in html
@@ -135,3 +139,10 @@ def test_admin_dashboard_renders_retention_metrics():
     assert 'data-metric="week_one_retention_rate"' in html
     assert 'fetch("/api/admin/metrics"' in source
     assert '관리자만 접근할 수 있습니다.' in source
+
+
+def test_profile_menu_can_be_closed_outside_or_with_escape():
+    source = APP_JS.read_text(encoding="utf-8")
+
+    assert 'if (!userInfo.contains(event.target)) closeProfileMenu();' in source
+    assert 'if (event.key === "Escape") closeProfileMenu();' in source

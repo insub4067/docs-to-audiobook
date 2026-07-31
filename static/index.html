@@ -38,17 +38,23 @@
         <header class="app-header">
             <div class="header-left">
                 <div class="logo">
-                    <i data-lucide="headphones" class="logo-icon"></i>
-                    <h1>Text<span>Audio</span></h1>
+                    <h1 class="brand-wordmark">TEXTAUDIO</h1>
                 </div>
             </div>
 
             <!-- User Info Section (Hidden when not logged in) -->
             <div class="user-info" id="userInfo" style="display: none;">
-                <span class="user-email" id="userEmail"></span>
-                <button class="btn-logout" id="logoutBtn" aria-label="로그아웃" title="로그아웃">
-                    <i data-lucide="log-out"></i>
+                <button class="profile-trigger" id="profileMenuBtn" type="button" aria-label="계정 메뉴" aria-haspopup="menu" aria-expanded="false" aria-controls="profileMenu">
+                    <img id="profileImage" alt="" hidden>
+                    <span id="profileInitial" aria-hidden="true">?</span>
                 </button>
+                <div class="profile-menu" id="profileMenu" role="menu" hidden>
+                    <p class="profile-email" id="userEmail"></p>
+                    <button class="btn-logout" id="logoutBtn" type="button" role="menuitem" aria-label="로그아웃">
+                        <i data-lucide="log-out"></i>
+                        로그아웃
+                    </button>
+                </div>
             </div>
 
             <!-- 비로그인 상태의 로그인 진입점. 구글 공식 버튼을 여기에 직접
