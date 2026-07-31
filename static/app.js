@@ -17,6 +17,10 @@ function isHttpUrl(value) {
     }
 }
 
+function syncUrlClearButton(input, button) {
+    button.hidden = input.value.length === 0;
+}
+
 
 document.addEventListener("DOMContentLoaded", async () => {
     // Initialize Lucide Icons
@@ -1016,6 +1020,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const urlInput = document.getElementById("urlInput");
     const urlFetchBtn = document.getElementById("urlFetchBtn");
     const urlPasteBtn = document.getElementById("urlPasteBtn");
+    const urlClearBtn = document.getElementById("urlClearBtn");
     let clipboardUrl = "";
 
     async function showUrlPasteButton() {
@@ -1069,6 +1074,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const data = await extractTextFromUrl(url);
                 applyExtractedText(data);
                 urlInput.value = "";
+                syncUrlClearButton(urlInput, urlClearBtn);
             } catch (error) {
                 console.error(error);
                 showToast(error.message, "error");
@@ -1082,6 +1088,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (urlInput) {
         urlInput.addEventListener("focus", showUrlPasteButton);
+        urlInput.addEventListener("input", () => syncUrlClearButton(urlInput, urlClearBtn));
         urlInput.addEventListener("keydown", (e) => {
             if (e.key === "Enter") {
                 e.preventDefault();
@@ -1094,9 +1101,24 @@ document.addEventListener("DOMContentLoaded", async () => {
         urlPasteBtn.addEventListener("click", () => {
             urlInput.value = clipboardUrl;
             urlPasteBtn.hidden = true;
+            syncUrlClearButton(urlInput, urlClearBtn);
             urlInput.focus();
         });
     }
+
+    if (urlClearBtn) {
+        urlClearBtn.addEventListener("click", () => {
+            urlInput.value = "";
+            syncUrlClearButton(urlInput, urlClearBtn);
+            urlInput.focus();
+        });
+    }
+
+    document.addEventListener("pointerdown", (event) => {
+        if (document.activeElement === urlInput && !event.target.closest(".url-input-row")) {
+            urlInput.blur();
+        }
+    });
 
     // ----------------------------------------------------
     // 3. Settings Sliders UX

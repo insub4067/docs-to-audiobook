@@ -105,7 +105,10 @@
                 <div class="url-divider"><span>또는</span></div>
 
                 <div class="url-input-row">
-                    <input type="url" id="urlInput" placeholder="뉴스 기사나 커뮤니티 게시글 링크를 붙여넣으세요" inputmode="url">
+                    <div class="url-input-wrapper">
+                        <input type="url" id="urlInput" placeholder="뉴스 기사나 커뮤니티 게시글 링크를 붙여넣으세요" inputmode="url">
+                        <button type="button" class="btn-url-clear" id="urlClearBtn" aria-label="링크 입력 지우기" hidden>&times;</button>
+                    </div>
                     <button type="button" class="btn-url-paste" id="urlPasteBtn" hidden>붙여넣기</button>
                     <button type="button" class="btn-url-fetch" id="urlFetchBtn">
                         <i data-lucide="link"></i>

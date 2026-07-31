@@ -238,10 +238,15 @@ html {
     gap: 8px;
 }
 
-.url-input-row input {
+.url-input-wrapper {
     flex: 1;
     min-width: 0;
-    padding: 12px 16px;
+    position: relative;
+}
+
+.url-input-row input {
+    width: 100%;
+    padding: 12px 52px 12px 16px;
     font-size: 16px; /* iOS 자동 확대 방지 */
     font-family: var(--font-sans);
     color: var(--text-color);
@@ -253,6 +258,27 @@ html {
 .url-input-row input:focus {
     outline: none;
     border-color: var(--primary-color);
+}
+
+.btn-url-clear {
+    position: absolute;
+    top: 50%;
+    right: 2px;
+    width: 44px;
+    height: 44px;
+    transform: translateY(-50%);
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.btn-url-clear:hover {
+    background-color: rgba(93, 75, 64, 0.08);
+    color: var(--text-color);
 }
 
 .btn-url-paste {

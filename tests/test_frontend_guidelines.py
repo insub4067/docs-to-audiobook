@@ -95,3 +95,20 @@ if (!isHttpUrl("https://m.yonhapnews.co.kr/news/article")) throw new Error("HTTP
 if (isHttpUrl("not a link") || isHttpUrl("javascript:alert(1)")) throw new Error("HTTP가 아닌 값을 링크로 인식합니다.");
 """
     subprocess.run(["node", "-e", script], check=True)
+
+
+def test_url_clear_button_is_visible_only_when_input_has_a_value():
+    script = f"""
+const fs = require("fs");
+const source = fs.readFileSync({str(APP_JS)!r}, "utf8");
+const start = source.indexOf("function syncUrlClearButton(input, button)");
+const end = source.indexOf("\\n}}", start) + 2;
+if (start < 0 || end < 2) throw new Error("syncUrlClearButton 함수가 없습니다.");
+eval(source.slice(start, end));
+const button = {{ hidden: true }};
+syncUrlClearButton({{ value: "https://example.com" }}, button);
+if (button.hidden) throw new Error("입력값이 있는데 초기화 버튼이 숨겨졌습니다.");
+syncUrlClearButton({{ value: "" }}, button);
+if (!button.hidden) throw new Error("빈 입력값인데 초기화 버튼이 보입니다.");
+"""
+    subprocess.run(["node", "-e", script], check=True)
