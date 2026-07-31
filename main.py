@@ -489,7 +489,16 @@ async def extract_url(request: Request, payload: dict, authorization: str = Head
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
 
-    resp = await asyncio.to_thread(_fetch_url_safely, url)
+    try:
+        resp = await asyncio.to_thread(_fetch_url_safely, url)
+    except requests.Timeout:
+        raise HTTPException(
+            status_code=504,
+            detail="외부 페이지가 제한 시간 안에 응답하지 않았습니다. 잠시 후 다시 시도해 주세요.",
+        )
+    except requests.RequestException:
+        raise HTTPException(status_code=400, detail="페이지를 가져오지 못했습니다. 주소를 확인해 주세요.")
+
     try:
         content_type = resp.headers.get("Content-Type", "")
         if "html" not in content_type.lower():

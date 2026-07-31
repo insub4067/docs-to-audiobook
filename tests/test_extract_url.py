@@ -7,6 +7,7 @@
 """
 import pytest
 import httpx
+import requests
 from unittest.mock import patch, MagicMock
 from main import app, _is_safe_public_host
 
@@ -181,6 +182,21 @@ async def test_extract_url_rejects_js_rendered_page():
             )
             assert response.status_code == 422
             assert "자바스크립트" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_extract_url_reports_a_korean_message_when_the_site_times_out():
+    with patch("main.require_user_id", return_value="test_user_id"), \
+         patch("main._is_safe_public_host", return_value=True), \
+         patch("main.requests.get", side_effect=requests.ConnectTimeout):
+        transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(
+                "/api/extract-url", json={"url": "https://m.yonhapnews.co.kr/news/article"}, headers=_auth_headers()
+            )
+
+    assert response.status_code == 504
+    assert "제한 시간" in response.json()["detail"]
 
 
 @pytest.mark.asyncio
