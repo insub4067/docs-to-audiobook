@@ -334,9 +334,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         let refreshing = false;
 
         const spokes = [...pullEl.querySelectorAll(".pull-spinner i")];
+        // 스피너와 콘텐츠가 같은 값을 읽어야 하므로 공통 조상에 둔다
+        const root = document.documentElement;
 
         function setPull(distance, progress) {
-            pullEl.style.setProperty("--pull-y", `${distance}px`);
+            root.classList.add("pull-active");
+            root.style.setProperty("--pull-y", `${distance}px`);
             pullEl.style.opacity = String(Math.min(progress * 1.4, 1));
             // 진행도만큼 스포크를 차례로 켠다
             const lit = Math.round(progress * SPOKES);
@@ -344,12 +347,25 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         function resetPull(animated) {
-            pullEl.classList.toggle("settling", animated !== false);
+            const animate = animated !== false;
+            pullEl.classList.toggle("settling", animate);
+            root.classList.toggle("pull-settling", animate);
             pullEl.classList.remove("refreshing");
             pullDistance = 0;
-            pullEl.style.setProperty("--pull-y", "0px");
+            root.style.setProperty("--pull-y", "0px");
             pullEl.style.opacity = "0";
             spokes.forEach(s => { s.style.opacity = ""; });
+
+            // 되돌아간 뒤에는 transform을 완전히 걷어낸다. 남겨두면 콘텐츠에
+            // 스택 컨텍스트가 계속 붙어 있게 된다.
+            const cleanup = () => {
+                if (pullActive || refreshing) return;
+                root.classList.remove("pull-active", "pull-settling");
+                root.style.removeProperty("--pull-y");
+                pullEl.classList.remove("settling");
+            };
+            if (animate) setTimeout(cleanup, 400);
+            else cleanup();
         }
 
         // 다른 화면이 떠 있으면 당김을 잡지 않는다
@@ -389,7 +405,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         async function runRefresh() {
             refreshing = true;
             pullEl.classList.add("settling", "refreshing");
-            pullEl.style.setProperty("--pull-y", `${PULL_THRESHOLD}px`);
+            root.classList.add("pull-active", "pull-settling");
+            // 새로고침 중에는 콘텐츠가 임계 지점에 머물러 스피너 자리를 만든다
+            root.style.setProperty("--pull-y", `${PULL_THRESHOLD}px`);
             pullEl.style.opacity = "1";
             spokes.forEach(s => { s.style.opacity = ""; });
 

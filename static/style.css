@@ -1978,8 +1978,31 @@ input[type="range"]::-webkit-slider-thumb:active {
 }
 
 /* ===================== 당겨서 새로고침 (Pull to Refresh) ===================== */
-/* 헤더 위 안전영역 바로 아래에 떠 있고, 당긴 만큼 아래로 따라 내려온다.
-   fixed로 두어 본문 레이아웃을 밀지 않는다. */
+/* 당긴 만큼 콘텐츠도 함께 내려온다. iOS처럼 화면 전체가 손가락을 따라오고
+   그 위 여백에서 스피너가 드러난다.
+
+   주의: .app-container에는 transform을 걸면 안 된다. 그 안에 모달/리더/
+   액션시트 같은 position: fixed 오버레이가 들어 있어서, transform이 걸리는
+   순간 그것들의 기준이 뷰포트가 아니라 컨테이너가 되어 화면이 어긋난다.
+   그래서 실제 콘텐츠 요소만 골라서 움직인다. */
+/* 당기는 동안에만 transform을 건다. 평상시에도 걸어두면 불필요한 스택
+   컨텍스트와 GPU 레이어가 계속 남는다. */
+.pull-active .app-header,
+.pull-active .app-main,
+.pull-active .auth-container,
+.pull-active .app-version-footer {
+    transform: translateY(var(--pull-y, 0px));
+}
+
+/* 손을 뗀 뒤 되돌아갈 때만 애니메이션한다. 당기는 중에는 손가락을 그대로
+   따라와야 하므로 transition이 없어야 한다. */
+.pull-settling .app-header,
+.pull-settling .app-main,
+.pull-settling .auth-container,
+.pull-settling .app-version-footer {
+    transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
 .pull-refresh {
     position: fixed;
     top: calc(env(safe-area-inset-top) + 8px);
