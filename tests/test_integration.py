@@ -192,9 +192,10 @@ async def test_auth_me_user_not_found(mock_supabase):
 
 
 @pytest.mark.asyncio
-async def test_auth_me_success(mock_supabase):
+async def test_auth_me_success(mock_supabase, monkeypatch):
     from auth import create_access_token
 
+    monkeypatch.setenv("ADMIN_EMAILS", "a@b.com")
     token = create_access_token({"sub": "user-1"})
     mock_supabase.table().select().eq().single().execute.return_value = MagicMock(
         data={"id": "user-1", "email": "a@b.com", "full_name": "A", "avatar_url": None, "created_at": "2026-01-01"}
@@ -204,5 +205,6 @@ async def test_auth_me_success(mock_supabase):
         response = await client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert response.status_code == 200
         data = response.json()
-        assert data["id"] == "user-1"
-        assert data["email"] == "a@b.com"
+    assert data["id"] == "user-1"
+    assert data["email"] == "a@b.com"
+    assert data["is_admin"] is True

@@ -203,11 +203,7 @@ def _supabase_or_503():
 def require_admin_user(authorization: str) -> str:
     """환경변수 허용 목록에 등록된 사용자만 관리자 통계를 볼 수 있게 한다."""
     user_id = require_user_id(authorization)
-    allowed_emails = {
-        email.strip().lower()
-        for email in os.getenv("ADMIN_EMAILS", "").split(",")
-        if email.strip()
-    }
+    allowed_emails = _admin_emails()
     if not allowed_emails:
         raise HTTPException(status_code=403, detail="관리자 계정이 설정되지 않았습니다.")
 
@@ -219,6 +215,14 @@ def require_admin_user(authorization: str) -> str:
     if not user or (user.get("email") or "").lower() not in allowed_emails:
         raise HTTPException(status_code=403, detail="관리자만 접근할 수 있습니다.")
     return user_id
+
+
+def _admin_emails() -> set[str]:
+    return {
+        email.strip().lower()
+        for email in os.getenv("ADMIN_EMAILS", "").split(",")
+        if email.strip()
+    }
 
 
 def _parse_event_time(value: str | None):
@@ -1727,6 +1731,7 @@ async def get_current_user(authorization: str = Header(None)):
             "email": user["email"],
             "full_name": user.get("full_name"),
             "avatar_url": user.get("avatar_url"),
+            "is_admin": (user.get("email") or "").lower() in _admin_emails(),
             "created_at": user.get("created_at")
         }
 

@@ -38,7 +38,7 @@
         <header class="app-header">
             <div class="header-left">
                 <div class="logo">
-                    <h1 class="brand-wordmark">TEXTAUDIO</h1>
+                    <h1 class="brand-wordmark" id="brandWordmark">TEXTAUDIO</h1>
                 </div>
             </div>
 
@@ -50,6 +50,10 @@
                 </button>
                 <div class="profile-menu" id="profileMenu" role="menu" hidden>
                     <p class="profile-email" id="userEmail"></p>
+                    <a class="profile-menu-link" id="adminDashboardLink" href="/admin" role="menuitem" hidden>
+                        <i data-lucide="layout-dashboard"></i>
+                        관리자 페이지
+                    </a>
                     <button class="btn-logout" id="logoutBtn" type="button" role="menuitem" aria-label="로그아웃">
                         <i data-lucide="log-out"></i>
                         로그아웃

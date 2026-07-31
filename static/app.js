@@ -3104,6 +3104,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         const profileImage = document.getElementById("profileImage");
         const profileInitial = document.getElementById("profileInitial");
         const profileMenuBtn = document.getElementById("profileMenuBtn");
+        const adminDashboardLink = document.getElementById("adminDashboardLink");
+        const brandWordmark = document.getElementById("brandWordmark");
         const headerLoginSlot = document.getElementById("headerLoginSlot");
 
         // 메인 화면은 로그인 여부와 무관하게 항상 보인다 (기본 오디오북 체험용).
@@ -3113,8 +3115,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         appMain.style.display = "flex";
 
         const loggedIn = !!(user && token);
+        const isAdmin = loggedIn && user.is_admin === true;
         userInfo.style.display = loggedIn ? "flex" : "none";
         if (headerLoginSlot) headerLoginSlot.style.display = loggedIn ? "none" : "flex";
+        if (adminDashboardLink) adminDashboardLink.hidden = !isAdmin;
+        if (brandWordmark) brandWordmark.dataset.admin = String(isAdmin);
         if (loggedIn) {
             const profileName = user.full_name || user.email || "사용자";
             userEmail.textContent = user.email || "";
@@ -3263,6 +3268,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         const userInfo = document.getElementById("userInfo");
         const profileMenuBtn = document.getElementById("profileMenuBtn");
         const profileMenu = document.getElementById("profileMenu");
+        const brandWordmark = document.getElementById("brandWordmark");
+        let logoTapCount = 0;
+        let logoTapTimer;
 
         function closeProfileMenu() {
             profileMenu.hidden = true;
@@ -3285,6 +3293,15 @@ document.addEventListener("DOMContentLoaded", async () => {
             });
             document.addEventListener("keydown", (event) => {
                 if (event.key === "Escape") closeProfileMenu();
+            });
+        }
+        if (brandWordmark) {
+            brandWordmark.addEventListener("click", () => {
+                if (brandWordmark.dataset.admin !== "true") return;
+                logoTapCount += 1;
+                clearTimeout(logoTapTimer);
+                logoTapTimer = setTimeout(() => { logoTapCount = 0; }, 700);
+                if (logoTapCount === 3) window.location.assign("/admin");
             });
         }
     }

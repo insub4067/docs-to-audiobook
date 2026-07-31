@@ -153,3 +153,13 @@ def test_profile_badge_uses_a_short_name_instead_of_google_avatar():
 
     assert 'profileName.trim().split(/\\s+/)[0].slice(0, 2)' in source
     assert 'profileImage.hidden = true;' in source
+
+
+def test_admin_users_have_menu_and_triple_tap_entry_points():
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    source = APP_JS.read_text(encoding="utf-8")
+
+    assert 'id="adminDashboardLink" href="/admin" role="menuitem" hidden' in html
+    assert 'id="brandWordmark"' in html
+    assert 'adminDashboardLink.hidden = !isAdmin;' in source
+    assert 'if (logoTapCount === 3) window.location.assign("/admin");' in source
