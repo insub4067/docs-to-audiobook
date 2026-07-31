@@ -1976,3 +1976,86 @@ input[type="range"]::-webkit-slider-thumb:active {
 .pwa-text span {
     color: var(--text-muted);
 }
+
+/* ===================== 당겨서 새로고침 (Pull to Refresh) ===================== */
+/* 헤더 위 안전영역 바로 아래에 떠 있고, 당긴 만큼 아래로 따라 내려온다.
+   fixed로 두어 본문 레이아웃을 밀지 않는다. */
+.pull-refresh {
+    position: fixed;
+    top: calc(env(safe-area-inset-top) + 8px);
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 900;
+    opacity: 0;
+    /* --pull-y: 당긴 거리, --pull-p: 0~1 진행도. JS가 갱신한다. */
+    transform: translateY(calc(var(--pull-y, 0px) - 40px));
+}
+
+/* 손을 뗀 뒤 되돌아가거나 자리를 잡을 때만 애니메이션한다.
+   당기는 중에는 손가락을 그대로 따라와야 하므로 transition이 없어야 한다. */
+.pull-refresh.settling {
+    transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.25s ease;
+}
+
+.pull-spinner {
+    position: relative;
+    width: 28px;
+    height: 28px;
+}
+
+.pull-spinner i {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 2px;
+    height: 8px;
+    margin-left: -1px;
+    border-radius: 1px;
+    background: var(--text-muted);
+    transform-origin: 1px 14px;
+    opacity: 0.15;
+}
+
+/* 12개 스포크를 시계 방향으로 배치 */
+.pull-spinner i:nth-child(1)  { transform: rotate(0deg); }
+.pull-spinner i:nth-child(2)  { transform: rotate(30deg); }
+.pull-spinner i:nth-child(3)  { transform: rotate(60deg); }
+.pull-spinner i:nth-child(4)  { transform: rotate(90deg); }
+.pull-spinner i:nth-child(5)  { transform: rotate(120deg); }
+.pull-spinner i:nth-child(6)  { transform: rotate(150deg); }
+.pull-spinner i:nth-child(7)  { transform: rotate(180deg); }
+.pull-spinner i:nth-child(8)  { transform: rotate(210deg); }
+.pull-spinner i:nth-child(9)  { transform: rotate(240deg); }
+.pull-spinner i:nth-child(10) { transform: rotate(270deg); }
+.pull-spinner i:nth-child(11) { transform: rotate(300deg); }
+.pull-spinner i:nth-child(12) { transform: rotate(330deg); }
+
+/* 당기는 중: 진행도만큼 스포크가 차례로 켜진다 (--lit 개수) */
+.pull-spinner i { transition: opacity 0.12s linear; }
+
+/* 새로고침 중: 스포크 밝기가 순환하며 도는 것처럼 보인다.
+   컨테이너를 돌리지 않고 opacity를 순환시켜야 iOS 특유의 느낌이 난다. */
+.pull-refresh.refreshing .pull-spinner i {
+    transition: none;
+    animation: pull-spoke 1s linear infinite;
+}
+.pull-refresh.refreshing .pull-spinner i:nth-child(1)  { animation-delay: -0.000s; }
+.pull-refresh.refreshing .pull-spinner i:nth-child(2)  { animation-delay: -0.083s; }
+.pull-refresh.refreshing .pull-spinner i:nth-child(3)  { animation-delay: -0.166s; }
+.pull-refresh.refreshing .pull-spinner i:nth-child(4)  { animation-delay: -0.250s; }
+.pull-refresh.refreshing .pull-spinner i:nth-child(5)  { animation-delay: -0.333s; }
+.pull-refresh.refreshing .pull-spinner i:nth-child(6)  { animation-delay: -0.416s; }
+.pull-refresh.refreshing .pull-spinner i:nth-child(7)  { animation-delay: -0.500s; }
+.pull-refresh.refreshing .pull-spinner i:nth-child(8)  { animation-delay: -0.583s; }
+.pull-refresh.refreshing .pull-spinner i:nth-child(9)  { animation-delay: -0.666s; }
+.pull-refresh.refreshing .pull-spinner i:nth-child(10) { animation-delay: -0.750s; }
+.pull-refresh.refreshing .pull-spinner i:nth-child(11) { animation-delay: -0.833s; }
+.pull-refresh.refreshing .pull-spinner i:nth-child(12) { animation-delay: -0.916s; }
+
+@keyframes pull-spoke {
+    0%   { opacity: 1; }
+    100% { opacity: 0.15; }
+}

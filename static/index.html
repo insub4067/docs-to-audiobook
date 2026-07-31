@@ -24,6 +24,15 @@
         <div class="circle circle-3"></div>
     </div>
 
+    <!-- 당겨서 새로고침 인디케이터. iOS처럼 12개 스포크가 당긴 만큼
+         차례로 켜지고, 임계점을 넘겨 놓으면 회전한다. -->
+    <div class="pull-refresh" id="pullRefresh" aria-hidden="true">
+        <div class="pull-spinner" id="pullSpinner">
+            <i></i><i></i><i></i><i></i><i></i><i></i>
+            <i></i><i></i><i></i><i></i><i></i><i></i>
+        </div>
+    </div>
+
     <div class="app-container">
         <!-- Header -->
         <header class="app-header">
