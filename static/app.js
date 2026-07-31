@@ -1338,7 +1338,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 <div class="audio-title-group">
                     <div class="generating-spinner"></div>
                     <div class="generating-info">
-                        <span class="audio-title">셜록 홈즈의 모험 (기본 제공)</span>
+                        <span class="audio-title">데미안 (기본 제공)</span>
                         <div class="generating-progress-track">
                             <div class="generating-progress-fill" style="width: 30%"></div>
                         </div>

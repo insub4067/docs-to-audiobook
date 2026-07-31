@@ -1118,11 +1118,8 @@ async def serve_shared_page(share_id: str):
 # --------------------------------------------------
 
 DEFAULT_BOOK_DIR = os.path.join(BASE_DIR, "default_book")
-# 전문(12챕터, 15,487자)을 쓴다. supertonic 시절에는 이 분량이 공유 CPU
-# 하나를 오래 점유해 축약본(3챕터)으로 줄였지만, edge-tts는 네트워크
-# 기반이라 실측 3,000자에 4.9초 수준이라 전문도 30초 안에 끝난다.
-DEFAULT_BOOK_SOURCE = os.path.join(STATIC_DIR, "samples", "sherlock-holmes.md")
-DEFAULT_BOOK_TITLE = "셜록 홈즈의 모험"
+DEFAULT_BOOK_SOURCE = os.path.join(STATIC_DIR, "samples", "demian.txt")
+DEFAULT_BOOK_TITLE = "데미안"
 DEFAULT_BOOK_VOICE = SUPPORTED_VOICES[0]
 
 default_book_state = {"status": "pending", "error": None}
@@ -1164,8 +1161,8 @@ def default_book_paths():
 def default_book_remote_keys():
     fp = _default_book_fingerprint()
     return (
-        f"_default/sherlock-holmes.{fp}.mp3",
-        f"_default/sherlock-holmes.{fp}.meta.json",
+        f"_default/demian.{fp}.mp3",
+        f"_default/demian.{fp}.meta.json",
     )
 
 
@@ -1252,7 +1249,7 @@ async def generate_default_book():
     print(f"Starting default audiobook generation from {DEFAULT_BOOK_SOURCE}...")
     try:
         os.makedirs(DEFAULT_BOOK_DIR, exist_ok=True)
-        raw_text = extract_text(DEFAULT_BOOK_SOURCE, "sherlock-holmes.md")
+        raw_text = extract_text(DEFAULT_BOOK_SOURCE, "demian.txt")
         # edge-tts 경로는 오디오 바이트를 돌려주므로 여기서 디스크에 쓴다
         audio_bytes, sentences, headings = await synthesize_document(
             raw_text, DEFAULT_BOOK_VOICE, "+5%", "+0Hz"

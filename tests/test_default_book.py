@@ -9,6 +9,13 @@ import pytest
 import main
 
 
+def test_default_book_uses_demian_source():
+    assert main.DEFAULT_BOOK_SOURCE.endswith("samples/demian.txt")
+    assert main.DEFAULT_BOOK_TITLE == "데미안"
+    with open(main.DEFAULT_BOOK_SOURCE, encoding="utf-8") as source:
+        assert source.readline().strip() == "제1장 두 세계"
+
+
 @pytest.fixture
 def reset_default_book_state():
     """default_book_state는 모듈 전역 dict라 테스트 간에 새어나간다."""
