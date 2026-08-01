@@ -462,10 +462,10 @@ def extract_text(file_path: str, filename: str) -> str:
         reader = pypdf.PdfReader(file_path)
         text_list = []
         for page in reader.pages:
-            t = page.extract_text()
+            t = page.extract_text(extraction_mode="layout")
             if t:
                 text_list.append(t)
-        return "\n".join(text_list)
+        return normalize_pdf_for_reading("\n".join(text_list))
     elif ext in [".txt", ".md", ".markdown"]:
         for encoding in ["utf-8", "cp949", "euc-kr", "utf-16", "latin-1"]:
             try:
@@ -495,9 +495,101 @@ def parse_heading_line(line: str) -> tuple[int, str] | None:
     return None
 
 
+def _pdf_layout_cells(line: str) -> list[str]:
+    return [cell.strip() for cell in re.split(r"\s{2,}", line.strip()) if cell.strip()]
+
+
+def normalize_pdf_for_reading(text: str) -> str:
+    """PDF 레이아웃 텍스트를 리더용 Markdown 구조로 정리한다."""
+    lines = text.split("\n")
+    normalized = []
+    index = 0
+
+    while index < len(lines):
+        line = lines[index].strip()
+        cells = _pdf_layout_cells(line)
+
+        if len(cells) >= 2:
+            rows = [cells]
+            next_index = index + 1
+            while next_index < len(lines):
+                next_cells = _pdf_layout_cells(lines[next_index])
+                if len(next_cells) != len(cells):
+                    break
+                rows.append(next_cells)
+                next_index += 1
+
+            if len(rows) >= 2:
+                normalized.append("| " + " | ".join(rows[0]) + " |")
+                normalized.append("| " + " | ".join("---" for _ in rows[0]) + " |")
+                normalized.extend("| " + " | ".join(row) + " |" for row in rows[1:])
+                index = next_index
+                continue
+
+        heading = parse_heading_line(line)
+        if heading:
+            level, display = heading
+            normalized.append("#" * level + " " + display)
+        elif re.match(r"^[•◦▪]\s+", line):
+            normalized.append("- " + re.sub(r"^[•◦▪]\s+", "", line))
+        else:
+            normalized.append(line)
+        index += 1
+
+    return "\n".join(normalized)
+
+
+def _markdown_table_cells(line: str) -> list[str]:
+    return [cell.strip() for cell in line.strip().strip("|").split("|")]
+
+
+def _is_markdown_table_separator(line: str) -> bool:
+    cells = _markdown_table_cells(line)
+    return bool(cells) and all(re.fullmatch(r":?-{3,}:?", cell) for cell in cells)
+
+
+def normalize_markdown_for_reading(text: str) -> str:
+    """표와 문법 기호를 TTS·리더에서 자연스러운 문장으로 바꾼다."""
+    lines = re.sub(r"<br\s*/?>", ". ", text, flags=re.IGNORECASE).split("\n")
+    normalized = []
+    index = 0
+
+    while index < len(lines):
+        line = lines[index]
+        if (
+            "|" in line
+            and index + 1 < len(lines)
+            and _is_markdown_table_separator(lines[index + 1])
+        ):
+            headers = _markdown_table_cells(line)
+            index += 2
+            while index < len(lines) and "|" in lines[index]:
+                values = _markdown_table_cells(lines[index])
+                pairs = [
+                    f"{header or '항목'}: {value}"
+                    for header, value in zip(headers, values)
+                    if value
+                ]
+                if pairs:
+                    normalized.append(". ".join(pairs) + ".")
+                index += 1
+            continue
+
+        if re.fullmatch(r"\s*(?:[-*_]\s*){3,}", line):
+            index += 1
+            continue
+
+        normalized.append(re.sub(r"^\s*>\s?", "", line))
+        index += 1
+
+    return "\n".join(normalized)
+
+
 def preprocess_text(text: str) -> str:
     # 1. Clean line breaks: single newline to space, double newline to paragraph break with pause indicator
-    cleaned_text = text.lstrip("\ufeff").replace("\r\n", "\n")
+    cleaned_text = normalize_markdown_for_reading(
+        text.lstrip("\ufeff").replace("\r\n", "\n")
+    )
     
     # 2. Prevent headings from merging with the next paragraph
     lines = cleaned_text.split('\n')
@@ -514,7 +606,8 @@ def preprocess_text(text: str) -> str:
     # 3. Clean consecutive spaces
     while "  " in cleaned_text:
         cleaned_text = cleaned_text.replace("  ", " ")
-        
+    cleaned_text = re.sub(r"([.!?])\s*\.", r"\1", cleaned_text)
+
     return cleaned_text.strip()
 
 
