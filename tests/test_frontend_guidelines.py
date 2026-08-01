@@ -11,6 +11,7 @@ AUTH_JS = ROOT_DIR / "static" / "js" / "auth.js"
 PWA_JS = ROOT_DIR / "static" / "js" / "pwa.js"
 NOTIFICATIONS_JS = ROOT_DIR / "static" / "js" / "notifications.js"
 GENERATION_STATUS_JS = ROOT_DIR / "static" / "js" / "generation-status.js"
+GENERATION_JS = ROOT_DIR / "static" / "js" / "generation.js"
 VOICES_JS = ROOT_DIR / "static" / "js" / "voices.js"
 WEB_SPEECH_JS = ROOT_DIR / "static" / "js" / "web-speech.js"
 READER_CONTROLS_JS = ROOT_DIR / "static" / "js" / "reader-controls.js"
@@ -30,10 +31,20 @@ SPLIT_APP_SCRIPTS = [
     "/static/js/auth.js",
     "/static/js/pwa.js",
     "/static/js/generation-status.js",
+    "/static/js/generation.js",
     "/static/js/voices.js",
     "/static/js/web-speech.js",
     "/static/js/reader-controls.js",
 ]
+
+
+def test_generation_controller_exposes_initialization_and_pending_generation_contract():
+    assert GENERATION_JS.is_file()
+    source = GENERATION_JS.read_text(encoding="utf-8")
+
+    assert "TextAudio.createGenerationController" in source
+    assert "initialize" in source
+    assert "runPendingGeneration" in source
 
 
 def test_background_notification_client_is_loaded():
@@ -44,11 +55,11 @@ def test_background_notification_client_is_loaded():
 
 
 def test_background_job_is_remembered_and_checked_on_resume():
-    app = APP_JS.read_text(encoding="utf-8")
+    generation = GENERATION_JS.read_text(encoding="utf-8")
     notifications = NOTIFICATIONS_JS.read_text(encoding="utf-8")
     pwa = PWA_JS.read_text(encoding="utf-8")
 
-    assert "rememberBackgroundJob(jobId, audioFilename)" in app
+    assert "rememberBackgroundJob(jobId, filename)" in generation
     assert "setInterval(checkPendingBackgroundJobs, 30000)" in notifications
     assert "window.__checkPendingBackgroundJobs" in pwa
 
@@ -633,47 +644,80 @@ def test_generation_requests_completion_notification_without_blocking_synthesis(
     script = f"""
 const fs = require("fs");
 const vm = require("vm");
-const source = fs.readFileSync({str(APP_JS)!r}, "utf8");
-const start = source.indexOf("// 4. Generate Audiobook Action");
-const end = source.indexOf("// Background job loading rows", start);
-if (start < 0 || end < 0) throw new Error("오디오북 생성 처리기를 찾지 못했습니다.");
+const source = fs.readFileSync({str(GENERATION_JS)!r}, "utf8");
 
 let notificationRequests = 0;
 let generationRequests = 0;
-const generateBtn = {{
-  addEventListener(name, handler) {{ this[name] = handler; }},
+function element(overrides = {{}}) {{
+  return Object.assign({{
+    value: "", textContent: "", disabled: false, style: {{}}, dataset: {{}}, files: [],
+    classList: {{ add() {{}}, remove() {{}} }}, listeners: {{}},
+    addEventListener(name, handler) {{ this.listeners[name] = handler; }},
+    trigger(name, event = {{}}) {{ return this.listeners[name]?.(event); }},
+    querySelector() {{ return null; }}, scrollIntoView() {{}}, focus() {{}}, blur() {{}},
+  }}, overrides);
+}}
+const elements = {{
+  dropzone: element(), fileInput: element(), fileDetails: element(), fileName: element(), fileSize: element(),
+  removeFileBtn: element(), speedSlider: element({{ value: "0" }}), speedVal: element(),
+  pitchSlider: element({{ value: "0" }}), pitchVal: element(), generateBtn: element(),
+  previewPlaceholder: element(), previewText: element(), charCountBadge: element(),
+  audioList: element({{ children: [], prepend(item) {{ this.children.unshift(item); }} }}),
+  libraryEmpty: element(), urlInput: element({{ value: "https://example.com/article" }}),
+  urlFetchBtn: element({{ querySelector() {{ return element({{ textContent: "가져오기" }}); }} }}),
+  urlClearBtn: element(), loginPromptConfirmBtn: element(), headerLoginSlot: element(),
 }};
+const storage = new Map();
 const context = {{
-  charCountBadge: {{ textContent: "1,234자" }},
-  closeGenerationModal() {{}},
-  console: {{ warn() {{}} }},
-  currentTextAccessToken: "access-token",
-  currentTextId: "text-1",
-  generateAudiobook: async (options) => {{
-    generationRequests += 1;
-    if (options.textId !== "text-1" || options.charCount !== 1234) {{
-      throw new Error("생성 인자가 유지되지 않았습니다.");
-    }}
+  FormData: class {{ constructor() {{ this.values = {{}}; }} append(key, value) {{ this.values[key] = value; }} }},
+  authHeaders: () => ({{}}), anonymousSessionHeaders: () => ({{}}), canStartAnonymousTrial: async () => true,
+  console, formatBytes: () => "1 KB", isLoggedIn: () => true, navigator: {{ userAgent: "Desktop" }},
+  rememberBackgroundJob() {{}}, showToast() {{}}, syncUrlClearButton() {{}}, trackProductEvent() {{}},
+  updateGenerateHint() {{}}, parseInt, setTimeout: (callback) => callback(),
+  document: {{
+    body: {{ dataset: {{ isAdmin: "false" }} }}, activeElement: null,
+    getElementById(id) {{ return elements[id] || null; }},
+    querySelector(selector) {{ return selector === ".library-section" ? element() : null; }},
+    addEventListener() {{}},
   }},
-  generateBtn,
-  getFormattedPitch: () => "+0Hz",
-  getFormattedSpeed: () => "+0%",
-  parseInt,
-  pitchSlider: {{ value: "0" }},
-  speedSlider: {{ value: "0" }},
-  uploadedFile: {{ name: "문서.pdf" }},
-  voiceController: {{ getSelectedVoice: () => "ko-KR-SunHiNeural" }},
+  sessionStorage: {{
+    getItem(key) {{ return storage.get(key) || null; }},
+    setItem(key, value) {{ storage.set(key, value); }},
+    removeItem(key) {{ storage.delete(key); }},
+  }},
+  fetch: async (url) => {{
+    if (url === "/api/extract-url") return {{ ok: true, json: async () => ({{
+      text_id: "text-1", text_access_token: "access-token", filename: "문서.pdf", preview: "본문", char_count: 1234,
+    }}) }};
+    if (url === "/api/synthesize") {{
+      generationRequests += 1;
+      return {{ ok: true, json: async () => ({{ job_id: "job-1", background_started: true }}) }};
+    }}
+    throw new Error(`예상하지 못한 요청: ${{url}}`);
+  }},
   window: {{
+    innerWidth: 1024,
     __requestPushNotificationSubscription: async () => {{
       notificationRequests += 1;
       throw new Error("알림 등록 실패");
     }},
   }},
 }};
-vm.runInNewContext(source.slice(start, end), context);
+vm.runInNewContext(source, context);
+const progressStatus = element();
+const controller = context.window.TextAudio.createGenerationController({{
+  voiceController: {{ getSelectedVoice: () => "ko-KR-SunHiNeural" }},
+  generationStatus: {{ create: () => element({{
+    querySelector(selector) {{ return selector.includes("fill") ? element() : progressStatus; }}, remove() {{}},
+  }}) }},
+  openGenerationModal() {{}}, closeGenerationModal() {{}}, openLoginPromptSheet() {{}}, closeLoginPromptSheet() {{}},
+  renderLibrary() {{}}, syncWithCloud() {{}},
+}});
+controller.initialize();
 
 (async () => {{
-  await generateBtn.click();
+  await elements.urlFetchBtn.trigger("click");
+  await elements.generateBtn.trigger("click");
   if (notificationRequests !== 1) throw new Error("생성 시 완료 알림을 요청하지 않았습니다.");
   if (generationRequests !== 1) throw new Error("알림 실패로 오디오북 생성을 중단했습니다.");
 }})().catch((error) => {{ console.error(error); process.exit(1); }});
@@ -1090,7 +1134,7 @@ async function dispatchClick() {{
 def test_service_worker_precaches_notification_client_with_new_cache_version():
     source = SW_JS.read_text(encoding="utf-8")
 
-    assert 'const CACHE_NAME = "2026.08.02.3";' in source
+    assert 'const CACHE_NAME = "2026.08.02.4";' in source
     assert '"/static/js/notifications.js"' in source
 
 
@@ -1214,7 +1258,7 @@ def test_modals_support_escape_and_restore_focus():
 
 
 def test_url_fetch_button_shows_a_spinner_while_loading():
-    source = APP_JS.read_text(encoding="utf-8")
+    source = GENERATION_JS.read_text(encoding="utf-8")
     css = STYLE_CSS.read_text(encoding="utf-8")
 
     assert 'urlFetchBtn.classList.add("is-loading")' in source
@@ -1254,7 +1298,7 @@ if (getAudiobookDisplayTitle("제목") !== "제목") throw new Error("확장자 
 
 
 def test_anonymous_trial_uses_a_private_session_header_and_one_time_marker():
-    source = APP_JS.read_text(encoding="utf-8") + AUTH_JS.read_text(encoding="utf-8")
+    source = GENERATION_JS.read_text(encoding="utf-8") + AUTH_JS.read_text(encoding="utf-8")
 
     assert '"X-Anonymous-Session"' in source
     assert "anonymousTrialUsed" in source

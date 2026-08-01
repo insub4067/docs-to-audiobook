@@ -4,9 +4,11 @@
 - 브랜치: `main`
 - 1차 분리 완료: `toast.js`, `utils.js`, `db.js`, `auth.js`, `pwa.js`, `notifications.js`
 - 2차 안전 모듈 분리 완료: `generation-status.js`, `voices.js`, `web-speech.js`, `reader-controls.js`
-- 다음 범위: 생성 워크플로 → 보관함 → 리더 본체 순서로 컨트롤러화
+- 생성 워크플로 분리 완료: `generation.js`가 파일·URL 추출, 생성 설정, 로그인 예약 생성을 소유
+- 현재 `static/app.js`: 1,871줄
+- 다음 범위: 보관함 → 리더 본체 순서로 컨트롤러화
 - 최신 설계: `docs/superpowers/specs/2026-08-02-app-js-phase-two-design.md`
-- 최신 실행 계획: `docs/superpowers/plans/2026-08-02-app-js-phase-two-safe-modules.md`
+- 최신 실행 계획: `docs/superpowers/plans/2026-08-02-app-js-generation-module.md`
 
 ## 왜 이렇게 결정했는가
 `static/app.js`(3550줄)는 최상위 유틸 함수 4개만 빼고 전부 **하나의**
@@ -167,4 +169,4 @@
    이 저장소는 main 푸시 시 자동 배포됨)
 
 ## 다음 작업
-업로드·생성, 보관함·클라우드 동기화, 리더 본체는 결합도가 높아 승인된 2차 설계에 따라 별도 TDD 배치로 순차 분리한다. 로컬/공유 리더의 중복 제거는 책임 이동과 섞지 않고 이번 분리 범위에서 제외한다.
+보관함·클라우드 동기화와 리더 본체는 결합도가 높아 승인된 2차 설계에 따라 별도 TDD 배치로 순차 분리한다. 로컬/공유 리더의 중복 제거는 책임 이동과 섞지 않는다.
