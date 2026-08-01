@@ -1,4 +1,4 @@
-const CACHE_NAME = "2026.08.01.29";
+const CACHE_NAME = "2026.08.01.30";
 
 const ASSETS_TO_CACHE = [
   "/",
@@ -72,7 +72,11 @@ self.addEventListener("notificationclick", (event) => {
           return false;
         }
       });
-      if (client) return client.focus();
+      if (client) {
+        return client.focus().then(() => {
+          client.postMessage({ type: "check_pending_background_jobs" });
+        });
+      }
       return clients.openWindow("/");
     })
   );

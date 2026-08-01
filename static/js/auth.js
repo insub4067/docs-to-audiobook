@@ -2,6 +2,19 @@
 // Authentication System
 // ============================================================
 
+let currentAuthenticatedUserId = null;
+
+function getCurrentAuthenticatedUserId() {
+    return currentAuthenticatedUserId;
+}
+
+window.addEventListener("storage", (event) => {
+    if (event.key !== "authToken" || event.oldValue === event.newValue) return;
+    currentAuthenticatedUserId = null;
+    window.__refreshBackgroundNotificationNamespace?.();
+    location.reload();
+});
+
 // 변환 계열 요청에 붙일 인증 헤더. FormData 전송 시 Content-Type을 직접
 // 지정하면 boundary가 깨지므로 Authorization만 넣는다.
 function authHeaders() {
@@ -101,6 +114,8 @@ function showAppUI(user, token) {
     appMain.style.display = "flex";
 
     const loggedIn = !!(user && token);
+    currentAuthenticatedUserId = loggedIn && typeof user.id === "string" ? user.id : null;
+    window.__refreshBackgroundNotificationNamespace?.();
     const isAdmin = loggedIn && user.is_admin === true;
     document.body.dataset.isAdmin = String(isAdmin);
     const dropzoneHint = document.querySelector(".dropzone-hint");

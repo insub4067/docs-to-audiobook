@@ -1,28 +1,55 @@
 const PENDING_BACKGROUND_JOBS_KEY = "textAudio_pendingBackgroundJobs";
+const PUSH_SUBSCRIPTION_OWNER_KEY = "textAudio_pushSubscriptionOwner";
+const BACKGROUND_JOB_CLAIM_MS = 5 * 60 * 1000;
+const PUSH_UNSUBSCRIBE_TIMEOUT_MS = 2500;
+const backgroundNotificationTabId = typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random()}`;
 let backgroundJobCheckInterval = null;
 let checkingBackgroundJobs = false;
+let backgroundNotificationMessageListenerAdded = false;
 
-function readPendingBackgroundJobs() {
-    try {
-        const pending = JSON.parse(localStorage.getItem(PENDING_BACKGROUND_JOBS_KEY) || "[]");
-        return Array.isArray(pending) ? pending.filter((jobId) => typeof jobId === "string") : [];
-    } catch (error) {
-        return [];
-    }
+function pendingBackgroundJobNamespace(userId = getCurrentAuthenticatedUserId()) {
+    if (!userId) return null;
+    return `${PENDING_BACKGROUND_JOBS_KEY}:${encodeURIComponent(userId)}:`;
 }
 
-function writePendingBackgroundJobs(jobIds) {
-    localStorage.setItem(PENDING_BACKGROUND_JOBS_KEY, JSON.stringify(jobIds));
-    updateBackgroundJobCheckInterval();
+function pendingBackgroundJobKey(userId, jobId) {
+    return `${pendingBackgroundJobNamespace(userId)}job:${encodeURIComponent(jobId)}`;
+}
+
+function pendingBackgroundJobClaimKey(userId, jobId) {
+    return `${pendingBackgroundJobNamespace(userId)}claim:${encodeURIComponent(jobId)}`;
+}
+
+function readPendingBackgroundJobs(userId = getCurrentAuthenticatedUserId()) {
+    const namespace = pendingBackgroundJobNamespace(userId);
+    if (!namespace) return [];
+    const jobPrefix = `${namespace}job:`;
+    const pending = [];
+    for (let index = 0; index < localStorage.length; index++) {
+        const key = localStorage.key(index);
+        if (!key?.startsWith(jobPrefix) || localStorage.getItem(key) !== "1") continue;
+        try {
+            pending.push(decodeURIComponent(key.slice(jobPrefix.length)));
+        } catch (error) {
+            // 손상된 로컬 키는 상태 조회 대상에서 제외한다.
+        }
+    }
+    return pending;
 }
 
 function rememberBackgroundJob(jobId) {
-    const pending = readPendingBackgroundJobs();
-    if (!pending.includes(jobId)) writePendingBackgroundJobs([...pending, jobId]);
+    const userId = getCurrentAuthenticatedUserId();
+    if (!userId || typeof jobId !== "string" || !jobId) return;
+    localStorage.setItem(pendingBackgroundJobKey(userId, jobId), "1");
+    updateBackgroundJobCheckInterval();
 }
 
-function forgetBackgroundJob(jobId) {
-    writePendingBackgroundJobs(readPendingBackgroundJobs().filter((pendingJobId) => pendingJobId !== jobId));
+function forgetBackgroundJob(jobId, userId = getCurrentAuthenticatedUserId()) {
+    if (!userId) return;
+    localStorage.removeItem(pendingBackgroundJobKey(userId, jobId));
+    updateBackgroundJobCheckInterval();
 }
 
 function updateBackgroundJobCheckInterval() {
@@ -35,31 +62,76 @@ function updateBackgroundJobCheckInterval() {
     }
 }
 
+async function claimPendingBackgroundJob(userId, jobId) {
+    const key = pendingBackgroundJobClaimKey(userId, jobId);
+    const now = Date.now();
+    try {
+        const current = JSON.parse(localStorage.getItem(key) || "null");
+        if (current?.expiresAt > now) return false;
+        const claim = { owner: backgroundNotificationTabId, expiresAt: now + BACKGROUND_JOB_CLAIM_MS };
+        localStorage.setItem(key, JSON.stringify(claim));
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        return JSON.parse(localStorage.getItem(key) || "null")?.owner === backgroundNotificationTabId;
+    } catch (error) {
+        return false;
+    }
+}
+
+function releasePendingBackgroundJobClaim(userId, jobId) {
+    const key = pendingBackgroundJobClaimKey(userId, jobId);
+    try {
+        if (JSON.parse(localStorage.getItem(key) || "null")?.owner === backgroundNotificationTabId) {
+            localStorage.removeItem(key);
+        }
+    } catch (error) {
+        localStorage.removeItem(key);
+    }
+}
+
+async function checkOnePendingBackgroundJob(userId, jobId, shouldClaim) {
+    if (shouldClaim && !await claimPendingBackgroundJob(userId, jobId)) return;
+    try {
+        if (getCurrentAuthenticatedUserId() !== userId) return;
+        const response = await fetch(`/api/background-jobs/${encodeURIComponent(jobId)}`, {
+            headers: authHeaders(),
+        });
+        if (!response.ok || getCurrentAuthenticatedUserId() !== userId) return;
+        const job = await response.json();
+        if (job.status === "completed") {
+            const syncAudiobooksToCloud = window.__syncAudiobooksToCloud;
+            if (typeof syncAudiobooksToCloud !== "function") return;
+            const syncResult = await syncAudiobooksToCloud({ silent: true });
+            if (!syncResult?.ok || getCurrentAuthenticatedUserId() !== userId) return;
+            forgetBackgroundJob(jobId, userId);
+            showToast("오디오북 생성이 완료되었습니다.", "success");
+        } else if (job.status === "error") {
+            forgetBackgroundJob(jobId, userId);
+            showToast(job.error || "오디오북 생성에 실패했습니다.", "error");
+        }
+    } catch (error) {
+        console.warn("백그라운드 작업 상태 확인 실패");
+    } finally {
+        if (shouldClaim) releasePendingBackgroundJobClaim(userId, jobId);
+    }
+}
+
+async function checkPendingBackgroundJobsForUser(userId, shouldClaim) {
+    if (getCurrentAuthenticatedUserId() !== userId) return;
+    for (const jobId of readPendingBackgroundJobs(userId)) {
+        await checkOnePendingBackgroundJob(userId, jobId, shouldClaim);
+    }
+}
+
 async function checkPendingBackgroundJobs() {
-    if (!isLoggedIn() || checkingBackgroundJobs) return;
+    const userId = getCurrentAuthenticatedUserId();
+    if (!isLoggedIn() || !userId || checkingBackgroundJobs) return;
     checkingBackgroundJobs = true;
     try {
-        for (const jobId of readPendingBackgroundJobs()) {
-            try {
-                const response = await fetch(`/api/background-jobs/${encodeURIComponent(jobId)}`, {
-                    headers: authHeaders(),
-                });
-                if (!response.ok) continue;
-                const job = await response.json();
-                if (job.status === "completed") {
-                    const syncAudiobooksToCloud = window.__syncAudiobooksToCloud;
-                    if (typeof syncAudiobooksToCloud !== "function") continue;
-                    const syncResult = await syncAudiobooksToCloud({ silent: true });
-                    if (!syncResult?.ok) continue;
-                    forgetBackgroundJob(jobId);
-                    showToast("오디오북 생성이 완료되었습니다.", "success");
-                } else if (job.status === "error") {
-                    forgetBackgroundJob(jobId);
-                    showToast(job.error || "오디오북 생성에 실패했습니다.", "error");
-                }
-            } catch (error) {
-                console.warn("백그라운드 작업 상태 확인 실패");
-            }
+        if (navigator.locks?.request) {
+            const lockName = `${PENDING_BACKGROUND_JOBS_KEY}:${encodeURIComponent(userId)}:check`;
+            await navigator.locks.request(lockName, () => checkPendingBackgroundJobsForUser(userId, false));
+        } else {
+            await checkPendingBackgroundJobsForUser(userId, true);
         }
     } finally {
         checkingBackgroundJobs = false;
@@ -81,14 +153,54 @@ async function savePushSubscription(subscription) {
     if (!response.ok) throw new Error("구독 저장 실패");
 }
 
+async function deletePushSubscription(endpoint, signal) {
+    const response = await fetch("/api/push/subscriptions", {
+        method: "DELETE",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint }),
+        signal,
+    });
+    if (!response.ok) throw new Error("구독 삭제 실패");
+}
+
+function renderPushNotificationState(button, label, state) {
+    button.dataset.state = state;
+    button.disabled = state === "blocked";
+    button.setAttribute("aria-pressed", String(state === "on"));
+    label.textContent = state === "on"
+        ? "완료 알림 켜짐"
+        : state === "blocked" ? "알림 차단됨" : "완료 알림 꺼짐";
+}
+
 async function initializeBackgroundNotifications() {
     window.__checkPendingBackgroundJobs = checkPendingBackgroundJobs;
+    window.__refreshBackgroundNotificationNamespace = () => {
+        updateBackgroundJobCheckInterval();
+        checkPendingBackgroundJobs();
+    };
     checkPendingBackgroundJobs();
     updateBackgroundJobCheckInterval();
 
+    if ("serviceWorker" in navigator && !backgroundNotificationMessageListenerAdded) {
+        navigator.serviceWorker.addEventListener("message", (event) => {
+            if (event.data?.type === "check_pending_background_jobs") {
+                window.__checkPendingBackgroundJobs?.();
+            }
+        });
+        backgroundNotificationMessageListenerAdded = true;
+    }
+
     const button = document.getElementById("pushNotificationBtn");
     const label = document.getElementById("pushNotificationLabel");
-    if (!button || !label || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return;
+    if (
+        !isLoggedIn()
+        || !getCurrentAuthenticatedUserId()
+        || !button
+        || !label
+        || !("serviceWorker" in navigator)
+        || !("PushManager" in window)
+        || !("Notification" in window)
+    ) return;
 
     try {
         const response = await fetch("/api/push/config");
@@ -96,29 +208,96 @@ async function initializeBackgroundNotifications() {
         const config = await response.json();
         if (!config.enabled || !config.public_key) return;
 
+        const registration = await navigator.serviceWorker.ready;
+        let subscription = await registration.pushManager.getSubscription();
+        let subscriptionIsRegistered = false;
+        if (!subscription) {
+            localStorage.removeItem(PUSH_SUBSCRIPTION_OWNER_KEY);
+        } else if (Notification.permission !== "denied") {
+            const userId = getCurrentAuthenticatedUserId();
+            if (localStorage.getItem(PUSH_SUBSCRIPTION_OWNER_KEY) === userId) {
+                subscriptionIsRegistered = true;
+            } else {
+                try {
+                    await savePushSubscription(subscription);
+                    localStorage.setItem(PUSH_SUBSCRIPTION_OWNER_KEY, userId);
+                    subscriptionIsRegistered = true;
+                } catch (error) {
+                    console.warn("기존 푸시 알림 구독 연결 실패");
+                }
+            }
+        }
         button.hidden = false;
+        renderPushNotificationState(
+            button,
+            label,
+            Notification.permission === "denied"
+                ? "blocked"
+                : subscriptionIsRegistered ? "on" : "off",
+        );
+
         button.addEventListener("click", async () => {
+            if (button.dataset.state === "blocked" || button.dataset.busy === "true") return;
+            button.dataset.busy = "true";
+            button.disabled = true;
             try {
-                const permission = await Notification.requestPermission();
+                if (subscription && button.dataset.state === "on") {
+                    const endpoint = subscription.endpoint;
+                    const [serverResult, browserResult] = await Promise.allSettled([
+                        deletePushSubscription(endpoint),
+                        subscription.unsubscribe(),
+                    ]);
+                    const serverDisabled = serverResult.status === "fulfilled";
+                    const browserDisabled = browserResult.status === "fulfilled" && browserResult.value !== false;
+                    if (!serverDisabled && !browserDisabled) throw new Error("구독 해제 실패");
+                    subscription = null;
+                    subscriptionIsRegistered = false;
+                    localStorage.removeItem(PUSH_SUBSCRIPTION_OWNER_KEY);
+                    renderPushNotificationState(button, label, "off");
+                    showToast("완료 알림 꺼짐", "success");
+                    return;
+                }
+
+                if (Notification.permission === "denied") {
+                    renderPushNotificationState(button, label, "blocked");
+                    return;
+                }
+                const permission = Notification.permission === "granted"
+                    ? "granted"
+                    : await Notification.requestPermission();
                 if (permission !== "granted") {
+                    renderPushNotificationState(button, label, permission === "denied" ? "blocked" : "off");
                     showToast("완료 알림 권한이 허용되지 않았습니다.", "error");
                     return;
                 }
 
-                const registration = await navigator.serviceWorker.ready;
-                let subscription = await registration.pushManager.getSubscription();
-                if (!subscription) {
+                const createdSubscription = !subscription;
+                if (createdSubscription) {
                     subscription = await registration.pushManager.subscribe({
                         userVisibleOnly: true,
                         applicationServerKey: urlBase64ToUint8Array(config.public_key),
                     });
                 }
-                await savePushSubscription(subscription);
-                label.textContent = "완료 알림 켜짐";
+                try {
+                    await savePushSubscription(subscription);
+                } catch (error) {
+                    if (createdSubscription) {
+                        await Promise.allSettled([subscription.unsubscribe()]);
+                        subscription = null;
+                    }
+                    renderPushNotificationState(button, label, "off");
+                    throw error;
+                }
+                subscriptionIsRegistered = true;
+                localStorage.setItem(PUSH_SUBSCRIPTION_OWNER_KEY, getCurrentAuthenticatedUserId());
+                renderPushNotificationState(button, label, "on");
                 showToast("완료 알림 켜짐", "success");
             } catch (error) {
                 console.warn("푸시 알림 설정 실패");
                 showToast("완료 알림 설정에 실패했습니다.", "error");
+            } finally {
+                delete button.dataset.busy;
+                if (button.dataset.state !== "blocked") button.disabled = false;
             }
         });
     } catch (error) {
@@ -126,39 +305,36 @@ async function initializeBackgroundNotifications() {
     }
 }
 
-async function unsubscribePushNotifications() {
-    if (!("serviceWorker" in navigator)) return;
-
-    let registration;
-    try {
-        registration = await navigator.serviceWorker.getRegistration();
-    } catch (error) {
-        return;
-    }
+async function performPushUnsubscribe(signal) {
+    const registration = await navigator.serviceWorker.getRegistration();
     if (!registration) return;
-
-    let subscription;
-    try {
-        subscription = await registration.pushManager.getSubscription();
-    } catch (error) {
-        return;
-    }
+    const subscription = await registration.pushManager.getSubscription();
     if (!subscription) return;
+    const [browserResult, serverResult] = await Promise.allSettled([
+        subscription.unsubscribe(),
+        deletePushSubscription(subscription.endpoint, signal),
+    ]);
+    const browserDisabled = browserResult.status === "fulfilled" && browserResult.value !== false;
+    const serverDisabled = serverResult.status === "fulfilled";
+    if (browserDisabled || serverDisabled) localStorage.removeItem(PUSH_SUBSCRIPTION_OWNER_KEY);
+}
 
-    const endpoint = subscription.endpoint;
+async function unsubscribePushNotifications() {
+    localStorage.removeItem(PUSH_SUBSCRIPTION_OWNER_KEY);
+    if (!("serviceWorker" in navigator)) return;
+    const controller = new AbortController();
+    let timeoutId;
+    const timeout = new Promise((resolve) => {
+        timeoutId = setTimeout(() => {
+            controller.abort();
+            resolve();
+        }, PUSH_UNSUBSCRIBE_TIMEOUT_MS);
+    });
     try {
-        await subscription.unsubscribe();
-    } catch (error) {
-        // 서버 구독 삭제는 계속 시도한다.
-    }
-
-    try {
-        await fetch("/api/push/subscriptions", {
-            method: "DELETE",
-            headers: { ...authHeaders(), "Content-Type": "application/json" },
-            body: JSON.stringify({ endpoint }),
-        });
+        await Promise.race([performPushUnsubscribe(controller.signal), timeout]);
     } catch (error) {
         // 로그아웃은 구독 해제 실패와 관계없이 계속한다.
+    } finally {
+        clearTimeout(timeoutId);
     }
 }

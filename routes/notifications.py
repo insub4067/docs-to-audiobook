@@ -1,14 +1,16 @@
 import os
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 import state
-from push_notifications import push_is_configured
+from push_notifications import is_supported_push_endpoint, push_is_configured
+from state import enforce_rate_limit
 
 
 router = APIRouter()
+MAX_PUSH_SUBSCRIPTIONS_PER_USER = 5
 
 
 class PushSubscriptionKeys(BaseModel):
@@ -25,6 +27,12 @@ class PushSubscriptionDeletion(BaseModel):
     endpoint: str = Field(min_length=1, max_length=4096)
 
 
+def _validate_push_endpoint(endpoint: str) -> str:
+    if not is_supported_push_endpoint(endpoint):
+        raise HTTPException(status_code=422, detail="지원하지 않는 Push endpoint입니다.")
+    return endpoint
+
+
 @router.get("/api/push/config")
 async def push_config():
     enabled = push_is_configured()
@@ -35,11 +43,25 @@ async def push_config():
 
 
 @router.post("/api/push/subscriptions")
-async def save_push_subscription(payload: PushSubscription, authorization: str = Header(None)):
+async def save_push_subscription(
+    request: Request,
+    payload: PushSubscription,
+    authorization: str = Header(None),
+):
     user_id = state.require_user_id(authorization)
-    state._supabase_or_503().table("push_subscriptions").upsert({
+    enforce_rate_limit(request, "push_subscription", limit=10, window_sec=600)
+    endpoint = _validate_push_endpoint(payload.endpoint)
+    supabase = state._supabase_or_503()
+    subscriptions = supabase.table("push_subscriptions").select("endpoint").eq(
+        "user_id", user_id
+    ).limit(MAX_PUSH_SUBSCRIPTIONS_PER_USER + 1).execute().data or []
+    is_existing = any(subscription.get("endpoint") == endpoint for subscription in subscriptions)
+    if not is_existing and len(subscriptions) >= MAX_PUSH_SUBSCRIPTIONS_PER_USER:
+        raise HTTPException(status_code=409, detail="등록할 수 있는 알림 기기 수를 초과했습니다.")
+
+    supabase.table("push_subscriptions").upsert({
         "user_id": user_id,
-        "endpoint": str(payload.endpoint),
+        "endpoint": endpoint,
         "p256dh": payload.keys.p256dh,
         "auth": payload.keys.auth,
         "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -50,9 +72,10 @@ async def save_push_subscription(payload: PushSubscription, authorization: str =
 @router.delete("/api/push/subscriptions")
 async def delete_push_subscription(payload: PushSubscriptionDeletion, authorization: str = Header(None)):
     user_id = state.require_user_id(authorization)
+    endpoint = _validate_push_endpoint(payload.endpoint)
     state._supabase_or_503().table("push_subscriptions").delete().eq(
         "user_id", user_id
-    ).eq("endpoint", payload.endpoint).execute()
+    ).eq("endpoint", endpoint).execute()
     return {"ok": True}
 
 

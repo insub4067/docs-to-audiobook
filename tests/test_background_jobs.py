@@ -26,6 +26,14 @@ def mock_supabase():
         yield mock_client
 
 
+@pytest.fixture(autouse=True)
+def restore_jobs_state():
+    existing_job_ids = set(state.jobs)
+    yield
+    for job_id in set(state.jobs) - existing_job_ids:
+        state.jobs.pop(job_id, None)
+
+
 def _seed_large_text(text_id="large-doc", max_synth_chars=None):
     state.text_storage[text_id] = {
         "filename": "large.pdf",
@@ -285,27 +293,58 @@ async def test_process_background_synthesis_task_succeeds_first_try(mock_supabas
 
 @pytest.mark.asyncio
 async def test_background_completion_updates_database_before_push(mock_supabase):
-    calls = []
-    mock_supabase.table().update.side_effect = (
-        lambda payload: calls.append(("update", payload)) or MagicMock()
-    )
+    events = []
+
+    def update_job(payload):
+        query = MagicMock()
+        query.eq.return_value = query
+        query.execute.side_effect = lambda: events.append(("execute", payload.get("status"))) or MagicMock()
+        return query
+
+    mock_supabase.table().update.side_effect = update_job
 
     async def complete_job(job_id, *_):
         state.jobs[job_id]["status"] = "completed"
 
     with patch("routes.tts.process_synthesis_task", side_effect=complete_job), \
          patch("routes.tts._store_background_audiobook", return_value="book-1"), \
-         patch("routes.tts.send_background_job_ready", side_effect=lambda *_: calls.append(("push", None))):
+         patch("routes.tts.send_background_job_ready", side_effect=lambda *_: events.append(("push", None))):
         await tts.process_background_synthesis_task(
             "job-1", "user-1", "제목", "원문", "voice", "+0%", "+0Hz"
         )
 
-    completed_index = next(
-        i for i, call in enumerate(calls)
-        if call[0] == "update" and call[1].get("status") == "completed"
-    )
-    push_index = calls.index(("push", None))
+    completed_index = events.index(("execute", "completed"))
+    push_index = events.index(("push", None))
     assert completed_index < push_index
+
+
+@pytest.mark.asyncio
+async def test_push_exception_does_not_overwrite_completed_job(mock_supabase):
+    completed_updates = []
+
+    def update_job(payload):
+        query = MagicMock()
+        query.eq.return_value = query
+        query.execute.side_effect = lambda: completed_updates.append(payload.copy()) or MagicMock()
+        return query
+
+    mock_supabase.table().update.side_effect = update_job
+
+    async def complete_job(job_id, *_):
+        state.jobs[job_id]["status"] = "completed"
+
+    with patch("routes.tts.process_synthesis_task", side_effect=complete_job), \
+         patch("routes.tts._store_background_audiobook", return_value="book-1"), \
+         patch("routes.tts.send_background_job_ready", side_effect=RuntimeError("push unavailable")), \
+         patch("routes.tts.asyncio.sleep", new_callable=AsyncMock):
+        await tts.process_background_synthesis_task(
+            "job-push-failure", "user-1", "제목", "원문", "voice", "+0%", "+0Hz"
+        )
+
+    statuses = [payload.get("status") for payload in completed_updates]
+    assert "completed" in statuses
+    assert "error" not in statuses
+    assert state.jobs["job-push-failure"]["status"] == "completed"
 
 
 @pytest.mark.asyncio

@@ -8,6 +8,7 @@ import asyncio
 import time
 import uuid
 import json
+import logging
 import secrets
 import shutil
 from datetime import datetime, timezone
@@ -29,6 +30,7 @@ from text_processing import (
 from push_notifications import send_background_job_ready
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # 실제로 제공할 음성. edge-tts가 주는 ko-KR 음성은 3개뿐이고, 예전
 # 메타데이터에 있던 지민/서현/순복/유진/현민은 존재하지 않아 선택할 수
@@ -471,7 +473,10 @@ async def process_background_synthesis_task(job_id: str, user_id: str, title: st
                         "completed_at": datetime.now(timezone.utc).isoformat(),
                     }).eq("id", job_id).execute()
                 )
-                await asyncio.to_thread(send_background_job_ready, user_id, job_id)
+                try:
+                    await asyncio.to_thread(send_background_job_ready, user_id, job_id)
+                except Exception as error:
+                    logger.warning("Background completion push failed error_type=%s", type(error).__name__)
                 return
             last_error = job.get("error") or last_error
         except Exception as e:

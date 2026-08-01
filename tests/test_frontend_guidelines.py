@@ -48,10 +48,14 @@ def test_completed_background_job_remains_pending_until_cloud_sync_succeeds():
 const fs = require("fs");
 const vm = require("vm");
 const source = fs.readFileSync({str(NOTIFICATIONS_JS)!r}, "utf8");
-const values = new Map([["textAudio_pendingBackgroundJobs", JSON.stringify(["job-1"])]]);
+const pendingKey = "textAudio_pendingBackgroundJobs:user-1:job:job-1";
+const values = new Map([[pendingKey, "1"]]);
 const toasts = [];
 const context = {{
   JSON,
+  Date,
+  Math,
+  Promise,
   Uint8Array,
   atob() {{}},
   clearInterval() {{}},
@@ -59,10 +63,18 @@ const context = {{
   document: {{ getElementById() {{ return null; }} }},
   fetch: async () => ({{ ok: true, json: async () => ({{ status: "completed" }}) }}),
   authHeaders: () => ({{}}),
+  getCurrentAuthenticatedUserId: () => "user-1",
   isLoggedIn: () => true,
-  localStorage: {{ getItem: (key) => values.get(key) || null, setItem: (key, value) => values.set(key, value) }},
+  localStorage: {{
+    get length() {{ return values.size; }},
+    key: (index) => [...values.keys()][index] || null,
+    getItem: (key) => values.get(key) || null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: (key) => values.delete(key),
+  }},
   navigator: {{}},
   setInterval: () => 1,
+  setTimeout,
   showToast: (...args) => toasts.push(args),
   window: {{}},
 }};
@@ -71,19 +83,19 @@ vm.runInNewContext(source, context);
 (async () => {{
   context.window.__syncAudiobooksToCloud = async () => ({{ ok: false }});
   await context.checkPendingBackgroundJobs();
-  if (values.get("textAudio_pendingBackgroundJobs") !== JSON.stringify(["job-1"]) || toasts.length !== 0) {{
+  if (values.get(pendingKey) !== "1" || toasts.length !== 0) {{
     throw new Error("동기화 실패 작업을 완료로 처리했습니다.");
   }}
 
   delete context.window.__syncAudiobooksToCloud;
   await context.checkPendingBackgroundJobs();
-  if (values.get("textAudio_pendingBackgroundJobs") !== JSON.stringify(["job-1"]) || toasts.length !== 0) {{
+  if (values.get(pendingKey) !== "1" || toasts.length !== 0) {{
     throw new Error("동기화 함수가 없는 초기화 순서에서 작업을 제거했습니다.");
   }}
 
   context.window.__syncAudiobooksToCloud = async () => ({{ ok: true }});
   await context.checkPendingBackgroundJobs();
-  if (values.get("textAudio_pendingBackgroundJobs") !== JSON.stringify([]) || toasts.length !== 1) {{
+  if (values.has(pendingKey) || toasts.length !== 1) {{
     throw new Error("동기화 성공 뒤 완료 처리가 한 번 실행되지 않았습니다.");
   }}
 }})().catch((error) => {{ console.error(error); process.exit(1); }});
@@ -96,12 +108,35 @@ def test_unsubscribe_does_not_wait_for_service_worker_ready():
 const fs = require("fs");
 const vm = require("vm");
 const source = fs.readFileSync({str(NOTIFICATIONS_JS)!r}, "utf8");
+let aborted = false;
+const values = new Map([["textAudio_pushSubscriptionOwner", "user-a"]]);
+const subscription = {{
+  endpoint: "https://fcm.googleapis.com/fcm/send/abc",
+  unsubscribe: () => new Promise(() => {{}}),
+}};
 const context = {{
+  AbortController: class {{
+    constructor() {{ this.signal = {{}}; }}
+    abort() {{ aborted = true; }}
+  }},
+  Promise,
+  authHeaders: () => ({{ Authorization: "Bearer token" }}),
   console: {{ warn() {{}} }},
+  fetch: () => new Promise(() => {{}}),
+  localStorage: {{
+    getItem: (key) => values.get(key) || null,
+    removeItem: (key) => values.delete(key),
+  }},
   navigator: {{ serviceWorker: {{
-    ready: new Promise(() => {{}}),
-    getRegistration: async () => undefined,
+    getRegistration: async () => ({{
+      pushManager: {{ getSubscription: async () => subscription }},
+    }}),
   }} }},
+  setTimeout(callback, delay) {{
+    if (delay >= 2000) {{ callback(); return 1; }}
+    return setTimeout(callback, delay);
+  }},
+  clearTimeout() {{}},
 }};
 vm.runInNewContext(source, context);
 
@@ -109,8 +144,328 @@ Promise.race([
   context.unsubscribePushNotifications().then(() => "returned"),
   new Promise((resolve) => setTimeout(() => resolve("timed-out"), 50)),
 ]).then((result) => {{
-  if (result !== "returned") throw new Error("서비스워커 준비 대기로 로그아웃이 멈춥니다.");
+  if (result !== "returned") throw new Error("구독 해제로 로그아웃이 멈춥니다.");
+  if (!aborted) throw new Error("시간 초과 DELETE 요청을 취소하지 않았습니다.");
+  if (values.has("textAudio_pushSubscriptionOwner")) throw new Error("시간 초과 뒤 stale 구독 owner를 남겼습니다.");
 }}).catch((error) => {{ console.error(error); process.exit(1); }});
+"""
+    subprocess.run(["node", "-e", script], check=True)
+
+
+def test_push_button_initial_state_and_toggle_behave_as_real_switch():
+    script = f"""
+const fs = require("fs");
+const vm = require("vm");
+const source = fs.readFileSync({str(NOTIFICATIONS_JS)!r}, "utf8");
+
+async function scenario(initialPermission, initialSubscription, failingMethod = null, initialOwner = null) {{
+  let permission = initialPermission;
+  let subscription = initialSubscription;
+  let requestCount = 0;
+  let subscribeCount = 0;
+  let unsubscribeCount = 0;
+  const requests = [];
+  const toasts = [];
+  const serviceWorkerListeners = {{}};
+  const button = {{
+    hidden: true,
+    disabled: false,
+    dataset: {{}},
+    addEventListener(name, handler) {{ this[name] = handler; }},
+    setAttribute() {{}},
+  }};
+  const label = {{ textContent: "" }};
+  const registration = {{ pushManager: {{
+    getSubscription: async () => subscription,
+    subscribe: async () => {{
+      subscribeCount += 1;
+      subscription = {{
+        endpoint: "https://fcm.googleapis.com/fcm/send/new",
+        toJSON: () => ({{ endpoint: "https://fcm.googleapis.com/fcm/send/new", keys: {{ p256dh: "p", auth: "a" }} }}),
+        unsubscribe: async () => {{ unsubscribeCount += 1; return true; }},
+      }};
+      return subscription;
+    }},
+  }} }};
+  const values = new Map();
+  if (initialOwner) values.set("textAudio_pushSubscriptionOwner", initialOwner);
+  const localStorage = {{
+    get length() {{ return values.size; }},
+    key(index) {{ return [...values.keys()][index] || null; }},
+    getItem(key) {{ return values.get(key) || null; }},
+    setItem(key, value) {{ values.set(key, value); }},
+    removeItem(key) {{ values.delete(key); }},
+  }};
+  const context = {{
+    AbortController,
+    Date,
+    JSON,
+    Math,
+    Promise,
+    Uint8Array,
+    atob,
+    authHeaders: () => ({{ Authorization: "Bearer token" }}),
+    clearInterval() {{}},
+    clearTimeout,
+    console: {{ warn() {{}} }},
+    crypto: {{ randomUUID: () => "tab-1" }},
+    document: {{ getElementById: (id) => id === "pushNotificationBtn" ? button : id === "pushNotificationLabel" ? label : null }},
+    fetch: async (url, options = {{}}) => {{
+      requests.push({{ url, method: options.method || "GET" }});
+      if (url === "/api/push/config") return {{ ok: true, json: async () => ({{ enabled: true, public_key: "BA" }} ) }};
+      return {{ ok: (options.method || "GET") !== failingMethod, json: async () => ({{}}) }};
+    }},
+    getCurrentAuthenticatedUserId: () => "user-1",
+    isLoggedIn: () => true,
+    localStorage,
+    navigator: {{ serviceWorker: {{
+      ready: Promise.resolve(registration),
+      addEventListener: (name, handler) => {{ serviceWorkerListeners[name] = handler; }},
+      getRegistration: async () => registration,
+    }} }},
+    Notification: {{
+      get permission() {{ return permission; }},
+      requestPermission: async () => {{ requestCount += 1; permission = "granted"; return permission; }},
+    }},
+    setInterval: () => 1,
+    setTimeout,
+    showToast: (...args) => toasts.push(args),
+    window: {{ PushManager: function() {{}} }},
+  }};
+  context.window.Notification = context.Notification;
+  vm.runInNewContext(source, context);
+  await context.initializeBackgroundNotifications();
+  return {{ button, context, label, requests, serviceWorkerListeners, toasts, values, counts: () => ({{ requestCount, subscribeCount, unsubscribeCount }}) }};
+}}
+
+(async () => {{
+  const denied = await scenario("denied", null);
+  if (denied.label.textContent !== "알림 차단됨" || !denied.button.disabled) throw new Error("차단 상태를 표시하지 않았습니다.");
+  await denied.button.click();
+  if (denied.counts().requestCount !== 0) throw new Error("차단 상태에서 권한을 다시 요청했습니다.");
+
+  let unsubscribed = 0;
+  const existing = {{
+    endpoint: "https://fcm.googleapis.com/fcm/send/existing",
+    toJSON: () => ({{}}),
+    unsubscribe: async () => {{ unsubscribed += 1; return true; }},
+  }};
+  const enabled = await scenario("granted", existing, null, "user-1");
+  if (enabled.label.textContent !== "완료 알림 켜짐") throw new Error("기존 구독을 켜짐으로 표시하지 않았습니다.");
+  await enabled.button.click();
+  if (enabled.counts().requestCount !== 0 || unsubscribed !== 1) throw new Error("켜진 토글이 구독 해제로 동작하지 않았습니다.");
+  if (!enabled.requests.some((request) => request.method === "DELETE") || enabled.toasts.length !== 1 || enabled.label.textContent !== "완료 알림 꺼짐") {{
+    throw new Error("구독 해제 상태 또는 토스트가 정확하지 않습니다.");
+  }}
+
+  const accountChanged = await scenario("granted", {{
+    endpoint: "https://fcm.googleapis.com/fcm/send/previous-user",
+    toJSON: () => ({{ endpoint: "https://fcm.googleapis.com/fcm/send/previous-user", keys: {{ p256dh: "p", auth: "a" }} }}),
+    unsubscribe: async () => true,
+  }}, null, "user-a");
+  if (!accountChanged.requests.some((request) => request.method === "POST") || accountChanged.values.get("textAudio_pushSubscriptionOwner") !== "user-1" || accountChanged.label.textContent !== "완료 알림 켜짐") {{
+    throw new Error("계정 전환 뒤 기존 browser 구독을 현재 사용자에게 재귀속하지 않았습니다.");
+  }}
+
+  const failedReconcile = await scenario("granted", {{
+    endpoint: "https://fcm.googleapis.com/fcm/send/unbound",
+    toJSON: () => ({{ endpoint: "https://fcm.googleapis.com/fcm/send/unbound", keys: {{ p256dh: "p", auth: "a" }} }}),
+    unsubscribe: async () => true,
+  }}, "POST", "user-a");
+  if (failedReconcile.label.textContent !== "완료 알림 꺼짐" || failedReconcile.values.get("textAudio_pushSubscriptionOwner") !== "user-a") {{
+    throw new Error("기존 구독의 서버 재귀속 실패를 켜짐으로 표시했습니다.");
+  }}
+
+  const stickySubscription = {{
+    endpoint: "https://fcm.googleapis.com/fcm/send/sticky",
+    toJSON: () => ({{}}),
+    unsubscribe: async () => false,
+  }};
+  const failedDisable = await scenario("granted", stickySubscription, "DELETE");
+  await failedDisable.button.click();
+  if (failedDisable.label.textContent !== "완료 알림 켜짐" || failedDisable.toasts.length !== 1 || failedDisable.toasts[0][1] !== "error") {{
+    throw new Error("서버와 브라우저 해제가 모두 실패했는데 꺼짐으로 표시했습니다.");
+  }}
+
+  const disabled = await scenario("default", null);
+  if (disabled.label.textContent !== "완료 알림 꺼짐") throw new Error("미구독 상태를 꺼짐으로 표시하지 않았습니다.");
+  await disabled.button.click();
+  if (disabled.counts().requestCount !== 1 || disabled.counts().subscribeCount !== 1) throw new Error("꺼진 토글에서 구독하지 않았습니다.");
+  if (!disabled.requests.some((request) => request.method === "POST") || disabled.toasts.length !== 1 || disabled.label.textContent !== "완료 알림 켜짐") {{
+    throw new Error("구독 설정 상태 또는 토스트가 정확하지 않습니다.");
+  }}
+
+  const failedSave = await scenario("default", null, "POST");
+  await failedSave.button.click();
+  if (failedSave.counts().unsubscribeCount !== 1 || failedSave.label.textContent !== "완료 알림 꺼짐" || failedSave.toasts.length !== 1) {{
+    throw new Error("서버 등록 실패 구독을 브라우저에 켜진 채 남겼습니다.");
+  }}
+
+  let messageChecks = 0;
+  disabled.context.window.__checkPendingBackgroundJobs = async () => {{ messageChecks += 1; }};
+  disabled.serviceWorkerListeners.message({{ data: {{ type: "check_pending_background_jobs" }} }});
+  await Promise.resolve();
+  if (messageChecks !== 1) throw new Error("서비스워커 확인 메시지를 처리하지 않았습니다.");
+}})().catch((error) => {{ console.error(error); process.exit(1); }});
+"""
+    subprocess.run(["node", "-e", script], check=True)
+
+
+def test_pending_jobs_are_isolated_by_user_and_concurrent_adds_are_not_lost():
+    script = f"""
+const fs = require("fs");
+const vm = require("vm");
+const source = fs.readFileSync({str(NOTIFICATIONS_JS)!r}, "utf8");
+const values = new Map();
+let serveStaleArray = true;
+let currentUserId = "user-a";
+const storage = {{
+  get length() {{ return values.size; }},
+  key(index) {{ return [...values.keys()][index] || null; }},
+  getItem(key) {{
+    if (serveStaleArray && key === "textAudio_pendingBackgroundJobs") return "[]";
+    return values.get(key) || null;
+  }},
+  setItem(key, value) {{ values.set(key, value); }},
+  removeItem(key) {{ values.delete(key); }},
+}};
+function makeContext() {{
+  const context = {{
+    Date, JSON, Math, Promise, Uint8Array, atob,
+    clearInterval() {{}},
+    console: {{ warn() {{}} }},
+    crypto: {{ randomUUID: () => "tab" }},
+    document: {{ getElementById: () => null }},
+    getCurrentAuthenticatedUserId: () => currentUserId,
+    isLoggedIn: () => true,
+    localStorage: storage,
+    navigator: {{}},
+    setInterval: () => 1,
+    setTimeout,
+    showToast() {{}},
+    window: {{}},
+  }};
+  vm.runInNewContext(source, context);
+  return context;
+}}
+const firstTab = makeContext();
+const secondTab = makeContext();
+firstTab.rememberBackgroundJob("job-a1");
+secondTab.rememberBackgroundJob("job-a2");
+serveStaleArray = false;
+const userAJobs = firstTab.readPendingBackgroundJobs().sort().join(",");
+if (userAJobs !== "job-a1,job-a2") throw new Error(`동시 추가 작업이 유실됐습니다: ${{userAJobs}}`);
+currentUserId = "user-b";
+if (firstTab.readPendingBackgroundJobs().length !== 0) throw new Error("A 계정 작업이 B 계정에 노출됐습니다.");
+firstTab.rememberBackgroundJob("job-b1");
+if (firstTab.readPendingBackgroundJobs().join(",") !== "job-b1") throw new Error("B 계정 작업 저장에 실패했습니다.");
+currentUserId = "user-a";
+if (firstTab.readPendingBackgroundJobs().sort().join(",") !== "job-a1,job-a2") throw new Error("A 계정 namespace를 복원하지 못했습니다.");
+"""
+    subprocess.run(["node", "-e", script], check=True)
+
+
+def test_multiple_tabs_claim_completed_job_before_showing_one_toast():
+    script = f"""
+const fs = require("fs");
+const vm = require("vm");
+const source = fs.readFileSync({str(NOTIFICATIONS_JS)!r}, "utf8");
+const values = new Map();
+const toasts = [];
+let releaseSync;
+const syncGate = new Promise((resolve) => {{ releaseSync = resolve; }});
+let secondTab;
+let secondCheck;
+let injectedConcurrentClaim = false;
+const storage = {{
+  get length() {{ return values.size; }},
+  key(index) {{ return [...values.keys()][index] || null; }},
+  getItem(key) {{
+    if (key.includes(":claim:") && !injectedConcurrentClaim) {{
+      injectedConcurrentClaim = true;
+      secondCheck = secondTab.checkPendingBackgroundJobs();
+      return null;
+    }}
+    return values.get(key) || null;
+  }},
+  setItem(key, value) {{ values.set(key, value); }},
+  removeItem(key) {{ values.delete(key); }},
+}};
+let tabNumber = 0;
+function makeContext() {{
+  const tabId = `tab-${{++tabNumber}}`;
+  const context = {{
+    Date, JSON, Math, Promise, Uint8Array, atob,
+    authHeaders: () => ({{}}),
+    clearInterval() {{}},
+    console: {{ warn() {{}} }},
+    crypto: {{ randomUUID: () => tabId }},
+    document: {{ getElementById: () => null }},
+    fetch: async () => ({{ ok: true, json: async () => ({{ status: "completed" }}) }}),
+    getCurrentAuthenticatedUserId: () => "user-a",
+    isLoggedIn: () => true,
+    localStorage: storage,
+    navigator: {{}},
+    setInterval: () => 1,
+    setTimeout,
+    showToast: (...args) => toasts.push(args),
+    window: {{ __syncAudiobooksToCloud: async () => syncGate }},
+  }};
+  vm.runInNewContext(source, context);
+  return context;
+}}
+const firstTab = makeContext();
+secondTab = makeContext();
+firstTab.rememberBackgroundJob("job-1");
+(async () => {{
+  const firstCheck = firstTab.checkPendingBackgroundJobs();
+  await Promise.resolve();
+  if (!secondCheck) throw new Error("동시 claim 경쟁을 만들지 못했습니다.");
+  releaseSync({{ ok: true }});
+  await Promise.all([firstCheck, secondCheck]);
+  if (toasts.length !== 1) throw new Error(`완료 토스트가 ${{toasts.length}}번 표시됐습니다.`);
+  if (firstTab.readPendingBackgroundJobs().length !== 0) throw new Error("완료 작업을 한 번 제거하지 않았습니다.");
+}})().catch((error) => {{ console.error(error); process.exit(1); }});
+"""
+    subprocess.run(["node", "-e", script], check=True)
+
+
+def test_auth_exposes_only_current_authenticated_user_id_to_local_clients():
+    script = f"""
+const fs = require("fs");
+const vm = require("vm");
+const source = fs.readFileSync({str(AUTH_JS)!r}, "utf8");
+const element = () => ({{
+  style: {{}}, dataset: {{}}, hidden: false, textContent: "", src: "",
+  setAttribute() {{}}, removeAttribute() {{}}, querySelector() {{ return null; }},
+}});
+const elements = new Map();
+const windowListeners = {{}};
+let reloads = 0;
+const context = {{
+  document: {{
+    body: {{ dataset: {{}} }},
+    getElementById(id) {{
+      if (["headerGoogleBtn", "googleLoginBtn", "authMessage"].includes(id)) return null;
+      if (!elements.has(id)) elements.set(id, element());
+      return elements.get(id);
+    }},
+    querySelector() {{ return null; }},
+  }},
+  location: {{ reload() {{ reloads += 1; }} }},
+  localStorage: {{ getItem() {{ return null; }} }},
+  setupSocialLogin() {{}},
+  window: {{ addEventListener(name, handler) {{ windowListeners[name] = handler; }} }},
+}};
+vm.runInNewContext(source, context);
+context.showAppUI({{ id: "user-a", email: "a@example.com" }}, "token");
+if (context.getCurrentAuthenticatedUserId() !== "user-a") throw new Error("로그인 사용자 id bridge가 없습니다.");
+context.showAppUI(null, null);
+if (context.getCurrentAuthenticatedUserId() !== null) throw new Error("로그아웃 뒤 사용자 id가 남았습니다.");
+context.showAppUI({{ id: "user-a", email: "a@example.com" }}, "token-a");
+if (typeof windowListeners.storage !== "function") throw new Error("다른 탭 인증 변경을 감지하지 않습니다.");
+windowListeners.storage({{ key: "authToken", oldValue: "token-a", newValue: "token-b" }});
+if (context.getCurrentAuthenticatedUserId() !== null || reloads !== 1) throw new Error("다른 탭 계정 전환 뒤 stale identity를 유지했습니다.");
 """
     subprocess.run(["node", "-e", script], check=True)
 
@@ -250,10 +605,18 @@ async function dispatchClick() {{
     throw new Error("같은 origin이 아닌 창을 포커스하거나 루트 창을 열지 않았습니다.");
   }}
 
-  windowClients = [{{ url: "https://app.example.com/library", focus: async () => focused.push("same-origin") }}];
+  const messages = [];
+  windowClients = [{{
+    url: "https://app.example.com/library",
+    focus: async () => focused.push("same-origin"),
+    postMessage: (message) => messages.push(message),
+  }}];
   await dispatchClick();
   if (focused.length !== 1 || focused[0] !== "same-origin" || opened.length !== 1) {{
     throw new Error("같은 origin 창을 포커스하지 않았습니다.");
+  }}
+  if (messages.length !== 1 || messages[0].type !== "check_pending_background_jobs") {{
+    throw new Error("포커스한 창에 즉시 상태 확인을 요청하지 않았습니다.");
   }}
 }})().catch((error) => {{ console.error(error); process.exit(1); }});
 """
@@ -263,7 +626,7 @@ async function dispatchClick() {{
 def test_service_worker_precaches_notification_client_with_new_cache_version():
     source = SW_JS.read_text(encoding="utf-8")
 
-    assert 'const CACHE_NAME = "2026.08.01.29";' in source
+    assert 'const CACHE_NAME = "2026.08.01.30";' in source
     assert '"/static/js/notifications.js"' in source
 
 
