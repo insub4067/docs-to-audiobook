@@ -1328,6 +1328,56 @@ async def process_synthesis_task(job_id: str, raw_text: str, voice: str, rate: s
         jobs[job_id]["error"] = str(e)
 
 
+def _store_background_audiobook(user_id: str, title: str, job: dict) -> str:
+    """브라우저가 없어도 서버가 완성본을 사용자 보관함에 저장한다."""
+    supabase = _supabase_or_503()
+    audiobook_id = str(uuid.uuid4())
+    audio_path, sentences_path = _object_paths(user_id, audiobook_id)
+    storage = supabase.storage.from_(AUDIOBOOK_BUCKET)
+    supabase.table("audiobooks").insert({
+        "id": audiobook_id,
+        "user_id": user_id,
+        "title": title[:255],
+        "file_name": title[:255],
+        "storage_path": audio_path,
+    }).execute()
+    with open(job["audio_path"], "rb") as audio_file:
+        storage.upload(audio_path, audio_file, {"content-type": "audio/mpeg"})
+    storage.upload(
+        sentences_path,
+        json.dumps(job["sentences"], ensure_ascii=False).encode("utf-8"),
+        {"content-type": "application/json"},
+    )
+    return audiobook_id
+
+
+async def process_background_synthesis_task(job_id: str, user_id: str, title: str, raw_text: str, voice: str, rate: str, pitch: str):
+    supabase = _supabase_or_503()
+    try:
+        await asyncio.to_thread(
+            lambda: supabase.table("background_synthesis_jobs").update({"status": "processing"}).eq("id", job_id).execute()
+        )
+        await process_synthesis_task(job_id, raw_text, voice, rate, pitch)
+        job = jobs.get(job_id, {})
+        if job.get("status") != "completed":
+            raise RuntimeError(job.get("error") or "음성 합성에 실패했습니다.")
+        audiobook_id = await asyncio.to_thread(_store_background_audiobook, user_id, title, job)
+        await asyncio.to_thread(
+            lambda: supabase.table("background_synthesis_jobs").update({
+                "status": "completed",
+                "source_text": None,
+                "audiobook_id": audiobook_id,
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+            }).eq("id", job_id).execute()
+        )
+    except Exception as e:
+        jobs.setdefault(job_id, {})["status"] = "error"
+        jobs[job_id]["error"] = str(e)
+        await asyncio.to_thread(
+            lambda: supabase.table("background_synthesis_jobs").update({"status": "error", "error": str(e)}).eq("id", job_id).execute()
+        )
+
+
 @app.post("/api/synthesize")
 async def synthesize_text(
     request: Request,
@@ -1373,9 +1423,36 @@ async def synthesize_text(
         "created_at": time.time(),
         "user_id": user_id,
     }
-    
-    # Pass raw text — process_synthesis_task handles preprocessing internally
-    background_tasks.add_task(process_synthesis_task, job_id, raw_text, voice, rate, pitch)
+
+    if max_synth_chars > MAX_SYNTH_CHARS:
+        # 대용량 작업은 브라우저의 폴링·클라우드 업로드에 의존하지 않는다.
+        # 완료 후 서버가 직접 보관함에 저장하므로 앱을 닫아도 결과가 남는다.
+        if not authorization:
+            raise HTTPException(status_code=401, detail="대용량 문서는 로그인 후 변환할 수 있습니다.")
+        supabase = _supabase_or_503()
+        await asyncio.to_thread(
+            lambda: supabase.table("background_synthesis_jobs").insert({
+                "id": job_id,
+                "user_id": user_id,
+                "source_text": raw_text,
+                "title": data["filename"],
+                "voice": voice,
+                "rate": rate,
+                "pitch": pitch,
+            }).execute()
+        )
+        background_tasks.add_task(
+            process_background_synthesis_task,
+            job_id,
+            user_id,
+            data["filename"],
+            raw_text,
+            voice,
+            rate,
+            pitch,
+        )
+    else:
+        background_tasks.add_task(process_synthesis_task, job_id, raw_text, voice, rate, pitch)
     
     return {"job_id": job_id}
 
@@ -2232,12 +2309,45 @@ async def social_login(provider: str, data: dict):
         print(f"Social login error ({provider}): {e}")
         raise HTTPException(status_code=500, detail="로그인에 실패했습니다.")
 
+async def resume_background_synthesis_jobs():
+    """배포·재시작 중 끊긴 대용량 작업을 원문으로 다시 시작한다."""
+    try:
+        supabase = _supabase_or_503()
+        rows = await asyncio.to_thread(
+            lambda: supabase.table("background_synthesis_jobs").select("*")
+            .in_("status", ["queued", "processing"]).execute().data or []
+        )
+        for row in rows:
+            if not row.get("source_text"):
+                continue
+            job_id = row["id"]
+            jobs[job_id] = {
+                "status": "processing",
+                "audio_path": None,
+                "sentences": [],
+                "headings": [],
+                "display_markdown": "",
+                "completed_chunks": row.get("completed_chunks", 0),
+                "total_chunks": row.get("total_chunks", 0),
+                "error": None,
+                "created_at": time.time(),
+                "user_id": row["user_id"],
+            }
+            asyncio.create_task(process_background_synthesis_task(
+                job_id, row["user_id"], row["title"], row["source_text"],
+                row["voice"], row["rate"], row["pitch"],
+            ))
+    except Exception as e:
+        print(f"Background job resume failed: {e}")
+
+
 @app.on_event("startup")
 async def startup_event():
     from auth import get_secret_key
 
     get_secret_key()
     asyncio.create_task(cleanup_expired_files_loop())
+    asyncio.create_task(resume_background_synthesis_jobs())
     # 부팅 시에는 클라우드에 있으면 내려받기만 하고 합성은 하지 않는다.
     # 여기서 합성을 시작하면 공유 CPU 1개를 점유해 사용자 변환이 막힌다.
     # 클라우드에 없으면 상태를 pending으로 두고, 실제로 요청이 올 때
