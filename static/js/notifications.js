@@ -47,7 +47,10 @@ async function checkPendingBackgroundJobs() {
                 if (!response.ok) continue;
                 const job = await response.json();
                 if (job.status === "completed") {
-                    await window.__syncAudiobooksToCloud?.({ silent: true });
+                    const syncAudiobooksToCloud = window.__syncAudiobooksToCloud;
+                    if (typeof syncAudiobooksToCloud !== "function") continue;
+                    const syncResult = await syncAudiobooksToCloud({ silent: true });
+                    if (!syncResult?.ok) continue;
                     forgetBackgroundJob(jobId);
                     showToast("오디오북 생성이 완료되었습니다.", "success");
                 } else if (job.status === "error") {
@@ -126,8 +129,20 @@ async function initializeBackgroundNotifications() {
 async function unsubscribePushNotifications() {
     if (!("serviceWorker" in navigator)) return;
 
-    const registration = await navigator.serviceWorker.ready;
-    const subscription = await registration.pushManager.getSubscription();
+    let registration;
+    try {
+        registration = await navigator.serviceWorker.getRegistration();
+    } catch (error) {
+        return;
+    }
+    if (!registration) return;
+
+    let subscription;
+    try {
+        subscription = await registration.pushManager.getSubscription();
+    } catch (error) {
+        return;
+    }
     if (!subscription) return;
 
     const endpoint = subscription.endpoint;

@@ -43,6 +43,78 @@ def test_background_job_is_remembered_and_checked_on_resume():
     assert "window.__checkPendingBackgroundJobs" in pwa
 
 
+def test_completed_background_job_remains_pending_until_cloud_sync_succeeds():
+    script = f"""
+const fs = require("fs");
+const vm = require("vm");
+const source = fs.readFileSync({str(NOTIFICATIONS_JS)!r}, "utf8");
+const values = new Map([["textAudio_pendingBackgroundJobs", JSON.stringify(["job-1"])]]);
+const toasts = [];
+const context = {{
+  JSON,
+  Uint8Array,
+  atob() {{}},
+  clearInterval() {{}},
+  console: {{ warn() {{}} }},
+  document: {{ getElementById() {{ return null; }} }},
+  fetch: async () => ({{ ok: true, json: async () => ({{ status: "completed" }}) }}),
+  authHeaders: () => ({{}}),
+  isLoggedIn: () => true,
+  localStorage: {{ getItem: (key) => values.get(key) || null, setItem: (key, value) => values.set(key, value) }},
+  navigator: {{}},
+  setInterval: () => 1,
+  showToast: (...args) => toasts.push(args),
+  window: {{}},
+}};
+vm.runInNewContext(source, context);
+
+(async () => {{
+  context.window.__syncAudiobooksToCloud = async () => ({{ ok: false }});
+  await context.checkPendingBackgroundJobs();
+  if (values.get("textAudio_pendingBackgroundJobs") !== JSON.stringify(["job-1"]) || toasts.length !== 0) {{
+    throw new Error("동기화 실패 작업을 완료로 처리했습니다.");
+  }}
+
+  delete context.window.__syncAudiobooksToCloud;
+  await context.checkPendingBackgroundJobs();
+  if (values.get("textAudio_pendingBackgroundJobs") !== JSON.stringify(["job-1"]) || toasts.length !== 0) {{
+    throw new Error("동기화 함수가 없는 초기화 순서에서 작업을 제거했습니다.");
+  }}
+
+  context.window.__syncAudiobooksToCloud = async () => ({{ ok: true }});
+  await context.checkPendingBackgroundJobs();
+  if (values.get("textAudio_pendingBackgroundJobs") !== JSON.stringify([]) || toasts.length !== 1) {{
+    throw new Error("동기화 성공 뒤 완료 처리가 한 번 실행되지 않았습니다.");
+  }}
+}})().catch((error) => {{ console.error(error); process.exit(1); }});
+"""
+    subprocess.run(["node", "-e", script], check=True)
+
+
+def test_unsubscribe_does_not_wait_for_service_worker_ready():
+    script = f"""
+const fs = require("fs");
+const vm = require("vm");
+const source = fs.readFileSync({str(NOTIFICATIONS_JS)!r}, "utf8");
+const context = {{
+  console: {{ warn() {{}} }},
+  navigator: {{ serviceWorker: {{
+    ready: new Promise(() => {{}}),
+    getRegistration: async () => undefined,
+  }} }},
+}};
+vm.runInNewContext(source, context);
+
+Promise.race([
+  context.unsubscribePushNotifications().then(() => "returned"),
+  new Promise((resolve) => setTimeout(() => resolve("timed-out"), 50)),
+]).then((result) => {{
+  if (result !== "returned") throw new Error("서비스워커 준비 대기로 로그아웃이 멈춥니다.");
+}}).catch((error) => {{ console.error(error); process.exit(1); }});
+"""
+    subprocess.run(["node", "-e", script], check=True)
+
+
 def test_split_app_scripts_exist_and_load_before_app_in_dependency_order():
     html = INDEX_HTML.read_text(encoding="utf-8")
     script_paths = [*SPLIT_APP_SCRIPTS, "/static/app.js"]
