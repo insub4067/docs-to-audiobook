@@ -181,8 +181,18 @@ def require_user_id(authorization: str) -> str:
     return payload["sub"]
 
 
-def require_job_owner(job_id: str, authorization: str) -> dict:
-    user_id = require_user_id(authorization)
+def resolve_job_owner(authorization: str, anonymous_session: str) -> str:
+    if authorization:
+        return require_user_id(authorization)
+
+    session_id = (anonymous_session or "").strip()
+    if len(session_id) < 16 or len(session_id) > 128:
+        raise HTTPException(status_code=401, detail="로그인 또는 체험 세션이 필요합니다.")
+    return f"anonymous:{session_id}"
+
+
+def require_job_owner(job_id: str, authorization: str, anonymous_session: str) -> dict:
+    user_id = resolve_job_owner(authorization, anonymous_session)
     job = jobs.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="해당 작업을 찾을 수 없습니다.")
@@ -1048,9 +1058,10 @@ async def synthesize_text(
     voice: str = Form("ko-KR-HyunsuMultilingualNeural"),
     rate: str = Form("+5%"),
     pitch: str = Form("+0Hz"),
-    authorization: str = Header(None)
+    authorization: str = Header(None),
+    anonymous_session: str = Header(None, alias="X-Anonymous-Session")
 ):
-    user_id = require_user_id(authorization)
+    user_id = resolve_job_owner(authorization, anonymous_session)
     # 가장 비싼 엔드포인트다. 배치 8개를 여러 번 돌릴 여유는 남긴다.
     enforce_rate_limit(request, "synthesize", limit=40, window_sec=600)
 
@@ -1088,8 +1099,12 @@ async def synthesize_text(
     return {"job_id": job_id}
 
 @app.get("/api/job/{job_id}")
-async def get_job_status(job_id: str, authorization: str = Header(None)):
-    job = require_job_owner(job_id, authorization)
+async def get_job_status(
+    job_id: str,
+    authorization: str = Header(None),
+    anonymous_session: str = Header(None, alias="X-Anonymous-Session")
+):
+    job = require_job_owner(job_id, authorization, anonymous_session)
 
     if job["status"] == "completed":
         # 오디오는 별도 엔드포인트에서 파일로 스트리밍한다. 여기서는
@@ -1110,8 +1125,12 @@ async def get_job_status(job_id: str, authorization: str = Header(None)):
 
 
 @app.get("/api/job/{job_id}/audio")
-async def get_job_audio(job_id: str, authorization: str = Header(None)):
-    job = require_job_owner(job_id, authorization)
+async def get_job_audio(
+    job_id: str,
+    authorization: str = Header(None),
+    anonymous_session: str = Header(None, alias="X-Anonymous-Session")
+):
+    job = require_job_owner(job_id, authorization, anonymous_session)
     if job.get("status") != "completed":
         raise HTTPException(status_code=404, detail="해당 작업의 오디오를 찾을 수 없습니다.")
 
@@ -1521,8 +1540,12 @@ async def get_default_book_audio():
     return FileResponse(audio_path, media_type="audio/mpeg", filename="sherlock-holmes.mp3")
 
 @app.get("/api/audio/{job_id}.mp3")
-async def download_audiobook(job_id: str, authorization: str = Header(None)):
-    job = require_job_owner(job_id, authorization)
+async def download_audiobook(
+    job_id: str,
+    authorization: str = Header(None),
+    anonymous_session: str = Header(None, alias="X-Anonymous-Session")
+):
+    job = require_job_owner(job_id, authorization, anonymous_session)
     audio_path = job.get("audio_path")
     if not audio_path or not os.path.exists(audio_path):
         raise HTTPException(status_code=404, detail="Audio file not found")

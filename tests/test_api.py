@@ -48,10 +48,35 @@ async def test_api_delete_audiobook_unauthorized():
 
 @pytest.mark.asyncio
 async def test_api_synthesize_requires_auth():
-    # /api/synthesize는 text_id 유무와 무관하게 인증을 먼저 확인한다.
+    # 로그인과 익명 체험 세션이 모두 없으면 합성을 시작할 수 없다.
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post("/api/synthesize", data={"text_id": "nonexistent"})
         assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_api_synthesize_allows_anonymous_session():
+    from unittest.mock import patch
+    from main import jobs, text_storage
+
+    text_storage["anonymous-text"] = {
+        "filename": "anonymous.txt",
+        "text": "비로그인 체험 문서입니다.",
+        "char_count": 14,
+        "created_at": 0,
+        "access_token": "text-token",
+    }
+    with patch("main.process_synthesis_task"):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/synthesize",
+                data={"text_id": "anonymous-text", "text_access_token": "text-token"},
+                headers={"X-Anonymous-Session": "anonymous-session-123456"},
+            )
+
+    assert response.status_code == 200
+    jobs.pop(response.json()["job_id"], None)
+    text_storage.pop("anonymous-text", None)
 
 
 @pytest.mark.asyncio
