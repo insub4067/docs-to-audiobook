@@ -1,6 +1,6 @@
 import pytest
 from fastapi import HTTPException
-from main import extract_text, _looks_like_garbled_pdf_extraction
+from text_processing import extract_text, _looks_like_garbled_pdf_extraction
 
 
 def test_extract_text_txt(tmp_path):
@@ -38,7 +38,7 @@ def test_extract_text_empty_hwp(tmp_path):
 def test_extract_text_docx(tmp_path):
     from unittest.mock import patch, MagicMock
 
-    with patch("main.docx.Document") as mock_doc:
+    with patch("text_processing.docx.Document") as mock_doc:
         mock_instance = MagicMock()
         mock_para = MagicMock()
         mock_para.text = "Hello Docx"
@@ -55,7 +55,7 @@ def test_extract_text_docx(tmp_path):
 def test_extract_text_pdf(tmp_path):
     from unittest.mock import patch, MagicMock
 
-    with patch("main.pypdf.PdfReader") as mock_pdf:
+    with patch("text_processing.pypdf.PdfReader") as mock_pdf:
         mock_instance = MagicMock()
         mock_page = MagicMock()
         mock_page.extract_text.return_value = "Hello PDF"
@@ -78,7 +78,7 @@ def test_extract_text_pdf_rejects_garbled_font_encoding(tmp_path):
 
     garbled = ("PART G  Chapter GG Chapter G Chapter  G G G GGG " * 20)
 
-    with patch("main.pypdf.PdfReader") as mock_pdf:
+    with patch("text_processing.pypdf.PdfReader") as mock_pdf:
         mock_instance = MagicMock()
         mock_page = MagicMock()
         mock_page.extract_text.return_value = garbled

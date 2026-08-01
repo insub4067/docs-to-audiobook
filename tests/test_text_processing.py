@@ -1,5 +1,5 @@
 import pytest
-from main import clean_tts_text, extract_markdown_headings, preprocess_text
+from text_processing import clean_tts_text, extract_markdown_headings, preprocess_text
 
 def test_clean_tts_text():
     # Headers
@@ -118,7 +118,7 @@ def foo(): pass
     assert h2[1]["level"] == 2
     assert h2[2]["level"] == 3
 
-from main import annotate_sentences_with_headings
+from text_processing import annotate_sentences_with_headings
 def test_annotate_sentences_with_headings():
     sentences = [
         {"text": "Title here", "start": 0}, 
@@ -148,7 +148,7 @@ def test_preprocess_text():
     
     And *markdown* formatting!
     """
-    from main import preprocess_text
+    from text_processing import preprocess_text
     processed = preprocess_text(raw_text)
     assert "This is a test." in processed
     assert "It has newlines." in processed
