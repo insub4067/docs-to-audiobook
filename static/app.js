@@ -1264,6 +1264,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 title: audioFilename,
                 audioData: audioArrayBuffer, 
                 sentences: sentences,
+                displayMarkdown: completedJobData.display_markdown || "",
                 timestamp: Date.now(),
                 dateString: new Date().toLocaleDateString("ko-KR", {
                     year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
@@ -2306,7 +2307,67 @@ document.addEventListener("DOMContentLoaded", async () => {
             return t.trim();
         }
 
-        audio.sentences.forEach((s, index) => {
+        function createSentenceSpan(s, index, text) {
+            const span = document.createElement("span");
+            span.className = "reader-sentence";
+            span.id = "sent-" + index;
+            span.textContent = text;
+            span.addEventListener("click", () => {
+                readerAudio.currentTime = s.start / 1000;
+                readerAudio.play().catch(err => console.log("Play failed:", err));
+                showPauseIcon();
+            });
+            return span;
+        }
+
+        for (let index = 0; index < audio.sentences.length; index++) {
+            const s = audio.sentences[index];
+            if (s.table) {
+                const tableId = s.table.id;
+                const cells = [];
+                while (index < audio.sentences.length && audio.sentences[index].table?.id === tableId) {
+                    cells.push({ sentence: audio.sentences[index], index });
+                    index++;
+                }
+                index--;
+
+                const columns = Math.max(...cells.map(cell => cell.sentence.table.column)) + 1;
+                const tableEl = document.createElement("table");
+                tableEl.className = "reader-table";
+                const headerRow = document.createElement("tr");
+                const headers = cells.filter(cell => cell.sentence.table.row === 0);
+                for (let column = 0; column < columns; column++) {
+                    const th = document.createElement("th");
+                    th.textContent = headers.find(cell => cell.sentence.table.column === column)?.sentence.table.header || "";
+                    headerRow.appendChild(th);
+                }
+                const thead = document.createElement("thead");
+                thead.appendChild(headerRow);
+                tableEl.appendChild(thead);
+                const tbody = document.createElement("tbody");
+                const rows = [...new Set(cells.map(cell => cell.sentence.table.row))];
+                rows.forEach(row => {
+                    const tr = document.createElement("tr");
+                    for (let column = 0; column < columns; column++) {
+                        const td = document.createElement("td");
+                        const cell = cells.find(item => item.sentence.table.row === row && item.sentence.table.column === column);
+                        if (cell) {
+                            const text = cleanDisplayText(cell.sentence.text);
+                            const prefix = `${cell.sentence.table.header}:`;
+                            td.appendChild(createSentenceSpan(
+                                cell.sentence,
+                                cell.index,
+                                text.startsWith(prefix) ? text.slice(prefix.length).trim() : text
+                            ));
+                        }
+                        tr.appendChild(td);
+                    }
+                    tbody.appendChild(tr);
+                });
+                tableEl.appendChild(tbody);
+                readerContent.appendChild(tableEl);
+                continue;
+            }
             const rawText = (s.text || "").trim();
             
             let isHeading = false;
@@ -2330,16 +2391,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const headingEl = document.createElement("h" + level);
                 headingEl.className = "reader-heading h" + level;
 
-                const span = document.createElement("span");
-                span.className = "reader-sentence";
-                span.id = "sent-" + index;
-                span.textContent = titleText;
-
-                span.addEventListener("click", () => {
-                    readerAudio.currentTime = s.start / 1000;
-                    readerAudio.play().catch(err => console.log("Play failed:", err));
-                    showPauseIcon();
-                });
+                const span = createSentenceSpan(s, index, titleText);
 
                 headingEl.appendChild(span);
                 readerContent.appendChild(headingEl);
@@ -2351,20 +2403,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                     startMs: s.start
                 });
             } else {
-                const span = document.createElement("span");
-                span.className = "reader-sentence";
-                span.id = "sent-" + index;
-                span.textContent = cleanDisplayText(s.text) + " ";
-
-                span.addEventListener("click", () => {
-                    readerAudio.currentTime = s.start / 1000;
-                    readerAudio.play().catch(err => console.log("Play failed:", err));
-                    showPauseIcon();
-                });
-
-                readerContent.appendChild(span);
+                readerContent.appendChild(createSentenceSpan(s, index, cleanDisplayText(s.text) + " "));
             }
-        });
+        }
 
         // 목차(Index) 버튼 표시 제어
         const readerIndexBtn = document.getElementById("readerIndexBtn");

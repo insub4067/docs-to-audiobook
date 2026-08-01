@@ -585,6 +585,71 @@ def normalize_markdown_for_reading(text: str) -> str:
     return "\n".join(normalized)
 
 
+def extract_markdown_tables(text: str) -> list:
+    tables = []
+    lines = text.split("\n")
+    index = 0
+    while index + 1 < len(lines):
+        if "|" not in lines[index] or not _is_markdown_table_separator(lines[index + 1]):
+            index += 1
+            continue
+        headers = _markdown_table_cells(lines[index])
+        rows = []
+        index += 2
+        while index < len(lines) and "|" in lines[index]:
+            values = _markdown_table_cells(lines[index])
+            if len(values) == len(headers):
+                rows.append(values)
+            index += 1
+        if headers and rows:
+            tables.append({"headers": headers, "rows": rows})
+    return tables
+
+
+def build_document_representations(raw_text: str) -> tuple[str, str, list]:
+    """표 구조를 보존한 표시용 Markdown과 낭독용 평탄 텍스트를 분리한다."""
+    display_markdown = raw_text.lstrip("\ufeff").replace("\r\n", "\n")
+    return display_markdown, preprocess_text(display_markdown), extract_markdown_tables(display_markdown)
+
+
+def _normalized_match_text(text: str) -> str:
+    return re.sub(r"[^\w가-힣]", "", clean_tts_text(text))
+
+
+def annotate_sentences_with_tables(sentences: list, tables: list) -> None:
+    """TTS 문장에 표시용 표의 행·열 정보를 붙인다. 완전 매칭된 표만 표시한다."""
+    search_start = 0
+    for table_id, table in enumerate(tables):
+        table_start = search_start
+        matches = []
+        for row_index, row in enumerate(table["rows"]):
+            for column_index, value in enumerate(row):
+                expected = _normalized_match_text(f"{table['headers'][column_index]}: {value}")
+                found = None
+                for sentence_index in range(search_start, len(sentences)):
+                    actual = _normalized_match_text(sentences[sentence_index]["text"])
+                    if expected and (actual == expected or expected in actual):
+                        found = sentence_index
+                        break
+                if found is None:
+                    matches = []
+                    break
+                matches.append((found, row_index, column_index))
+                search_start = found + 1
+            if not matches:
+                break
+        if not matches:
+            search_start = table_start
+            continue
+        for sentence_index, row_index, column_index in matches:
+            sentences[sentence_index]["table"] = {
+                "id": table_id,
+                "row": row_index,
+                "column": column_index,
+                "header": table["headers"][column_index],
+            }
+
+
 def preprocess_text(text: str) -> str:
     # 1. Clean line breaks: single newline to space, double newline to paragraph break with pause indicator
     cleaned_text = normalize_markdown_for_reading(
@@ -1030,11 +1095,8 @@ async def synthesize_chunk(chunk_index: int, text_chunk: str, voice: str, rate: 
 
 async def synthesize_document(raw_text: str, voice: str, rate: str, pitch: str, progress_callback=None) -> tuple:
     """Synthesize a full document into (audio_bytes, annotated_sentences, heading_index)."""
-    # Extract heading metadata from original text (before preprocessing strips newlines)
-    headings = extract_markdown_headings(raw_text)
-
-    # Preprocess text for TTS (merge lines, clean spacing)
-    text = preprocess_text(raw_text)
+    display_markdown, text, tables = build_document_representations(raw_text)
+    headings = extract_markdown_headings(display_markdown)
 
     # Split text into chunks (~800 chars per chunk for optimal parallel TTS generation)
     paragraphs = text.split(". ")
@@ -1105,12 +1167,14 @@ async def synthesize_document(raw_text: str, voice: str, rate: str, pitch: str, 
     annotated_sentences, heading_index = annotate_sentences_with_headings(
         combined_sentences, headings
     )
+    annotate_sentences_with_tables(annotated_sentences, tables)
 
     return combined_audio, annotated_sentences, heading_index
 
 
 async def process_synthesis_task(job_id: str, raw_text: str, voice: str, rate: str, pitch: str):
     try:
+        display_markdown, _, _ = build_document_representations(raw_text)
         def update_progress(completed_chunks: int, total_chunks: int):
             jobs[job_id]["completed_chunks"] = completed_chunks
             jobs[job_id]["total_chunks"] = total_chunks
@@ -1135,6 +1199,7 @@ async def process_synthesis_task(job_id: str, raw_text: str, voice: str, rate: s
         jobs[job_id]["audio_path"] = audio_path
         jobs[job_id]["sentences"] = annotated_sentences
         jobs[job_id]["headings"] = heading_index
+        jobs[job_id]["display_markdown"] = display_markdown
         jobs[job_id]["status"] = "completed"
 
     except Exception as e:
@@ -1179,6 +1244,7 @@ async def synthesize_text(
         "audio_path": None,
         "sentences": [],
         "headings": [],
+        "display_markdown": "",
         "completed_chunks": 0,
         "total_chunks": 0,
         "error": None,
@@ -1206,7 +1272,8 @@ async def get_job_status(
             "status": "completed",
             "audio_url": f"/api/job/{job_id}/audio",
             "sentences": job["sentences"],
-            "headings": job.get("headings", [])
+            "headings": job.get("headings", []),
+            "display_markdown": job.get("display_markdown", ""),
         })
 
     return JSONResponse(content={

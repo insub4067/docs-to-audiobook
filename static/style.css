@@ -1385,6 +1385,40 @@ input[type="range"]::-webkit-slider-thumb:active {
     box-shadow: inset 0 -2px 0 rgba(198, 154, 88, 0.5);
 }
 
+.reader-table {
+    width: 100%;
+    margin: 18px 0;
+    border-collapse: separate;
+    border-spacing: 0;
+    overflow: hidden;
+    border: 1px solid var(--glass-border);
+    border-radius: 14px;
+    font-size: 0.82em;
+    line-height: 1.5;
+}
+
+.reader-table th,
+.reader-table td {
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid var(--glass-border);
+}
+
+.reader-table th {
+    color: var(--primary-color);
+    background: var(--glass-bg);
+    font-weight: 700;
+}
+
+.reader-table tr:last-child td {
+    border-bottom: 0;
+}
+
+.reader-table .reader-sentence {
+    display: inline;
+}
+
 /* 하단 바는 접혀도 사라지지 않고 재생 컨트롤만 남는 컴팩트 상태가 된다.
    오디오북에서 일시정지와 재생 위치는 읽는 중 가장 자주 쓰는 컨트롤이라
    완전히 숨기면 매번 스크롤을 되돌려야 한다. */
