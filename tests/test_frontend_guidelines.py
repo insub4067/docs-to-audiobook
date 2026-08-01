@@ -182,6 +182,84 @@ def test_service_worker_handles_ready_push_and_notification_click():
     assert "clients.openWindow" in source
 
 
+def test_service_worker_push_and_click_handlers_use_only_verified_origin_clients():
+    script = f"""
+const fs = require("fs");
+const vm = require("vm");
+const source = fs.readFileSync({str(SW_JS)!r}, "utf8");
+const listeners = {{}};
+const notifications = [];
+const focused = [];
+const opened = [];
+let fetchCalls = 0;
+let windowClients = [];
+const context = {{
+  URL,
+  caches: {{}},
+  clients: {{
+    matchAll: async () => windowClients,
+    openWindow: async (url) => opened.push(url),
+  }},
+  fetch: async () => {{ fetchCalls += 1; }},
+  self: {{
+    location: {{ origin: "https://app.example.com" }},
+    registration: {{
+      showNotification: async (title, options) => notifications.push({{ title, options }}),
+    }},
+    addEventListener: (name, handler) => {{ listeners[name] = handler; }},
+  }},
+}};
+vm.runInNewContext(source, context);
+
+async function dispatchPush(payload) {{
+  let pending;
+  listeners.push({{
+    data: {{ json: () => payload }},
+    waitUntil: (promise) => {{ pending = promise; }},
+  }});
+  if (pending) await pending;
+}}
+
+async function dispatchClick() {{
+  let pending;
+  let closed = false;
+  listeners.notificationclick({{
+    notification: {{ close: () => {{ closed = true; }} }},
+    waitUntil: (promise) => {{ pending = promise; }},
+  }});
+  await pending;
+  if (!closed) throw new Error("알림을 닫지 않았습니다.");
+}}
+
+(async () => {{
+  await dispatchPush({{ type: "other", job_id: "job-1" }});
+  if (notifications.length !== 0) throw new Error("audiobook_ready 이외 payload에도 알림을 표시했습니다.");
+
+  await dispatchPush({{ type: "audiobook_ready", job_id: "job-1" }});
+  if (notifications.length !== 1 || notifications[0].title !== "TextAudio" || notifications[0].options.body !== "오디오북 생성이 완료되었습니다.") {{
+    throw new Error("일반 완료 알림을 표시하지 않았습니다.");
+  }}
+  if (fetchCalls !== 0) throw new Error("push payload로 상태 API를 직접 호출했습니다.");
+
+  windowClients = [
+    {{ url: "not a valid URL", focus: async () => focused.push("invalid") }},
+    {{ url: "https://app.example.com.evil/", focus: async () => focused.push("malicious") }},
+  ];
+  await dispatchClick();
+  if (focused.length !== 0 || opened.length !== 1 || opened[0] !== "/") {{
+    throw new Error("같은 origin이 아닌 창을 포커스하거나 루트 창을 열지 않았습니다.");
+  }}
+
+  windowClients = [{{ url: "https://app.example.com/library", focus: async () => focused.push("same-origin") }}];
+  await dispatchClick();
+  if (focused.length !== 1 || focused[0] !== "same-origin" || opened.length !== 1) {{
+    throw new Error("같은 origin 창을 포커스하지 않았습니다.");
+  }}
+}})().catch((error) => {{ console.error(error); process.exit(1); }});
+"""
+    subprocess.run(["node", "-e", script], check=True)
+
+
 def test_service_worker_precaches_notification_client_with_new_cache_version():
     source = SW_JS.read_text(encoding="utf-8")
 
