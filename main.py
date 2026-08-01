@@ -68,6 +68,11 @@ MAX_ADMIN_UPLOAD_BYTES = 50 * 1024 * 1024
 # 되므로, 10MB 텍스트(약 350만 자)를 그대로 받으면 오디오만 2.9GB가 되어
 # 반드시 죽는다. 10만 자면 약 4시간 분량이라 실사용에는 충분하다.
 MAX_SYNTH_CHARS = 100_000
+MAX_ADMIN_SYNTH_CHARS = 500_000
+
+# 긴 관리자 문서는 다섯 묶음으로 나눠 각각의 MP3를 디스크에 기록한다.
+# 묶음 안의 청크는 순서대로 처리해 메모리에 오디오를 쌓지 않는다.
+DOCUMENT_PART_CONCURRENCY = 5
 
 # 1GB 인스턴스에서는 대용량 문서의 텍스트 추출을 병렬로 처리하면 메모리
 # 여유가 빠르게 사라진다. 관리자 대용량 업로드는 한 번에 하나만 처리한다.
@@ -249,6 +254,14 @@ def upload_limit_for(authorization: str | None) -> int:
     except HTTPException:
         return MAX_UPLOAD_BYTES
     return MAX_ADMIN_UPLOAD_BYTES
+
+
+def synth_limit_for(upload_limit_bytes: int) -> int:
+    return (
+        MAX_ADMIN_SYNTH_CHARS
+        if upload_limit_bytes == MAX_ADMIN_UPLOAD_BYTES
+        else MAX_SYNTH_CHARS
+    )
 
 
 def _parse_event_time(value: str | None):
@@ -912,6 +925,7 @@ async def upload_file(request: Request, file: UploadFile = File(...), authorizat
     file_id = str(uuid.uuid4())
     temp_path = os.path.join(UPLOAD_DIR, f"{file_id}_{safe_name}")
     max_upload_bytes = upload_limit_for(authorization)
+    max_synth_chars = synth_limit_for(max_upload_bytes)
 
     try:
         if max_upload_bytes > MAX_UPLOAD_BYTES:
@@ -940,10 +954,10 @@ async def upload_file(request: Request, file: UploadFile = File(...), authorizat
         if not text.strip():
             raise HTTPException(status_code=400, detail="추출된 텍스트가 없습니다. 빈 파일이거나 읽을 수 없는 문서입니다.")
 
-        if len(text) > MAX_SYNTH_CHARS:
+        if len(text) > max_synth_chars:
             raise HTTPException(
                 status_code=413,
-                detail=f"추출된 텍스트가 너무 깁니다. 최대 {MAX_SYNTH_CHARS:,}자까지 지원합니다.",
+                detail=f"추출된 텍스트가 너무 깁니다. 최대 {max_synth_chars:,}자까지 지원합니다.",
             )
 
         # Save to memory storage with timestamp
@@ -951,6 +965,7 @@ async def upload_file(request: Request, file: UploadFile = File(...), authorizat
             "filename": file.filename,
             "text": text,
             "char_count": len(text),
+            "max_synth_chars": max_synth_chars,
             "created_at": time.time(),
             "access_token": uuid.uuid4().hex,
         }
@@ -1122,28 +1137,30 @@ async def synthesize_chunk(chunk_index: int, text_chunk: str, voice: str, rate: 
 
     raise last_error
 
+
+def split_tts_chunks(text: str) -> list[str]:
+    """Edge TTS에 보낼 800자 안팎의 순서 보장 청크를 만든다."""
+    paragraphs = text.split(". ")
+    chunks = []
+    current_chunk = ""
+
+    for paragraph in paragraphs:
+        if len(current_chunk) + len(paragraph) < 800:
+            current_chunk += paragraph + ". "
+        else:
+            if current_chunk.strip():
+                chunks.append(current_chunk.strip())
+            current_chunk = paragraph + ". "
+    if current_chunk.strip():
+        chunks.append(current_chunk.strip())
+    return chunks or [text]
+
 async def synthesize_document(raw_text: str, voice: str, rate: str, pitch: str, progress_callback=None) -> tuple:
     """Synthesize a full document into (audio_bytes, annotated_sentences, heading_index)."""
     display_markdown, text, tables = build_document_representations(raw_text)
     headings = extract_markdown_headings(display_markdown)
 
-    # Split text into chunks (~800 chars per chunk for optimal parallel TTS generation)
-    paragraphs = text.split(". ")
-    chunks = []
-    current_chunk = ""
-
-    for p in paragraphs:
-        if len(current_chunk) + len(p) < 800:
-            current_chunk += (p + ". ")
-        else:
-            if current_chunk.strip():
-                chunks.append(current_chunk.strip())
-            current_chunk = p + ". "
-    if current_chunk.strip():
-        chunks.append(current_chunk.strip())
-
-    if not chunks:
-        chunks = [text]
+    chunks = split_tts_chunks(text)
 
     completed_chunks = 0
 
@@ -1201,29 +1218,104 @@ async def synthesize_document(raw_text: str, voice: str, rate: str, pitch: str, 
     return combined_audio, annotated_sentences, heading_index
 
 
+async def synthesize_document_to_file(
+    raw_text: str,
+    voice: str,
+    rate: str,
+    pitch: str,
+    output_path: str,
+    progress_callback=None,
+) -> tuple[list, list, str]:
+    """긴 문서를 최대 다섯 묶음으로 병렬 합성해 MP3를 디스크에 기록한다."""
+    display_markdown, text, tables = build_document_representations(raw_text)
+    headings = extract_markdown_headings(display_markdown)
+    chunks = split_tts_chunks(text)
+    part_count = min(DOCUMENT_PART_CONCURRENCY, len(chunks))
+    base_part_size, extra_chunks = divmod(len(chunks), part_count)
+    parts = []
+    start = 0
+    for part_index in range(part_count):
+        part_size = base_part_size + (1 if part_index < extra_chunks else 0)
+        parts.append(list(enumerate(chunks[start:start + part_size], start)))
+        start += part_size
+    part_paths = [f"{output_path}.part-{index}" for index in range(len(parts))]
+    completed_chunks = 0
+
+    async def synthesize_part(part_index: int, part: list[tuple[int, str]]):
+        nonlocal completed_chunks
+        part_sentences = []
+        current_offset = 0
+        with open(part_paths[part_index], "wb") as audio_file:
+            for chunk_index, chunk in part:
+                _, audio_data, sentences = await synthesize_chunk(chunk_index, chunk, voice, rate, pitch)
+                audio_file.write(audio_data)
+                for sentence in sentences:
+                    part_sentences.append({
+                        "text": sentence["text"],
+                        "start": sentence["start"] + current_offset,
+                        "end": sentence["end"] + current_offset,
+                    })
+                if sentences:
+                    current_offset += max(sentence["end"] for sentence in sentences)
+                completed_chunks += 1
+                if progress_callback:
+                    progress_callback(completed_chunks, len(chunks))
+        return part_index, part_sentences, current_offset
+
+    try:
+        results = await asyncio.gather(*[
+            synthesize_part(part_index, part)
+            for part_index, part in enumerate(parts)
+        ])
+        results.sort(key=lambda result: result[0])
+
+        combined_sentences = []
+        current_offset = 0
+        with open(output_path, "wb") as output_file:
+            for part_index, part_sentences, part_duration in results:
+                with open(part_paths[part_index], "rb") as part_file:
+                    shutil.copyfileobj(part_file, output_file)
+                os.remove(part_paths[part_index])
+                for sentence in part_sentences:
+                    combined_sentences.append({
+                        "text": sentence["text"],
+                        "start": sentence["start"] + current_offset,
+                        "end": sentence["end"] + current_offset,
+                    })
+                current_offset += part_duration
+    except Exception:
+        try:
+            os.remove(output_path)
+        except OSError:
+            pass
+        raise
+    finally:
+        for part_path in part_paths:
+            try:
+                os.remove(part_path)
+            except OSError:
+                pass
+
+    annotated_sentences, heading_index = annotate_sentences_with_headings(combined_sentences, headings)
+    annotate_sentences_with_tables(annotated_sentences, tables)
+    return annotated_sentences, heading_index, display_markdown
+
+
 async def process_synthesis_task(job_id: str, raw_text: str, voice: str, rate: str, pitch: str):
     try:
-        display_markdown, _, _ = build_document_representations(raw_text)
         def update_progress(completed_chunks: int, total_chunks: int):
             jobs[job_id]["completed_chunks"] = completed_chunks
             jobs[job_id]["total_chunks"] = total_chunks
 
-        combined_audio, annotated_sentences, heading_index = await synthesize_document(
-            raw_text, voice, rate, pitch, progress_callback=update_progress
+        audio_path = os.path.join(JOB_AUDIO_DIR, f"{job_id}.mp3")
+        annotated_sentences, heading_index, display_markdown = await synthesize_document_to_file(
+            raw_text, voice, rate, pitch, audio_path, progress_callback=update_progress
         )
 
-        if not combined_audio:
+        if not os.path.exists(audio_path) or os.path.getsize(audio_path) == 0:
             jobs[job_id]["status"] = "error"
             jobs[job_id]["error"] = "음성 합성 결과가 비어 있습니다."
             return
-
-        # 완성된 오디오는 디스크로 내린다. base64로 메모리에 들고 있으면
-        # 문자당 약 900바이트 x 1.33배가 클라이언트가 가져갈 때까지 RAM에
-        # 남아, 동시 작업 수만큼 곱해져 인스턴스가 죽는다.
-        audio_path = os.path.join(JOB_AUDIO_DIR, f"{job_id}.mp3")
-        with open(audio_path, "wb") as f:
-            f.write(combined_audio)
-        del combined_audio
 
         jobs[job_id]["audio_path"] = audio_path
         jobs[job_id]["sentences"] = annotated_sentences
@@ -1260,10 +1352,11 @@ async def synthesize_text(
         raise HTTPException(status_code=403, detail="이 문서를 변환할 권한이 없습니다.")
     raw_text = data["text"]
 
-    if len(raw_text) > MAX_SYNTH_CHARS:
+    max_synth_chars = data.get("max_synth_chars", MAX_SYNTH_CHARS)
+    if len(raw_text) > max_synth_chars:
         raise HTTPException(
             status_code=413,
-            detail=f"문서가 너무 깁니다. 최대 {MAX_SYNTH_CHARS:,}자까지 변환할 수 있습니다 "
+            detail=f"문서가 너무 깁니다. 최대 {max_synth_chars:,}자까지 변환할 수 있습니다 "
                    f"(현재 {len(raw_text):,}자)."
         )
 
