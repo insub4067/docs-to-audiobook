@@ -1,4 +1,4 @@
-const CACHE_NAME = "2026.08.01.28";
+const CACHE_NAME = "2026.08.01.29";
 
 const ASSETS_TO_CACHE = [
   "/",
@@ -8,6 +8,7 @@ const ASSETS_TO_CACHE = [
   "/static/js/db.js",
   "/static/js/auth.js",
   "/static/js/pwa.js",
+  "/static/js/notifications.js",
   "/static/app.js",
   "/static/admin.css",
   "/static/admin.js",
@@ -39,6 +40,35 @@ self.addEventListener("activate", (e) => {
         })
       );
     }).then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch (_) {}
+  if (payload.type !== "audiobook_ready") return;
+
+  event.waitUntil(
+    self.registration.showNotification("TextAudio", {
+      body: "오디오북 생성이 완료되었습니다.",
+      icon: "/static/textaudio-icon.png",
+      badge: "/static/textaudio-icon.png",
+      tag: `audiobook-ready-${payload.job_id || "job"}`,
+      data: { job_id: payload.job_id || "" },
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
+      const client = windowClients.find((windowClient) => windowClient.url.startsWith(self.location.origin));
+      if (client) return client.focus();
+      return clients.openWindow("/");
+    })
   );
 });
 

@@ -171,6 +171,24 @@ def test_service_worker_precaches_split_app_scripts():
         assert f'"{script_path}"' in source
 
 
+def test_service_worker_handles_ready_push_and_notification_click():
+    source = SW_JS.read_text(encoding="utf-8")
+
+    assert 'self.addEventListener("push"' in source
+    assert 'showNotification("TextAudio"' in source
+    assert "오디오북 생성이 완료되었습니다." in source
+    assert 'self.addEventListener("notificationclick"' in source
+    assert "clients.matchAll" in source
+    assert "clients.openWindow" in source
+
+
+def test_service_worker_precaches_notification_client_with_new_cache_version():
+    source = SW_JS.read_text(encoding="utf-8")
+
+    assert 'const CACHE_NAME = "2026.08.01.29";' in source
+    assert '"/static/js/notifications.js"' in source
+
+
 def test_pull_refresh_is_safe_before_app_bridges_are_ready():
     script = f"""
 const fs = require("fs");
