@@ -4,6 +4,8 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 APP_JS = ROOT_DIR / "static" / "app.js"
+UTILS_JS = ROOT_DIR / "static" / "js" / "utils.js"
+AUTH_JS = ROOT_DIR / "static" / "js" / "auth.js"
 STYLE_CSS = ROOT_DIR / "static" / "style.css"
 INDEX_HTML = ROOT_DIR / "static" / "index.html"
 ADMIN_HTML = ROOT_DIR / "static" / "admin.html"
@@ -16,14 +18,15 @@ MANIFEST = ROOT_DIR / "static" / "manifest.json"
 def test_user_generated_titles_are_escaped_before_html_rendering():
     script = f"""
 const fs = require("fs");
-const source = fs.readFileSync({str(APP_JS)!r}, "utf8");
-const match = source.match(/function escapeHtml\\(value\\) \\{{[\\s\\S]*?\\n\\}}/);
+const utilsSource = fs.readFileSync({str(UTILS_JS)!r}, "utf8");
+const appSource = fs.readFileSync({str(APP_JS)!r}, "utf8");
+const match = utilsSource.match(/function escapeHtml\\(value\\) \\{{[\\s\\S]*?\\n\\}}/);
 if (!match) throw new Error("escapeHtml 함수가 없습니다.");
 eval(match[0]);
 if (escapeHtml('<img src=x onerror=alert(1)>') !== '&lt;img src=x onerror=alert(1)&gt;') {{
   throw new Error("HTML 특수문자를 이스케이프하지 않습니다.");
 }}
-if (!source.includes('escapeHtml(getAudiobookDisplayTitle(audioFilename))') || !source.includes('escapeHtml(getAudiobookDisplayTitle(audio.title))')) {{
+if (!appSource.includes('escapeHtml(getAudiobookDisplayTitle(audioFilename))') || !appSource.includes('escapeHtml(getAudiobookDisplayTitle(audio.title))')) {{
   throw new Error("사용자 제목을 안전하게 렌더링하지 않습니다.");
 }}
 """
@@ -95,7 +98,7 @@ def test_url_fetch_button_shows_a_spinner_while_loading():
 def test_url_clear_button_is_visible_only_when_input_has_a_value():
     script = f"""
 const fs = require("fs");
-const source = fs.readFileSync({str(APP_JS)!r}, "utf8");
+const source = fs.readFileSync({str(UTILS_JS)!r}, "utf8");
 const start = source.indexOf("function syncUrlClearButton(input, button)");
 const end = source.indexOf("\\n}}", start) + 2;
 if (start < 0 || end < 2) throw new Error("syncUrlClearButton 함수가 없습니다.");
@@ -112,7 +115,7 @@ if (!button.hidden) throw new Error("빈 입력값인데 초기화 버튼이 보
 def test_audiobook_display_title_hides_file_extension():
     script = f"""
 const fs = require("fs");
-const source = fs.readFileSync({str(APP_JS)!r}, "utf8");
+const source = fs.readFileSync({str(UTILS_JS)!r}, "utf8");
 const start = source.indexOf("function getAudiobookDisplayTitle(title)");
 const end = source.indexOf("\\n}}", start) + 2;
 if (start < 0 || end < 2) throw new Error("오디오북 표시 제목 함수가 없습니다.");
@@ -124,7 +127,7 @@ if (getAudiobookDisplayTitle("제목") !== "제목") throw new Error("확장자 
 
 
 def test_anonymous_trial_uses_a_private_session_header_and_one_time_marker():
-    source = APP_JS.read_text(encoding="utf-8")
+    source = APP_JS.read_text(encoding="utf-8") + AUTH_JS.read_text(encoding="utf-8")
 
     assert '"X-Anonymous-Session"' in source
     assert "anonymousTrialUsed" in source
@@ -140,7 +143,7 @@ def test_login_prompt_explains_second_generation_requires_login():
 def test_login_does_not_access_database_before_it_initializes():
     source = APP_JS.read_text(encoding="utf-8")
 
-    assert source.index("await initializeAuth();") < source.index("let db = null;")
+    assert source.index("await initializeAuth();") < source.index("initDB()")
     assert "if (loggedIn && db) syncWithCloud();" not in source
     assert "if (isLoggedIn()) syncWithCloud();" in source
 
@@ -178,14 +181,14 @@ def test_admin_metric_cards_link_to_dedicated_detail_pages():
 
 
 def test_profile_menu_can_be_closed_outside_or_with_escape():
-    source = APP_JS.read_text(encoding="utf-8")
+    source = AUTH_JS.read_text(encoding="utf-8")
 
     assert 'if (!userInfo.contains(event.target)) closeProfileMenu();' in source
     assert 'if (event.key === "Escape") closeProfileMenu();' in source
 
 
 def test_profile_badge_uses_a_short_name_instead_of_google_avatar():
-    source = APP_JS.read_text(encoding="utf-8")
+    source = AUTH_JS.read_text(encoding="utf-8")
 
     assert 'profileName.trim().split(/\\s+/)[0].slice(0, 2)' in source
     assert 'profileImage.hidden = true;' in source
@@ -193,7 +196,7 @@ def test_profile_badge_uses_a_short_name_instead_of_google_avatar():
 
 def test_admin_users_have_menu_and_triple_tap_entry_points():
     html = INDEX_HTML.read_text(encoding="utf-8")
-    source = APP_JS.read_text(encoding="utf-8")
+    source = AUTH_JS.read_text(encoding="utf-8")
 
     assert 'id="adminDashboardLink" href="/admin" role="menuitem" hidden' in html
     assert 'id="brandWordmark"' in html
@@ -213,7 +216,7 @@ def test_pwa_uses_the_textaudio_name_and_icon():
 def test_reader_scroll_target_uses_viewport_coordinates_for_nested_table_cells():
     script = f"""
 const fs = require("fs");
-const source = fs.readFileSync({str(APP_JS)!r}, "utf8");
+const source = fs.readFileSync({str(UTILS_JS)!r}, "utf8");
 const start = source.indexOf("function getReaderScrollTarget(container, activeElement)");
 const end = source.indexOf("\\n}}", start) + 2;
 if (start < 0 || end < 2) throw new Error("스크롤 위치 계산 함수가 없습니다.");
