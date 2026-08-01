@@ -1,10 +1,12 @@
-# static/app.js 분리 작업 계획 (진행 중, 미완료)
+# static/app.js 분리 작업 기록 (진행 중)
 
 ## 상태
-- 브랜치: `refactor/split-app-js` (main에서 분기, 아직 커밋 없음 — 이 문서 작성 시점까지 코드 변경 전혀 안 함)
-- main.py 도메인 분리(작업#7)는 완료·병합·푸시됨. 이 문서는 별개 작업(#8, 클라이언트 코드 분리)의 계획서.
-- 사용자가 승인한 범위: **"안전한 부분만 먼저"** — 인증/utils/IndexedDB/PWA(약 800줄)만 분리하고,
-  업로드·생성·보관함·리더 핵심 로직(약 2700줄)은 지금은 `static/app.js`에 그대로 둔다.
+- 브랜치: `main`
+- 1차 분리 완료: `toast.js`, `utils.js`, `db.js`, `auth.js`, `pwa.js`, `notifications.js`
+- 2차 안전 모듈 분리 완료: `generation-status.js`, `voices.js`, `web-speech.js`, `reader-controls.js`
+- 다음 범위: 생성 워크플로 → 보관함 → 리더 본체 순서로 컨트롤러화
+- 최신 설계: `docs/superpowers/specs/2026-08-02-app-js-phase-two-design.md`
+- 최신 실행 계획: `docs/superpowers/plans/2026-08-02-app-js-phase-two-safe-modules.md`
 
 ## 왜 이렇게 결정했는가
 `static/app.js`(3550줄)는 최상위 유틸 함수 4개만 빼고 전부 **하나의**
@@ -164,6 +166,5 @@
 4. 확인되면 `refactor/split-app-js` 브랜치를 main으로 머지 + 푸시 (사용자에게 먼저 확인받을 것 —
    이 저장소는 main 푸시 시 자동 배포됨)
 
-## 아직 하지 않은 것 (다음 작업, #8 범위 밖)
-업로드·생성·보관함·리더 핵심 로직(~2700줄, 지금은 app.js에 그대로 남음)의 추가 분리는
-이번 범위에서 제외하기로 사용자와 합의함. 필요해지면 별도로 논의.
+## 다음 작업
+업로드·생성, 보관함·클라우드 동기화, 리더 본체는 결합도가 높아 승인된 2차 설계에 따라 별도 TDD 배치로 순차 분리한다. 로컬/공유 리더의 중복 제거는 책임 이동과 섞지 않고 이번 분리 범위에서 제외한다.

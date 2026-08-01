@@ -29,6 +29,10 @@ SPLIT_APP_SCRIPTS = [
     "/static/js/db.js",
     "/static/js/auth.js",
     "/static/js/pwa.js",
+    "/static/js/generation-status.js",
+    "/static/js/voices.js",
+    "/static/js/web-speech.js",
+    "/static/js/reader-controls.js",
 ]
 
 
@@ -1082,7 +1086,7 @@ async function dispatchClick() {{
 def test_service_worker_precaches_notification_client_with_new_cache_version():
     source = SW_JS.read_text(encoding="utf-8")
 
-    assert 'const CACHE_NAME = "2026.08.02.2";' in source
+    assert 'const CACHE_NAME = "2026.08.02.3";' in source
     assert '"/static/js/notifications.js"' in source
 
 
@@ -1138,13 +1142,14 @@ def test_user_generated_titles_are_escaped_before_html_rendering():
 const fs = require("fs");
 const utilsSource = fs.readFileSync({str(UTILS_JS)!r}, "utf8");
 const appSource = fs.readFileSync({str(APP_JS)!r}, "utf8");
+const generationStatusSource = fs.readFileSync({str(GENERATION_STATUS_JS)!r}, "utf8");
 const match = utilsSource.match(/function escapeHtml\\(value\\) \\{{[\\s\\S]*?\\n\\}}/);
 if (!match) throw new Error("escapeHtml 함수가 없습니다.");
 eval(match[0]);
 if (escapeHtml('<img src=x onerror=alert(1)>') !== '&lt;img src=x onerror=alert(1)&gt;') {{
   throw new Error("HTML 특수문자를 이스케이프하지 않습니다.");
 }}
-if (!appSource.includes('escapeHtml(getAudiobookDisplayTitle(audioFilename))') || !appSource.includes('escapeHtml(getAudiobookDisplayTitle(audio.title))')) {{
+if (!generationStatusSource.includes('escapeHtml(getAudiobookDisplayTitle(audioFilename))') || !appSource.includes('escapeHtml(getAudiobookDisplayTitle(audio.title))')) {{
   throw new Error("사용자 제목을 안전하게 렌더링하지 않습니다.");
 }}
 """

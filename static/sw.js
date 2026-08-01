@@ -1,4 +1,4 @@
-const CACHE_NAME = "2026.08.02.2";
+const CACHE_NAME = "2026.08.02.3";
 
 const ASSETS_TO_CACHE = [
   "/",
@@ -9,6 +9,10 @@ const ASSETS_TO_CACHE = [
   "/static/js/auth.js",
   "/static/js/pwa.js",
   "/static/js/notifications.js",
+  "/static/js/generation-status.js",
+  "/static/js/voices.js",
+  "/static/js/web-speech.js",
+  "/static/js/reader-controls.js",
   "/static/app.js",
   "/static/admin.css",
   "/static/admin.js",
