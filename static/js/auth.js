@@ -247,6 +247,12 @@ async function logout() {
         return;
     }
 
+    try {
+        await unsubscribePushNotifications();
+    } catch (error) {
+        console.warn("푸시 알림 구독 해제 실패");
+    }
+
     // 재생 설정 등 사용자 흔적도 함께 정리한다
     localStorage.removeItem("authToken");
     localStorage.removeItem("textAudio_playbackSpeed");

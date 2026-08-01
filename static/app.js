@@ -907,6 +907,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             // 않고 안내만 하고 끝낸다 — 진행 아이템을 붙잡고 있어봐야
             // 갱신되지 않는다.
             if (resData.background_started) {
+                rememberBackgroundJob(jobId);
                 progressItem.remove();
                 if (audioList.children.length === 0) {
                     libraryEmpty.style.display = "flex";
@@ -1436,7 +1437,7 @@ document.addEventListener("DOMContentLoaded", async () => {
      * 예전에는 실패를 조용히 삼켜서, 업로드가 안 된 채로 기기 데이터가
      * 지워지는 일을 막지 못했다.
      */
-    async function syncWithCloud() {
+    async function syncWithCloud({ silent = false } = {}) {
         const result = { uploaded: 0, added: 0, failed: 0, deleted: 0, ok: false };
         if (!isLoggedIn() || syncing) return result;
         syncing = true;
@@ -1510,7 +1511,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
 
             result.ok = result.failed === 0;
-            if (result.uploaded || result.added) {
+            if ((result.uploaded || result.added) && !silent) {
                 renderLibrary();
                 showToast(`동기화 완료 (올림 ${result.uploaded}, 받음 ${result.added})`, "success");
             }
@@ -2698,7 +2699,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     checkSharedLink();
-
+    initializeBackgroundNotifications();
 
     initIosPwaPrompt();
 });

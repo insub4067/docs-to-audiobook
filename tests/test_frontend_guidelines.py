@@ -7,6 +7,7 @@ APP_JS = ROOT_DIR / "static" / "app.js"
 UTILS_JS = ROOT_DIR / "static" / "js" / "utils.js"
 AUTH_JS = ROOT_DIR / "static" / "js" / "auth.js"
 PWA_JS = ROOT_DIR / "static" / "js" / "pwa.js"
+NOTIFICATIONS_JS = ROOT_DIR / "static" / "js" / "notifications.js"
 SW_JS = ROOT_DIR / "static" / "sw.js"
 STYLE_CSS = ROOT_DIR / "static" / "style.css"
 INDEX_HTML = ROOT_DIR / "static" / "index.html"
@@ -23,6 +24,23 @@ SPLIT_APP_SCRIPTS = [
     "/static/js/auth.js",
     "/static/js/pwa.js",
 ]
+
+
+def test_background_notification_client_is_loaded():
+    html = INDEX_HTML.read_text(encoding="utf-8")
+
+    assert NOTIFICATIONS_JS.is_file()
+    assert '<script src="/static/js/notifications.js"></script>' in html
+
+
+def test_background_job_is_remembered_and_checked_on_resume():
+    app = APP_JS.read_text(encoding="utf-8")
+    notifications = NOTIFICATIONS_JS.read_text(encoding="utf-8")
+    pwa = PWA_JS.read_text(encoding="utf-8")
+
+    assert "rememberBackgroundJob(jobId)" in app
+    assert "setInterval(checkPendingBackgroundJobs, 30000)" in notifications
+    assert "window.__checkPendingBackgroundJobs" in pwa
 
 
 def test_split_app_scripts_exist_and_load_before_app_in_dependency_order():

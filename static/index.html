@@ -55,6 +55,10 @@
                         <i data-lucide="layout-dashboard"></i>
                         관리자 페이지
                     </a>
+                    <button class="profile-menu-link" id="pushNotificationBtn" type="button" role="menuitem" hidden>
+                        <i data-lucide="bell"></i>
+                        <span id="pushNotificationLabel">완료 알림 받기</span>
+                    </button>
                     <button class="btn-logout" id="logoutBtn" type="button" role="menuitem" aria-label="로그아웃">
                         <i data-lucide="log-out"></i>
                         로그아웃
@@ -392,6 +396,7 @@
     <script src="/static/js/db.js"></script>
     <script src="/static/js/auth.js"></script>
     <script src="/static/js/pwa.js"></script>
+    <script src="/static/js/notifications.js"></script>
     <script src="/static/app.js"></script>
     <script>
         if ('serviceWorker' in navigator) {

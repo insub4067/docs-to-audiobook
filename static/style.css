@@ -1946,6 +1946,10 @@ input[type="range"]::-webkit-slider-thumb:active {
     cursor: pointer;
 }
 
+.profile-menu-link[hidden] {
+    display: none;
+}
+
 .profile-menu-link:hover,
 .profile-menu-link:focus-visible,
 .btn-logout:hover,

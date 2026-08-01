@@ -181,6 +181,7 @@ async function checkAndReloadIfUpdated() {
 document.addEventListener("visibilitychange", async () => {
     if (document.visibilityState !== "visible") return;
     checkAndReloadIfUpdated();
+    window.__checkPendingBackgroundJobs?.();
 });
 
 // 메인 화면에서 스크롤 다운할 때도 버전 확인 (30초마다 한 번)
