@@ -667,3 +667,17 @@ async def resume_background_synthesis_jobs():
             ))
     except Exception as e:
         print(f"Background job resume failed: {e}")
+
+
+@router.get("/api/audio/{job_id}.mp3")
+async def download_audiobook(
+    job_id: str,
+    authorization: str = Header(None),
+    anonymous_session: str = Header(None, alias="X-Anonymous-Session")
+):
+    job = require_job_owner(job_id, authorization, anonymous_session)
+    audio_path = job.get("audio_path")
+    if not audio_path or not os.path.exists(audio_path):
+        raise HTTPException(status_code=404, detail="Audio file not found")
+
+    return FileResponse(audio_path, media_type="audio/mpeg")

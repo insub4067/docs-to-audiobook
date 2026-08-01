@@ -57,7 +57,7 @@ async def test_api_synthesize_requires_auth():
 @pytest.mark.asyncio
 async def test_api_synthesize_allows_anonymous_session():
     from unittest.mock import patch
-    from main import jobs, text_storage
+    from state import jobs, text_storage
 
     text_storage["anonymous-text"] = {
         "filename": "anonymous.txt",
@@ -99,7 +99,7 @@ async def test_api_synthesize_text_too_long():
     # MAX_SYNTH_CHARS를 넘는 텍스트는 413로 거절해야 한다(10MB 텍스트 =
     # 오디오만 2.9GB가 되어 인스턴스가 죽는 것을 막는 상한).
     from unittest.mock import patch
-    from main import text_storage, MAX_SYNTH_CHARS
+    from state import text_storage, MAX_SYNTH_CHARS
 
     text_storage["big"] = {
         "filename": "big.txt",
@@ -121,7 +121,7 @@ async def test_api_synthesize_text_too_long():
 @pytest.mark.asyncio
 async def test_api_upload_rejects_text_that_cannot_be_synthesized():
     from unittest.mock import patch
-    from main import MAX_SYNTH_CHARS
+    from state import MAX_SYNTH_CHARS
 
     with patch("routes.upload.extract_text", return_value="가" * (MAX_SYNTH_CHARS + 1)):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
@@ -137,7 +137,7 @@ async def test_api_upload_rejects_text_that_cannot_be_synthesized():
 @pytest.mark.asyncio
 async def test_api_synthesize_rejects_wrong_text_access_token():
     from unittest.mock import patch
-    from main import text_storage
+    from state import text_storage
 
     text_storage["private-text"] = {
         "filename": "private.txt",

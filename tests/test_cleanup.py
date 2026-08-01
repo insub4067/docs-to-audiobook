@@ -13,7 +13,8 @@ import json
 import time
 import asyncio
 import pytest
-import main
+import cleanup
+import state
 
 
 @pytest.mark.asyncio
@@ -24,18 +25,18 @@ async def test_cleanup_one_iteration(tmp_path, monkeypatch):
     job_audio_dir = tmp_path / "job_audio"
     shared_dir.mkdir()
     job_audio_dir.mkdir()
-    monkeypatch.setattr(main, "SHARED_DIR", str(shared_dir))
-    monkeypatch.setattr(main, "JOB_AUDIO_DIR", str(job_audio_dir))
+    monkeypatch.setattr(cleanup, "SHARED_DIR", str(shared_dir))
+    monkeypatch.setattr(cleanup, "JOB_AUDIO_DIR", str(job_audio_dir))
 
     # 1) text_storage: 30분(1800s) 넘은 것만 지워져야 한다
-    main.text_storage["expired"] = {"created_at": now - 2000}
-    main.text_storage["fresh"] = {"created_at": now}
+    state.text_storage["expired"] = {"created_at": now - 2000}
+    state.text_storage["fresh"] = {"created_at": now}
 
     # 2) jobs: 30분 넘은 것은 지워지고, 딸린 오디오 파일도 삭제돼야 한다
     expired_audio = job_audio_dir / "expired_job.mp3"
     expired_audio.write_bytes(b"audio")
-    main.jobs["expired_job"] = {"created_at": now - 2000, "audio_path": str(expired_audio)}
-    main.jobs["fresh_job"] = {"created_at": now, "audio_path": None}
+    state.jobs["expired_job"] = {"created_at": now - 2000, "audio_path": str(expired_audio)}
+    state.jobs["fresh_job"] = {"created_at": now, "audio_path": None}
 
     # 3) shared: 24시간(86400s)이 지나면 메타데이터와 무관하게 지워져야 한다
     def make_share(share_id, created_at, never_expire=False):
@@ -62,7 +63,7 @@ async def test_cleanup_one_iteration(tmp_path, monkeypatch):
     # 루프의 본문은 await 지점이 없어(asyncio.sleep(600)에 닿기 전까지) 한
     # 이벤트 루프 틱 안에서 전부 동기 실행된다. 짧게 재운 뒤 취소하면
     # 정확히 "한 번의 반복"만 관측할 수 있다.
-    task = asyncio.create_task(main.cleanup_expired_files_loop())
+    task = asyncio.create_task(cleanup.cleanup_expired_files_loop())
     await asyncio.sleep(0.2)
     task.cancel()
     try:
@@ -71,12 +72,12 @@ async def test_cleanup_one_iteration(tmp_path, monkeypatch):
         pass
 
     # text_storage 검증
-    assert "expired" not in main.text_storage
-    assert "fresh" in main.text_storage
+    assert "expired" not in state.text_storage
+    assert "fresh" in state.text_storage
 
     # jobs 검증 + 딸린 파일 삭제 검증
-    assert "expired_job" not in main.jobs
-    assert "fresh_job" in main.jobs
+    assert "expired_job" not in state.jobs
+    assert "fresh_job" in state.jobs
     assert not expired_audio.exists()
 
     # shared 검증 (과거 never_expire 메타데이터도 보관 우회에 쓰이면 안 된다)

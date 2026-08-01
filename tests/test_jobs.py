@@ -1,7 +1,8 @@
 import pytest
 import httpx
 from unittest.mock import patch
-from main import app, jobs
+from main import app
+from state import jobs
 
 
 def _owner_from_header(authorization):

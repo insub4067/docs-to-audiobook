@@ -6,7 +6,7 @@ from main import app
 
 def test_share_id_and_metadata_validation():
     from fastapi import HTTPException
-    from main import parse_share_metadata, validate_share_id
+    from routes.share import parse_share_metadata, validate_share_id
 
     assert validate_share_id("a1b2c3d4e5f6") == "a1b2c3d4e5f6"
     with pytest.raises(HTTPException, match="공유 링크"):
@@ -37,9 +37,9 @@ async def test_get_voice_preview():
 
 @pytest.mark.asyncio
 async def test_social_auth_callback():
-    with patch("main.SOCIAL_VERIFIERS", {"google": MagicMock(return_value={"provider_id": "g_1", "email": "a@a.com", "full_name": "A"})}):
-        # We need to mock _upsert_social_user as well, which is in main.py
-        with patch("main._upsert_social_user", return_value={"id": "user123", "email": "a@a.com"}):
+    with patch("routes.auth_social.SOCIAL_VERIFIERS", {"google": MagicMock(return_value={"provider_id": "g_1", "email": "a@a.com", "full_name": "A"})}):
+        # We need to mock _upsert_social_user as well
+        with patch("routes.auth_social._upsert_social_user", return_value={"id": "user123", "email": "a@a.com"}):
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
                 response = await client.post("/api/auth/social/google", json={"token": "t"})
                 assert response.status_code == 200
@@ -49,7 +49,7 @@ async def test_social_auth_callback():
         response = await client.post("/api/auth/social/kakao", json={"token": "t"})
         assert response.status_code == 400
         
-    with patch("main.SOCIAL_VERIFIERS", {"google": MagicMock(side_effect=Exception("Invalid"))}):
+    with patch("routes.auth_social.SOCIAL_VERIFIERS", {"google": MagicMock(side_effect=Exception("Invalid"))}):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post("/api/auth/social/google", json={"token": "t"})
             assert response.status_code == 500
@@ -69,8 +69,8 @@ async def test_front_end_routes():
             
 @pytest.mark.asyncio
 async def test_share_features():
-    with patch("main.require_user_id", return_value="test_user"):
-        with patch("main.save_upload_limited") as mock_save:
+    with patch("routes.share.require_user_id", return_value="test_user"):
+        with patch("routes.share.save_upload_limited") as mock_save:
             mock_save.return_value = 100
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
                 files = {"audio": ("test.mp3", b"fake audio", "audio/mpeg")}
@@ -82,15 +82,15 @@ async def test_share_features():
                 
     # Test get_share_meta
     with patch("main.os.path.exists", return_value=True):
-        with patch("main.open") as mock_open:
+        with patch("routes.share.open") as mock_open:
             mock_open.return_value.__enter__.return_value.read.return_value = '{"title": "Test Share", "sentences": [], "headings": []}'
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
                 response = await client.get(f"/api/share/{share_id}")
                 assert response.status_code == 200
                 assert response.json()["title"] == "Test Share"
-                
+
                 # Test default book meta
-                with patch("main.default_book_paths", return_value=("audio", "meta")):
+                with patch("routes.share.default_book_paths", return_value=("audio", "meta")):
                     res2 = await client.get("/api/share/default_book")
                     assert res2.status_code == 200
                     assert res2.json()["title"] == "Test Share"

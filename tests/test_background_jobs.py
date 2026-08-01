@@ -27,11 +27,11 @@ def mock_supabase():
 
 
 def _seed_large_text(text_id="large-doc", max_synth_chars=None):
-    main.text_storage[text_id] = {
+    state.text_storage[text_id] = {
         "filename": "large.pdf",
         "text": "관리자 대용량 문서 테스트 본문입니다.",
         "char_count": 20,
-        "max_synth_chars": max_synth_chars or main.MAX_ADMIN_SYNTH_CHARS,
+        "max_synth_chars": max_synth_chars or state.MAX_ADMIN_SYNTH_CHARS,
         "created_at": 0,
         "access_token": "text-token",
     }
@@ -64,10 +64,10 @@ async def test_synthesize_large_text_starts_background_job(mock_supabase):
     mock_supabase.table().insert.assert_called_once()
     inserted = mock_supabase.table().insert.call_args[0][0]
     assert inserted["id"] == data["job_id"]
-    assert inserted["source_text"] == main.text_storage.get("large-doc", {}).get("text", inserted["source_text"])
+    assert inserted["source_text"] == state.text_storage.get("large-doc", {}).get("text", inserted["source_text"])
 
-    main.jobs.pop(data["job_id"], None)
-    main.text_storage.pop("large-doc", None)
+    state.jobs.pop(data["job_id"], None)
+    state.text_storage.pop("large-doc", None)
 
 
 @pytest.mark.asyncio
@@ -117,7 +117,7 @@ async def test_synthesize_large_text_rejected_when_disk_is_low(mock_supabase):
     assert "디스크 여유가 부족" in response.json()["detail"]
     mock_supabase.table().insert.assert_not_called()
 
-    main.text_storage.pop("large-doc", None)
+    state.text_storage.pop("large-doc", None)
 
 
 def test_has_enough_disk_for_synthesis_uses_real_free_space(tmp_path, monkeypatch):
@@ -141,7 +141,7 @@ async def test_synthesize_large_text_requires_login(mock_supabase):
             headers={"X-Anonymous-Session": "anonymous-session-123456"},
         )
     assert response.status_code == 401
-    main.text_storage.pop("large-doc", None)
+    state.text_storage.pop("large-doc", None)
 
 
 # ---- _store_background_audiobook: 결과 저장 순서(고아 방지) ----
@@ -209,8 +209,8 @@ async def test_resume_reschedules_queued_jobs(mock_supabase):
         "job-resume-1", "user-1", "재개될 문서", "원문 텍스트",
         "ko-KR-HyunsuMultilingualNeural", "+0%", "+0Hz",
     )
-    assert main.jobs["job-resume-1"]["status"] == "processing"
-    main.jobs.pop("job-resume-1", None)
+    assert state.jobs["job-resume-1"]["status"] == "processing"
+    state.jobs.pop("job-resume-1", None)
 
 
 @pytest.mark.asyncio
@@ -234,7 +234,7 @@ async def test_resume_skips_when_another_process_already_claimed(mock_supabase):
         await __import__("asyncio").sleep(0)
 
     mock_task.assert_not_called()
-    assert "job-already-claimed" not in main.jobs
+    assert "job-already-claimed" not in state.jobs
 
 
 @pytest.mark.asyncio
@@ -250,7 +250,7 @@ async def test_resume_skips_rows_without_source_text(mock_supabase):
         await __import__("asyncio").sleep(0)
 
     mock_task.assert_not_called()
-    assert "job-no-text" not in main.jobs
+    assert "job-no-text" not in state.jobs
 
 
 # ---- process_background_synthesis_task: 전체 재시도(all or nothing) ----
@@ -265,9 +265,9 @@ async def test_process_background_synthesis_task_succeeds_first_try(mock_supabas
     async def fake_process(job_id, raw_text, voice, rate, pitch):
         audio_path = tmp_path / f"{job_id}.mp3"
         audio_path.write_bytes(b"fake-audio")
-        main.jobs[job_id]["status"] = "completed"
-        main.jobs[job_id]["audio_path"] = str(audio_path)
-        main.jobs[job_id]["sentences"] = []
+        state.jobs[job_id]["status"] = "completed"
+        state.jobs[job_id]["audio_path"] = str(audio_path)
+        state.jobs[job_id]["sentences"] = []
 
     with patch("routes.tts.process_synthesis_task", side_effect=fake_process), \
          patch("routes.tts._store_background_audiobook", return_value="audiobook-1") as mock_store, \
@@ -280,7 +280,7 @@ async def test_process_background_synthesis_task_succeeds_first_try(mock_supabas
     mock_sleep.assert_not_called()  # 한 번에 성공했으니 재시도 대기가 없어야 한다
     update_calls = mock_supabase.table().update.call_args_list
     assert any(call.args[0].get("status") == "completed" for call in update_calls)
-    main.jobs.pop("job-first-try", None)
+    state.jobs.pop("job-first-try", None)
 
 
 @pytest.mark.asyncio
@@ -290,14 +290,14 @@ async def test_process_background_synthesis_task_retries_whole_job_on_failure(mo
     async def fake_process(job_id, raw_text, voice, rate, pitch):
         attempts.append(len(attempts) + 1)
         if len(attempts) == 1:
-            main.jobs[job_id]["status"] = "error"
-            main.jobs[job_id]["error"] = "청크 하나가 계속 실패했습니다."
+            state.jobs[job_id]["status"] = "error"
+            state.jobs[job_id]["error"] = "청크 하나가 계속 실패했습니다."
         else:
             audio_path = tmp_path / f"{job_id}.mp3"
             audio_path.write_bytes(b"fake-audio")
-            main.jobs[job_id]["status"] = "completed"
-            main.jobs[job_id]["audio_path"] = str(audio_path)
-            main.jobs[job_id]["sentences"] = []
+            state.jobs[job_id]["status"] = "completed"
+            state.jobs[job_id]["audio_path"] = str(audio_path)
+            state.jobs[job_id]["sentences"] = []
 
     with patch("routes.tts.process_synthesis_task", side_effect=fake_process), \
          patch("routes.tts._store_background_audiobook", return_value="audiobook-1"), \
@@ -308,15 +308,15 @@ async def test_process_background_synthesis_task_retries_whole_job_on_failure(mo
 
     assert len(attempts) == 2  # 첫 시도 실패, 두 번째에 성공
     assert mock_sleep.call_count == 1  # 재시도 사이에 한 번만 쉰다
-    assert main.jobs["job-retry-success"]["status"] == "completed"
-    main.jobs.pop("job-retry-success", None)
+    assert state.jobs["job-retry-success"]["status"] == "completed"
+    state.jobs.pop("job-retry-success", None)
 
 
 @pytest.mark.asyncio
 async def test_process_background_synthesis_task_gives_up_after_max_attempts(mock_supabase):
     async def always_fails(job_id, raw_text, voice, rate, pitch):
-        main.jobs[job_id]["status"] = "error"
-        main.jobs[job_id]["error"] = "계속 실패합니다."
+        state.jobs[job_id]["status"] = "error"
+        state.jobs[job_id]["error"] = "계속 실패합니다."
 
     with patch("routes.tts.process_synthesis_task", side_effect=always_fails), \
          patch("routes.tts.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
@@ -324,9 +324,9 @@ async def test_process_background_synthesis_task_gives_up_after_max_attempts(moc
             "job-all-fail", "user-1", "제목", "원문", "voice", "+0%", "+0Hz"
         )
 
-    assert main.jobs["job-all-fail"]["status"] == "error"
-    assert main.jobs["job-all-fail"]["error"] == "계속 실패합니다."
+    assert state.jobs["job-all-fail"]["status"] == "error"
+    assert state.jobs["job-all-fail"]["error"] == "계속 실패합니다."
     assert mock_sleep.call_count == 2  # 3번 시도, 사이에 2번만 쉰다
     update_calls = mock_supabase.table().update.call_args_list
     assert any(call.args[0].get("status") == "error" for call in update_calls)
-    main.jobs.pop("job-all-fail", None)
+    state.jobs.pop("job-all-fail", None)

@@ -12,7 +12,7 @@ def mock_supabase():
 
 @pytest.fixture
 def mock_auth():
-    with patch("main.require_user_id") as mock_req_user:
+    with patch("routes.audiobooks.require_user_id") as mock_req_user:
         mock_req_user.return_value = "test_user_id"
         yield mock_req_user
 
@@ -138,8 +138,8 @@ async def test_admin_metrics_are_available_only_through_admin_route():
         "week_one_retention_rate": 40,
         "generation_success_rate": 92,
     }
-    with patch("main.require_admin_user", return_value="admin-id"):
-        with patch("main.load_admin_metrics", return_value=metrics):
+    with patch("routes.system.require_admin_user", return_value="admin-id"):
+        with patch("routes.system.load_admin_metrics", return_value=metrics):
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
                 response = await client.get("/api/admin/metrics", headers={"Authorization": "Bearer admin"})
 
@@ -158,14 +158,14 @@ async def test_admin_metric_detail_page_is_served():
 
 def test_admin_metrics_normalize_naive_database_timestamps_to_utc():
     from datetime import timezone
-    from main import _parse_event_time
+    from routes.system import _parse_event_time
 
     assert _parse_event_time("2026-08-01T07:00:00").tzinfo == timezone.utc
     assert _parse_event_time("2026-08-01T07:00:00+00:00").tzinfo == timezone.utc
 
 
 def test_admin_metrics_include_named_users_for_detail_sheets():
-    from main import load_admin_metrics
+    from routes.system import load_admin_metrics
 
     class Query:
         def __init__(self, data):
@@ -188,7 +188,7 @@ def test_admin_metrics_include_named_users_for_detail_sheets():
                 "product_events": [{"user_id": "user-1", "event_name": "playback_started", "created_at": "2026-08-01T00:00:00+00:00"}],
             }[name])
 
-    with patch("main._supabase_or_503", return_value=Client()):
+    with patch("routes.system._supabase_or_503", return_value=Client()):
         metrics = load_admin_metrics()
 
     assert metrics["metric_details"]["total_users"] == [{"name": "인섭", "email": "insub@example.com", "meta": "가입일 2026-08-01"}]

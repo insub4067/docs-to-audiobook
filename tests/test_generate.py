@@ -7,7 +7,7 @@ from routes.tts import synthesize_document, synthesize_chunk, process_synthesis_
 @pytest.mark.asyncio
 async def test_synthesize_chunk_success():
     # We want to mock edge_tts.Communicate so it doesn't actually synthesize anything
-    with patch('main.edge_tts.Communicate') as MockCommunicate:
+    with patch('routes.tts.edge_tts.Communicate') as MockCommunicate:
         mock_instance = MagicMock()
         
         async def mock_stream():
@@ -25,7 +25,7 @@ async def test_synthesize_chunk_success():
 @pytest.mark.asyncio
 async def test_synthesize_chunk_failure():
     # If the TTS engine raises an exception, we want to see if it retries and fails
-    with patch('main.edge_tts.Communicate') as MockCommunicate:
+    with patch('routes.tts.edge_tts.Communicate') as MockCommunicate:
         mock_instance = MagicMock()
         mock_instance.stream.side_effect = Exception("TTS failed")
         MockCommunicate.return_value = mock_instance
@@ -151,7 +151,7 @@ async def test_synthesize_document_to_file_limits_workers_and_preserves_order(tm
 @pytest.mark.asyncio
 async def test_process_synthesis_task_success(tmp_path, monkeypatch):
     monkeypatch.setattr("routes.tts.JOB_AUDIO_DIR", str(tmp_path))
-    from main import jobs
+    from state import jobs
 
     job_id = "job-success"
     jobs[job_id] = {"status": "processing", "audio_path": None, "sentences": [], "headings": [], "error": None}
@@ -178,7 +178,7 @@ async def test_process_synthesis_task_success(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_process_synthesis_task_empty_audio_marks_error():
-    from main import jobs
+    from state import jobs
 
     job_id = "job-empty"
     jobs[job_id] = {"status": "processing", "audio_path": None, "sentences": [], "headings": [], "error": None}
@@ -192,7 +192,7 @@ async def test_process_synthesis_task_empty_audio_marks_error():
 
 @pytest.mark.asyncio
 async def test_process_synthesis_task_exception_marks_error():
-    from main import jobs
+    from state import jobs
 
     job_id = "job-exception"
     jobs[job_id] = {"status": "processing", "audio_path": None, "sentences": [], "headings": [], "error": None}

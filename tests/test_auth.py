@@ -1,7 +1,7 @@
 import pytest
 from fastapi import HTTPException
 from unittest.mock import patch
-from main import _verify_google
+from routes.auth_social import _verify_google
 
 def test_verify_google_invalid_token():
     # If the token is invalid, google.oauth2.id_token.verify_oauth2_token raises ValueError
