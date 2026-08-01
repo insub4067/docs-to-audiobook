@@ -29,7 +29,7 @@ function readPendingBackgroundJobs(userId = getCurrentAuthenticatedUserId()) {
     const pending = [];
     for (let index = 0; index < localStorage.length; index++) {
         const key = localStorage.key(index);
-        if (!key?.startsWith(jobPrefix) || localStorage.getItem(key) !== "1") continue;
+        if (!key?.startsWith(jobPrefix) || localStorage.getItem(key) === null) continue;
         try {
             pending.push(decodeURIComponent(key.slice(jobPrefix.length)));
         } catch (error) {
@@ -39,10 +39,19 @@ function readPendingBackgroundJobs(userId = getCurrentAuthenticatedUserId()) {
     return pending;
 }
 
-function rememberBackgroundJob(jobId) {
+function readPendingBackgroundJobTitle(userId, jobId) {
+    try {
+        const value = JSON.parse(localStorage.getItem(pendingBackgroundJobKey(userId, jobId)) || "null");
+        return typeof value?.title === "string" && value.title.trim() ? value.title : "오디오북";
+    } catch (error) {
+        return "오디오북";
+    }
+}
+
+function rememberBackgroundJob(jobId, title = "오디오북") {
     const userId = getCurrentAuthenticatedUserId();
     if (!userId || typeof jobId !== "string" || !jobId) return;
-    localStorage.setItem(pendingBackgroundJobKey(userId, jobId), "1");
+    localStorage.setItem(pendingBackgroundJobKey(userId, jobId), JSON.stringify({ title }));
     updateBackgroundJobCheckInterval();
 }
 
@@ -103,9 +112,11 @@ async function checkOnePendingBackgroundJob(userId, jobId, shouldClaim) {
             const syncResult = await syncAudiobooksToCloud({ silent: true });
             if (!syncResult?.ok || getCurrentAuthenticatedUserId() !== userId) return;
             forgetBackgroundJob(jobId, userId);
+            window.__removeBackgroundJobLoading?.(jobId);
             showToast("오디오북 생성이 완료되었습니다.", "success");
         } else if (job.status === "error") {
             forgetBackgroundJob(jobId, userId);
+            window.__removeBackgroundJobLoading?.(jobId);
             showToast(job.error || "오디오북 생성에 실패했습니다.", "error");
         }
     } catch (error) {
@@ -178,6 +189,10 @@ async function initializeBackgroundNotifications() {
         updateBackgroundJobCheckInterval();
         checkPendingBackgroundJobs();
     };
+    const userId = getCurrentAuthenticatedUserId();
+    for (const jobId of readPendingBackgroundJobs(userId)) {
+        window.__showBackgroundJobLoading?.(jobId, readPendingBackgroundJobTitle(userId, jobId));
+    }
     checkPendingBackgroundJobs();
     updateBackgroundJobCheckInterval();
 

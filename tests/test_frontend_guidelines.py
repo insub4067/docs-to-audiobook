@@ -40,9 +40,104 @@ def test_background_job_is_remembered_and_checked_on_resume():
     notifications = NOTIFICATIONS_JS.read_text(encoding="utf-8")
     pwa = PWA_JS.read_text(encoding="utf-8")
 
-    assert "rememberBackgroundJob(jobId)" in app
+    assert "rememberBackgroundJob(jobId, audioFilename)" in app
     assert "setInterval(checkPendingBackgroundJobs, 30000)" in notifications
     assert "window.__checkPendingBackgroundJobs" in pwa
+
+
+def test_background_loading_row_is_unique_and_removed_by_job_id():
+    script = f"""
+const fs = require("fs");
+const vm = require("vm");
+const source = fs.readFileSync({str(APP_JS)!r}, "utf8");
+const start = source.indexOf("// Background job loading rows");
+const end = source.indexOf("// End background job loading rows", start);
+if (start < 0 || end < 0) throw new Error("백그라운드 로딩 행 함수가 없습니다.");
+
+const audioList = {{
+  children: [],
+  prepend(item) {{ this.children.unshift(item); item.parent = this; }},
+  querySelectorAll(selector) {{
+    return selector === ".audio-item-generating"
+      ? this.children.filter((item) => item.className.includes("audio-item-generating"))
+      : [];
+  }},
+}};
+const libraryEmpty = {{ style: {{ display: "flex" }} }};
+const context = {{
+  Array,
+  audioList,
+  libraryEmpty,
+  document: {{
+    createElement() {{
+      const status = {{ textContent: "" }};
+      return {{
+        className: "",
+        dataset: {{}},
+        innerHTML: "",
+        querySelector(selector) {{ return selector === ".generating-status" ? status : null; }},
+        remove() {{
+          this.parent.children = this.parent.children.filter((item) => item !== this);
+        }},
+      }};
+    }},
+  }},
+  escapeHtml: (value) => value,
+  getAudiobookDisplayTitle: (value) => value.replace(/\\.mp3$/i, ""),
+  window: {{}},
+}};
+vm.runInNewContext(source.slice(start, end), context);
+
+const first = context.window.__showBackgroundJobLoading("job-1", "첫 번째.mp3");
+const duplicate = context.window.__showBackgroundJobLoading("job-1", "중복.mp3");
+if (first !== duplicate || audioList.children.length !== 1) {{
+  throw new Error("같은 작업의 로딩 행이 중복 생성되었습니다.");
+}}
+if (!first.innerHTML.includes("첫 번째") || libraryEmpty.style.display !== "none") {{
+  throw new Error("로딩 행의 제목 또는 빈 상태가 올바르지 않습니다.");
+}}
+context.window.__removeBackgroundJobLoading("job-1");
+if (audioList.children.length !== 0 || libraryEmpty.style.display !== "flex") {{
+  throw new Error("완료된 작업의 로딩 행을 제거하지 않았습니다.");
+}}
+"""
+    subprocess.run(["node", "-e", script], check=True)
+
+
+def test_pending_background_job_restores_loading_row_with_saved_title():
+    script = f"""
+const fs = require("fs");
+const vm = require("vm");
+const source = fs.readFileSync({str(NOTIFICATIONS_JS)!r}, "utf8");
+const pendingKey = "textAudio_pendingBackgroundJobs:user-1:job:job-1";
+const values = new Map([[pendingKey, JSON.stringify({{ title: "복원할 책.mp3" }})]]);
+const restored = [];
+const context = {{
+  JSON, Date, Math, Promise, Uint8Array, atob() {{}}, clearInterval() {{}},
+  console: {{ warn() {{}} }},
+  document: {{ getElementById() {{ return null; }} }},
+  fetch: async () => ({{ ok: true, json: async () => ({{ status: "processing" }}) }}),
+  authHeaders: () => ({{}}),
+  getCurrentAuthenticatedUserId: () => "user-1",
+  isLoggedIn: () => true,
+  localStorage: {{
+    get length() {{ return values.size; }}, key: (index) => [...values.keys()][index] || null,
+    getItem: (key) => values.get(key) || null, setItem: (key, value) => values.set(key, value),
+    removeItem: (key) => values.delete(key),
+  }},
+  navigator: {{}}, setInterval: () => 1, setTimeout, showToast() {{}},
+  window: {{ __showBackgroundJobLoading: (...args) => restored.push(args) }},
+}};
+vm.runInNewContext(source, context);
+
+(async () => {{
+  await context.initializeBackgroundNotifications();
+  if (restored.length !== 1 || restored[0][0] !== "job-1" || restored[0][1] !== "복원할 책.mp3") {{
+    throw new Error("저장된 백그라운드 작업의 로딩 행을 복원하지 않았습니다.");
+  }}
+}})().catch((error) => {{ console.error(error); process.exit(1); }});
+"""
+    subprocess.run(["node", "-e", script], check=True)
 
 
 def test_completed_background_job_remains_pending_until_cloud_sync_succeeds():
@@ -53,6 +148,7 @@ const source = fs.readFileSync({str(NOTIFICATIONS_JS)!r}, "utf8");
 const pendingKey = "textAudio_pendingBackgroundJobs:user-1:job:job-1";
 const values = new Map([[pendingKey, "1"]]);
 const toasts = [];
+const removed = [];
 const context = {{
   JSON,
   Date,
@@ -78,7 +174,7 @@ const context = {{
   setInterval: () => 1,
   setTimeout,
   showToast: (...args) => toasts.push(args),
-  window: {{}},
+  window: {{ __removeBackgroundJobLoading: (jobId) => removed.push(jobId) }},
 }};
 vm.runInNewContext(source, context);
 
@@ -88,6 +184,7 @@ vm.runInNewContext(source, context);
   if (values.get(pendingKey) !== "1" || toasts.length !== 0) {{
     throw new Error("동기화 실패 작업을 완료로 처리했습니다.");
   }}
+  if (removed.length !== 0) throw new Error("동기화 실패 전에 로딩 행을 제거했습니다.");
 
   delete context.window.__syncAudiobooksToCloud;
   await context.checkPendingBackgroundJobs();
@@ -97,7 +194,7 @@ vm.runInNewContext(source, context);
 
   context.window.__syncAudiobooksToCloud = async () => ({{ ok: true }});
   await context.checkPendingBackgroundJobs();
-  if (values.has(pendingKey) || toasts.length !== 1) {{
+  if (values.has(pendingKey) || toasts.length !== 1 || removed.join(",") !== "job-1") {{
     throw new Error("동기화 성공 뒤 완료 처리가 한 번 실행되지 않았습니다.");
   }}
 }})().catch((error) => {{ console.error(error); process.exit(1); }});

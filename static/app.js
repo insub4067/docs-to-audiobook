@@ -836,6 +836,52 @@ document.addEventListener("DOMContentLoaded", async () => {
         return base + ".mp3";
     }
 
+    // Background job loading rows
+    function createGeneratingItem(audioFilename) {
+        const safeAudioFilename = escapeHtml(getAudiobookDisplayTitle(audioFilename));
+        const item = document.createElement("div");
+        item.className = "audio-item audio-item-generating";
+        item.innerHTML = `
+            <div class="audio-title-group">
+                <div class="generating-spinner"></div>
+                <div class="generating-info">
+                    <span class="audio-title">${safeAudioFilename}</span>
+                    <div class="generating-progress-track">
+                        <div class="generating-progress-fill" style="width: 0%"></div>
+                    </div>
+                    <span class="generating-status">오디오북 생성 중...</span>
+                </div>
+            </div>
+        `;
+        return item;
+    }
+
+    function findBackgroundJobLoading(jobId) {
+        return Array.from(audioList.querySelectorAll(".audio-item-generating"))
+            .find((item) => item.dataset.backgroundJobId === jobId) || null;
+    }
+
+    function showBackgroundJobLoading(jobId, title = "오디오북") {
+        const existing = findBackgroundJobLoading(jobId);
+        if (existing) return existing;
+
+        const item = createGeneratingItem(title);
+        item.dataset.backgroundJobId = jobId;
+        item.querySelector(".generating-status").textContent = "서버에서 생성 중...";
+        audioList.prepend(item);
+        libraryEmpty.style.display = "none";
+        return item;
+    }
+
+    function removeBackgroundJobLoading(jobId) {
+        findBackgroundJobLoading(jobId)?.remove();
+        if (audioList.children.length === 0) libraryEmpty.style.display = "flex";
+    }
+
+    window.__showBackgroundJobLoading = showBackgroundJobLoading;
+    window.__removeBackgroundJobLoading = removeBackgroundJobLoading;
+    // End background job loading rows
+
     // 오디오북 생성 + 저장. 단일 파일 경로와 배치 경로가 공유한다.
     // 전역 상태 대신 인자만 사용하므로 루프에서 반복 호출해도 안전하다.
     // 성공하면 true, 실패하면 false를 반환한다.
@@ -850,24 +896,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         const audioFilename = filename;
-        const safeAudioFilename = escapeHtml(getAudiobookDisplayTitle(audioFilename));
-
         // 라이브러리 섹션에 인라인 진행 아이템 추가
         libraryEmpty.style.display = "none";
-        const progressItem = document.createElement("div");
-        progressItem.className = "audio-item audio-item-generating";
-        progressItem.innerHTML = `
-            <div class="audio-title-group">
-                <div class="generating-spinner"></div>
-                <div class="generating-info">
-                    <span class="audio-title">${safeAudioFilename}</span>
-                    <div class="generating-progress-track">
-                        <div class="generating-progress-fill" style="width: 0%"></div>
-                    </div>
-                    <span class="generating-status">오디오북 생성 중...</span>
-                </div>
-            </div>
-        `;
+        const progressItem = createGeneratingItem(audioFilename);
         audioList.prepend(progressItem);
 
         // 라이브러리 섹션으로 스크롤
@@ -902,16 +933,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             const resData = await response.json();
             const jobId = resData.job_id;
 
-            // 관리자 대용량 문서는 서버가 완료까지 전담하고 보관함에 직접
-            // 저장한다. 브라우저를 닫아도 결과가 남으므로, 여기서는 폴링하지
-            // 않고 안내만 하고 끝낸다 — 진행 아이템을 붙잡고 있어봐야
-            // 갱신되지 않는다.
+            // 서버 백그라운드 작업은 앱을 닫아도 계속된다. 진행 행에는 작업
+            // ID를 연결해 새로고침 뒤 복원하고 완료 상태와 함께 제거한다.
             if (resData.background_started) {
-                rememberBackgroundJob(jobId);
-                progressItem.remove();
-                if (audioList.children.length === 0) {
-                    libraryEmpty.style.display = "flex";
-                }
+                rememberBackgroundJob(jobId, audioFilename);
+                progressItem.dataset.backgroundJobId = jobId;
+                inlineStatus.textContent = "서버에서 생성 중...";
                 showToast("서버에서 백그라운드 생성이 시작되었습니다. 완료되면 보관함에 저장됩니다.", "info");
                 return true;
             }
