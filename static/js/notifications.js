@@ -242,14 +242,17 @@ async function initializeBackgroundNotifications() {
             button.disabled = true;
             try {
                 if (subscription && button.dataset.state === "on") {
-                    const endpoint = subscription.endpoint;
-                    const [serverResult, browserResult] = await Promise.allSettled([
-                        deletePushSubscription(endpoint),
-                        subscription.unsubscribe(),
-                    ]);
-                    const serverDisabled = serverResult.status === "fulfilled";
-                    const browserDisabled = browserResult.status === "fulfilled" && browserResult.value !== false;
-                    if (!serverDisabled && !browserDisabled) throw new Error("구독 해제 실패");
+                    const { timedOut, result } = await runBoundedPushUnsubscribe(
+                        (signal) => performSubscriptionUnsubscribe(subscription, signal),
+                    );
+                    if (timedOut || (!result.serverDisabled && !result.browserDisabled)) {
+                        if (timedOut) localStorage.removeItem(PUSH_SUBSCRIPTION_OWNER_KEY);
+                        subscription = await registration.pushManager.getSubscription();
+                        if (subscription) {
+                            renderPushNotificationState(button, label, "on");
+                            throw new Error("구독 해제 실패");
+                        }
+                    }
                     subscription = null;
                     subscriptionIsRegistered = false;
                     localStorage.removeItem(PUSH_SUBSCRIPTION_OWNER_KEY);
@@ -305,36 +308,53 @@ async function initializeBackgroundNotifications() {
     }
 }
 
+async function performSubscriptionUnsubscribe(subscription, signal) {
+    const [browserResult, serverResult] = await Promise.allSettled([
+        subscription.unsubscribe(),
+        deletePushSubscription(subscription.endpoint, signal),
+    ]);
+    return {
+        browserDisabled: browserResult.status === "fulfilled" && browserResult.value !== false,
+        serverDisabled: serverResult.status === "fulfilled",
+    };
+}
+
 async function performPushUnsubscribe(signal) {
     const registration = await navigator.serviceWorker.getRegistration();
     if (!registration) return;
     const subscription = await registration.pushManager.getSubscription();
     if (!subscription) return;
-    const [browserResult, serverResult] = await Promise.allSettled([
-        subscription.unsubscribe(),
-        deletePushSubscription(subscription.endpoint, signal),
-    ]);
-    const browserDisabled = browserResult.status === "fulfilled" && browserResult.value !== false;
-    const serverDisabled = serverResult.status === "fulfilled";
-    if (browserDisabled || serverDisabled) localStorage.removeItem(PUSH_SUBSCRIPTION_OWNER_KEY);
+    const result = await performSubscriptionUnsubscribe(subscription, signal);
+    if (result.browserDisabled || result.serverDisabled) {
+        localStorage.removeItem(PUSH_SUBSCRIPTION_OWNER_KEY);
+    }
 }
 
-async function unsubscribePushNotifications() {
-    localStorage.removeItem(PUSH_SUBSCRIPTION_OWNER_KEY);
-    if (!("serviceWorker" in navigator)) return;
+async function runBoundedPushUnsubscribe(operation) {
     const controller = new AbortController();
     let timeoutId;
     const timeout = new Promise((resolve) => {
         timeoutId = setTimeout(() => {
             controller.abort();
-            resolve();
+            resolve({ timedOut: true, result: null });
         }, PUSH_UNSUBSCRIBE_TIMEOUT_MS);
     });
     try {
-        await Promise.race([performPushUnsubscribe(controller.signal), timeout]);
-    } catch (error) {
-        // 로그아웃은 구독 해제 실패와 관계없이 계속한다.
+        return await Promise.race([
+            operation(controller.signal).then((result) => ({ timedOut: false, result })),
+            timeout,
+        ]);
     } finally {
         clearTimeout(timeoutId);
+    }
+}
+
+async function unsubscribePushNotifications() {
+    localStorage.removeItem(PUSH_SUBSCRIPTION_OWNER_KEY);
+    if (!("serviceWorker" in navigator)) return;
+    try {
+        await runBoundedPushUnsubscribe(performPushUnsubscribe);
+    } catch (error) {
+        // 로그아웃은 구독 해제 실패와 관계없이 계속한다.
     }
 }

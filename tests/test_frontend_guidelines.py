@@ -1,6 +1,8 @@
 import subprocess
 from pathlib import Path
 
+import pytest
+
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 APP_JS = ROOT_DIR / "static" / "app.js"
@@ -306,6 +308,100 @@ async function scenario(initialPermission, initialSubscription, failingMethod = 
   disabled.serviceWorkerListeners.message({{ data: {{ type: "check_pending_background_jobs" }} }});
   await Promise.resolve();
   if (messageChecks !== 1) throw new Error("서비스워커 확인 메시지를 처리하지 않았습니다.");
+}})().catch((error) => {{ console.error(error); process.exit(1); }});
+"""
+    subprocess.run(["node", "-e", script], check=True)
+
+
+@pytest.mark.parametrize("pending_operation,expected_label,expected_toast", [
+    ("delete", "완료 알림 꺼짐", "success"),
+    ("unsubscribe", "완료 알림 켜짐", "error"),
+])
+def test_push_button_recovers_after_unsubscribe_operation_never_settles(
+    pending_operation, expected_label, expected_toast
+):
+    script = f"""
+const fs = require("fs");
+const vm = require("vm");
+const source = fs.readFileSync({str(NOTIFICATIONS_JS)!r}, "utf8");
+const pendingOperation = {pending_operation!r};
+let aborted = false;
+let currentSubscription;
+const toasts = [];
+const values = new Map([["textAudio_pushSubscriptionOwner", "user-1"]]);
+const button = {{
+  hidden: true,
+  disabled: false,
+  dataset: {{}},
+  addEventListener(name, handler) {{ this[name] = handler; }},
+  setAttribute() {{}},
+}};
+const label = {{ textContent: "" }};
+currentSubscription = {{
+  endpoint: "https://fcm.googleapis.com/fcm/send/pending",
+  toJSON: () => ({{}}),
+  unsubscribe: () => {{
+    if (pendingOperation === "unsubscribe") return new Promise(() => {{}});
+    currentSubscription = null;
+    return Promise.resolve(true);
+  }},
+}};
+const registration = {{ pushManager: {{
+  getSubscription: async () => currentSubscription,
+}} }};
+const context = {{
+  AbortController: class {{
+    constructor() {{ this.signal = {{}}; }}
+    abort() {{ aborted = true; }}
+  }},
+  Date, JSON, Math, Promise, Uint8Array, atob,
+  authHeaders: () => ({{ Authorization: "Bearer token" }}),
+  clearInterval() {{}},
+  clearTimeout() {{}},
+  console: {{ warn() {{}} }},
+  crypto: {{ randomUUID: () => "tab-1" }},
+  document: {{ getElementById: (id) => id === "pushNotificationBtn" ? button : id === "pushNotificationLabel" ? label : null }},
+  fetch: (url, options = {{}}) => {{
+    if (url === "/api/push/config") return Promise.resolve({{ ok: true, json: async () => ({{ enabled: true, public_key: "BA" }}) }});
+    if (pendingOperation === "delete" && options.method === "DELETE") return new Promise(() => {{}});
+    return Promise.resolve({{ ok: true, json: async () => ({{}}) }});
+  }},
+  getCurrentAuthenticatedUserId: () => "user-1",
+  isLoggedIn: () => true,
+  localStorage: {{
+    get length() {{ return values.size; }},
+    key(index) {{ return [...values.keys()][index] || null; }},
+    getItem(key) {{ return values.get(key) || null; }},
+    setItem(key, value) {{ values.set(key, value); }},
+    removeItem(key) {{ values.delete(key); }},
+  }},
+  navigator: {{ serviceWorker: {{
+    ready: Promise.resolve(registration),
+    addEventListener() {{}},
+  }} }},
+  Notification: {{ permission: "granted", requestPermission: async () => "granted" }},
+  setInterval: () => 1,
+  setTimeout(callback, delay) {{
+    if (delay >= 2000) {{ queueMicrotask(callback); return 1; }}
+    return setTimeout(callback, delay);
+  }},
+  showToast: (...args) => toasts.push(args),
+  window: {{ PushManager: function() {{}} }},
+}};
+context.window.Notification = context.Notification;
+vm.runInNewContext(source, context);
+
+(async () => {{
+  await context.initializeBackgroundNotifications();
+  const outcome = await Promise.race([
+    button.click().then(() => "returned"),
+    new Promise((resolve) => setTimeout(() => resolve("stuck"), 50)),
+  ]);
+  if (outcome !== "returned") throw new Error("UI 알림 해제가 영구 대기했습니다.");
+  if (!aborted) throw new Error("제한시간 뒤 DELETE 요청을 abort하지 않았습니다.");
+  if (button.dataset.busy || button.disabled) throw new Error("제한시간 뒤 버튼 busy 상태를 복구하지 않았습니다.");
+  if (label.textContent !== {expected_label!r}) throw new Error("실제 브라우저 구독 상태로 라벨을 복구하지 않았습니다.");
+  if (toasts.length !== 1 || toasts[0][1] !== {expected_toast!r}) throw new Error("제한시간 결과를 정확한 토스트로 표시하지 않았습니다.");
 }})().catch((error) => {{ console.error(error); process.exit(1); }});
 """
     subprocess.run(["node", "-e", script], check=True)
@@ -626,7 +722,7 @@ async function dispatchClick() {{
 def test_service_worker_precaches_notification_client_with_new_cache_version():
     source = SW_JS.read_text(encoding="utf-8")
 
-    assert 'const CACHE_NAME = "2026.08.01.30";' in source
+    assert 'const CACHE_NAME = "2026.08.01.31";' in source
     assert '"/static/js/notifications.js"' in source
 
 
