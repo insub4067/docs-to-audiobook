@@ -123,6 +123,20 @@ if (getAudiobookDisplayTitle("제목") !== "제목") throw new Error("확장자 
     subprocess.run(["node", "-e", script], check=True)
 
 
+def test_anonymous_trial_uses_a_private_session_header_and_one_time_marker():
+    source = APP_JS.read_text(encoding="utf-8")
+
+    assert '"X-Anonymous-Session"' in source
+    assert "anonymousTrialUsed" in source
+    assert "anonymousTrialInProgress" in source
+
+
+def test_login_prompt_explains_second_generation_requires_login():
+    html = INDEX_HTML.read_text(encoding="utf-8")
+
+    assert "추가 생성은 로그인 후 가능해요" in html
+
+
 def test_library_syncs_playback_and_can_edit_titles():
     source = APP_JS.read_text(encoding="utf-8")
     html = INDEX_HTML.read_text(encoding="utf-8")
