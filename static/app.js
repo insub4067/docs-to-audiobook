@@ -1139,13 +1139,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     // 5. Audiobook Library Management (IndexedDB Powered)
     // ----------------------------------------------------
     async function renderLibrary() {
-        // 생성 중인 진행 아이템 백업
-        const generatingItems = Array.from(audioList.querySelectorAll(".audio-item-generating"));
-
-        audioList.innerHTML = "";
-
         try {
             const list = await getAllAudiobooksFromDB();
+            // 생성 중인 진행 아이템 백업
+            const generatingItems = Array.from(audioList.querySelectorAll(".audio-item-generating"));
+            audioList.innerHTML = "";
 
             if (list.length === 0 && generatingItems.length === 0) {
                 libraryEmpty.style.display = "flex";

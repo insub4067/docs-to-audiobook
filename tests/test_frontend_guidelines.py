@@ -310,3 +310,14 @@ if (getReaderScrollTarget(container, nestedCell) !== 630) {{
 }}
 """
     subprocess.run(["node", "-e", script], check=True)
+
+
+def test_library_clears_existing_rows_after_async_database_read():
+    source = APP_JS.read_text(encoding="utf-8")
+    start = source.index("async function renderLibrary()")
+    end = source.index("// --- ActionSheet ---", start)
+    render_source = source[start:end]
+
+    read_position = render_source.index("await getAllAudiobooksFromDB()")
+    clear_position = render_source.index('audioList.innerHTML = ""')
+    assert read_position < clear_position
