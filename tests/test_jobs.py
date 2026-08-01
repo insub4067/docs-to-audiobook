@@ -87,3 +87,20 @@ async def test_get_job_status_rejects_other_user():
             response = await client.get("/api/job/private_job", headers={"Authorization": "Bearer other"})
 
     assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_get_job_status_rejects_other_anonymous_session():
+    jobs["anonymous_job"] = {
+        "status": "pending",
+        "user_id": "anonymous:anonymous-session-123456",
+    }
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(
+            "/api/job/anonymous_job",
+            headers={"X-Anonymous-Session": "anonymous-session-654321"},
+        )
+
+    assert response.status_code == 403
+    del jobs["anonymous_job"]

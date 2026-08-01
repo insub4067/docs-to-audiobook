@@ -33,13 +33,30 @@ h2 { margin-bottom: 0; font-size: 1.4rem; }
 .section-heading { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
 .metric-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .metric-grid-wide { grid-template-columns: repeat(4, 1fr); }
-.metric-card { min-height: 168px; padding: 22px; border: 1px solid var(--line); border-radius: 18px; background: var(--card); display: flex; flex-direction: column; justify-content: space-between; }
+.metric-card { min-height: 168px; padding: 22px; border: 1px solid var(--line); border-radius: 18px; background: var(--card); color: var(--ink); display: flex; flex-direction: column; justify-content: space-between; text-align: left; font: inherit; text-decoration: none; cursor: pointer; transition: transform 0.18s ease, border-color 0.18s ease; }
+.metric-card:hover, .metric-card:focus-visible { border-color: var(--accent); outline: none; transform: translateY(-2px); }
+.metric-card:active { transform: scale(0.985); }
 .metric-card p { margin-bottom: 18px; color: var(--muted); font-size: 0.88rem; }
 .metric-card strong { font-family: Georgia, "Noto Serif KR", serif; font-size: clamp(2rem, 5vw, 3rem); letter-spacing: -0.06em; }
 .metric-card span { margin-top: 12px; font-size: 0.78rem; line-height: 1.45; }
 .metric-card span b { color: var(--ink); }
 .metric-card-primary { color: #fff; border-color: #805034; background: linear-gradient(135deg, #9f5936, #704330); }
 .metric-card-primary p, .metric-card-primary span { color: #f8e6d8; }
+
+.metric-page-shell { max-width: 720px; margin: 0 auto; padding: 28px 20px 64px; }
+.metric-page-back { display: inline-flex; align-items: center; min-height: 44px; margin-bottom: 28px; color: var(--muted); font-size: 0.9rem; text-decoration: none; }
+.metric-page-header { padding-bottom: 24px; border-bottom: 1px solid var(--line); }
+.metric-page-header h1 { margin-bottom: 12px; font-size: clamp(2.2rem, 10vw, 4.3rem); }
+.metric-page-value { display: block; margin: 24px 0 14px; font-family: Georgia, "Noto Serif KR", serif; font-size: clamp(3.2rem, 15vw, 5.5rem); letter-spacing: -0.07em; }
+.metric-page-description { margin-bottom: 10px; font-size: 1rem; line-height: 1.65; }
+.metric-page-basis, .metric-page-status { color: var(--muted); font-size: 0.88rem; line-height: 1.6; }
+.metric-page-list-title { margin: 40px 0 8px; color: var(--muted); font-size: 0.76rem; font-weight: 800; letter-spacing: 0.08em; }
+.metric-page-list { margin: 0; padding: 0; border-top: 1px solid var(--line); list-style: none; }
+.metric-page-list li { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 16px 2px; border-bottom: 1px solid var(--line); }
+.metric-page-list strong { display: block; font-size: 1rem; }
+.metric-page-list span { display: block; overflow: hidden; color: var(--muted); font-size: 0.84rem; text-overflow: ellipsis; white-space: nowrap; }
+.metric-page-list .metric-page-meta { flex-shrink: 0; text-align: right; }
+.metric-page-list .metric-page-empty { display: block; color: var(--muted); }
 
 @media (max-width: 720px) {
     .dashboard-shell { padding: 32px 16px 56px; }

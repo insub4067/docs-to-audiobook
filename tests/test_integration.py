@@ -147,6 +147,54 @@ async def test_admin_metrics_are_available_only_through_admin_route():
     assert response.json() == metrics
 
 
+@pytest.mark.asyncio
+async def test_admin_metric_detail_page_is_served():
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/admin/metrics/total_users")
+
+    assert response.status_code == 200
+    assert "metricPageList" in response.text
+
+
+def test_admin_metrics_normalize_naive_database_timestamps_to_utc():
+    from datetime import timezone
+    from main import _parse_event_time
+
+    assert _parse_event_time("2026-08-01T07:00:00").tzinfo == timezone.utc
+    assert _parse_event_time("2026-08-01T07:00:00+00:00").tzinfo == timezone.utc
+
+
+def test_admin_metrics_include_named_users_for_detail_sheets():
+    from main import load_admin_metrics
+
+    class Query:
+        def __init__(self, data):
+            self.data = data
+
+        def select(self, *_):
+            return self
+
+        def gte(self, *_):
+            return self
+
+        def execute(self):
+            return MagicMock(data=self.data)
+
+    class Client:
+        def table(self, name):
+            return Query({
+                "users": [{"id": "user-1", "full_name": "인섭", "email": "insub@example.com", "created_at": "2026-08-01T00:00:00"}],
+                "audiobooks": [{"id": "book-1", "user_id": "user-1", "created_at": "2026-08-01T00:00:00"}],
+                "product_events": [{"user_id": "user-1", "event_name": "playback_started", "created_at": "2026-08-01T00:00:00+00:00"}],
+            }[name])
+
+    with patch("main._supabase_or_503", return_value=Client()):
+        metrics = load_admin_metrics()
+
+    assert metrics["metric_details"]["total_users"] == [{"name": "인섭", "email": "insub@example.com", "meta": "가입일 2026-08-01"}]
+    assert metrics["metric_details"]["playback_started_30d"][0]["name"] == "인섭"
+
+
 # ---- /api/auth/me ----
 # 이전에 커버리지 0%였던 엔드포인트. 오늘 세션에서 몇 시간을 쓴
 # "재로그인해도 세션이 끊기는" 버그의 클라이언트 쪽 원인이 바로 이
@@ -184,9 +232,10 @@ async def test_auth_me_user_not_found(mock_supabase):
 
 
 @pytest.mark.asyncio
-async def test_auth_me_success(mock_supabase):
+async def test_auth_me_success(mock_supabase, monkeypatch):
     from auth import create_access_token
 
+    monkeypatch.setenv("ADMIN_EMAILS", "a@b.com")
     token = create_access_token({"sub": "user-1"})
     mock_supabase.table().select().eq().single().execute.return_value = MagicMock(
         data={"id": "user-1", "email": "a@b.com", "full_name": "A", "avatar_url": None, "created_at": "2026-01-01"}
@@ -196,5 +245,6 @@ async def test_auth_me_success(mock_supabase):
         response = await client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert response.status_code == 200
         data = response.json()
-        assert data["id"] == "user-1"
-        assert data["email"] == "a@b.com"
+    assert data["id"] == "user-1"
+    assert data["email"] == "a@b.com"
+    assert data["is_admin"] is True

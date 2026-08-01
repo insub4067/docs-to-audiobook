@@ -181,8 +181,18 @@ def require_user_id(authorization: str) -> str:
     return payload["sub"]
 
 
-def require_job_owner(job_id: str, authorization: str) -> dict:
-    user_id = require_user_id(authorization)
+def resolve_job_owner(authorization: str, anonymous_session: str) -> str:
+    if authorization:
+        return require_user_id(authorization)
+
+    session_id = (anonymous_session or "").strip()
+    if len(session_id) < 16 or len(session_id) > 128:
+        raise HTTPException(status_code=401, detail="로그인 또는 체험 세션이 필요합니다.")
+    return f"anonymous:{session_id}"
+
+
+def require_job_owner(job_id: str, authorization: str, anonymous_session: str) -> dict:
+    user_id = resolve_job_owner(authorization, anonymous_session)
     job = jobs.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="해당 작업을 찾을 수 없습니다.")
@@ -203,11 +213,7 @@ def _supabase_or_503():
 def require_admin_user(authorization: str) -> str:
     """환경변수 허용 목록에 등록된 사용자만 관리자 통계를 볼 수 있게 한다."""
     user_id = require_user_id(authorization)
-    allowed_emails = {
-        email.strip().lower()
-        for email in os.getenv("ADMIN_EMAILS", "").split(",")
-        if email.strip()
-    }
+    allowed_emails = _admin_emails()
     if not allowed_emails:
         raise HTTPException(status_code=403, detail="관리자 계정이 설정되지 않았습니다.")
 
@@ -221,25 +227,34 @@ def require_admin_user(authorization: str) -> str:
     return user_id
 
 
+def _admin_emails() -> set[str]:
+    return {
+        email.strip().lower()
+        for email in os.getenv("ADMIN_EMAILS", "").split(",")
+        if email.strip()
+    }
+
+
 def _parse_event_time(value: str | None):
     if not value:
         return None
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed
     except (TypeError, ValueError):
         return None
 
 
 def load_admin_metrics():
-    """개인 콘텐츠를 조회하지 않고 사용자·이벤트 집계만 반환한다."""
+    """관리자에게만 사용자·이벤트 집계와 지표별 사용자 목록을 반환한다."""
     now = datetime.now(timezone.utc)
     week_ago = now - timedelta(days=7)
     two_weeks_ago = now - timedelta(days=14)
     thirty_days_ago = now - timedelta(days=30)
     supabase = _supabase_or_503()
     try:
-        users = supabase.table("users").select("id,created_at").execute().data or []
-        audiobooks = supabase.table("audiobooks").select("id,created_at").execute().data or []
+        users = supabase.table("users").select("id,full_name,email,created_at").execute().data or []
+        audiobooks = supabase.table("audiobooks").select("id,user_id,created_at").execute().data or []
         events = supabase.table("product_events").select("user_id,event_name,created_at") \
             .gte("created_at", thirty_days_ago.isoformat()).execute().data or []
     except Exception as e:
@@ -267,6 +282,67 @@ def load_admin_metrics():
         if event_time >= week_ago and event.get("user_id") in week_one_cohort
     }
 
+    users_by_id = {user["id"]: user for user in users}
+
+    def user_list(user_ids, meta_by_id=None):
+        people = []
+        for user_id in user_ids:
+            user = users_by_id.get(user_id)
+            if not user:
+                continue
+            people.append({
+                "name": user.get("full_name") or "이름 없음",
+                "email": user.get("email") or "",
+                "meta": (meta_by_id or {}).get(user_id, ""),
+            })
+        return sorted(people, key=lambda person: (person["name"], person["email"]))
+
+    generation_counts = {}
+    playback_counts = {}
+    for event, _ in recent_events:
+        user_id = event.get("user_id")
+        if not user_id:
+            continue
+        if event["event_name"] in {"generation_completed", "generation_failed"}:
+            counts = generation_counts.setdefault(user_id, {"completed": 0, "failed": 0})
+            counts["completed" if event["event_name"] == "generation_completed" else "failed"] += 1
+        if event["event_name"] == "playback_started":
+            playback_counts[user_id] = playback_counts.get(user_id, 0) + 1
+
+    audiobook_counts = {}
+    for audiobook in audiobooks:
+        user_id = audiobook.get("user_id")
+        if user_id:
+            audiobook_counts[user_id] = audiobook_counts.get(user_id, 0) + 1
+
+    metric_details = {
+        "total_users": user_list(
+            users_by_id,
+            {user["id"]: f"가입일 {str(user.get('created_at') or '')[:10]}" for user in users},
+        ),
+        "daily_active_users": user_list(daily_active_users, {user_id: "최근 24시간 활동" for user_id in daily_active_users}),
+        "weekly_active_users": user_list(weekly_active_users, {user_id: "최근 7일 활동" for user_id in weekly_active_users}),
+        "week_one_retention_rate": user_list(
+            week_one_cohort,
+            {user_id: "재방문" if user_id in returning_users else "미재방문" for user_id in week_one_cohort},
+        ),
+        "generation_success_rate": user_list(
+            generation_counts,
+            {
+                user_id: f"완료 {counts['completed']}회 · 실패 {counts['failed']}회"
+                for user_id, counts in generation_counts.items()
+            },
+        ),
+        "playback_started_30d": user_list(
+            playback_counts,
+            {user_id: f"재생 시작 {count}회" for user_id, count in playback_counts.items()},
+        ),
+        "total_audiobooks": user_list(
+            audiobook_counts,
+            {user_id: f"오디오북 {count}권" for user_id, count in audiobook_counts.items()},
+        ),
+    }
+
     return {
         "total_users": len(users),
         "new_users_7d": sum((_parse_event_time(user.get("created_at")) or now) >= week_ago for user in users),
@@ -280,6 +356,7 @@ def load_admin_metrics():
         "playback_started_30d": sum(event["event_name"] == "playback_started" for event, _ in recent_events),
         "week_one_retention_rate": round(len(returning_users) / len(week_one_cohort) * 100) if week_one_cohort else None,
         "retention_cohort_size": len(week_one_cohort),
+        "metric_details": metric_details,
     }
 
 
@@ -981,9 +1058,10 @@ async def synthesize_text(
     voice: str = Form("ko-KR-HyunsuMultilingualNeural"),
     rate: str = Form("+5%"),
     pitch: str = Form("+0Hz"),
-    authorization: str = Header(None)
+    authorization: str = Header(None),
+    anonymous_session: str = Header(None, alias="X-Anonymous-Session")
 ):
-    user_id = require_user_id(authorization)
+    user_id = resolve_job_owner(authorization, anonymous_session)
     # 가장 비싼 엔드포인트다. 배치 8개를 여러 번 돌릴 여유는 남긴다.
     enforce_rate_limit(request, "synthesize", limit=40, window_sec=600)
 
@@ -1021,8 +1099,12 @@ async def synthesize_text(
     return {"job_id": job_id}
 
 @app.get("/api/job/{job_id}")
-async def get_job_status(job_id: str, authorization: str = Header(None)):
-    job = require_job_owner(job_id, authorization)
+async def get_job_status(
+    job_id: str,
+    authorization: str = Header(None),
+    anonymous_session: str = Header(None, alias="X-Anonymous-Session")
+):
+    job = require_job_owner(job_id, authorization, anonymous_session)
 
     if job["status"] == "completed":
         # 오디오는 별도 엔드포인트에서 파일로 스트리밍한다. 여기서는
@@ -1043,8 +1125,12 @@ async def get_job_status(job_id: str, authorization: str = Header(None)):
 
 
 @app.get("/api/job/{job_id}/audio")
-async def get_job_audio(job_id: str, authorization: str = Header(None)):
-    job = require_job_owner(job_id, authorization)
+async def get_job_audio(
+    job_id: str,
+    authorization: str = Header(None),
+    anonymous_session: str = Header(None, alias="X-Anonymous-Session")
+):
+    job = require_job_owner(job_id, authorization, anonymous_session)
     if job.get("status") != "completed":
         raise HTTPException(status_code=404, detail="해당 작업의 오디오를 찾을 수 없습니다.")
 
@@ -1144,6 +1230,14 @@ async def read_admin_dashboard():
     if os.path.exists(admin_path):
         return FileResponse(admin_path)
     return JSONResponse(status_code=404, content={"message": "관리자 대시보드를 찾을 수 없습니다."})
+
+
+@app.get("/admin/metrics/{metric_name}")
+async def read_admin_metric_page(metric_name: str):
+    metric_path = os.path.join(STATIC_DIR, "admin-metric.html")
+    if os.path.exists(metric_path):
+        return FileResponse(metric_path)
+    return JSONResponse(status_code=404, content={"message": "관리자 지표 화면을 찾을 수 없습니다."})
 
 # --------------------------------------------------
 # Share Feature: 24-hour temporary server storage
@@ -1446,8 +1540,12 @@ async def get_default_book_audio():
     return FileResponse(audio_path, media_type="audio/mpeg", filename="sherlock-holmes.mp3")
 
 @app.get("/api/audio/{job_id}.mp3")
-async def download_audiobook(job_id: str, authorization: str = Header(None)):
-    job = require_job_owner(job_id, authorization)
+async def download_audiobook(
+    job_id: str,
+    authorization: str = Header(None),
+    anonymous_session: str = Header(None, alias="X-Anonymous-Session")
+):
+    job = require_job_owner(job_id, authorization, anonymous_session)
     audio_path = job.get("audio_path")
     if not audio_path or not os.path.exists(audio_path):
         raise HTTPException(status_code=404, detail="Audio file not found")
@@ -1726,6 +1824,7 @@ async def get_current_user(authorization: str = Header(None)):
             "email": user["email"],
             "full_name": user.get("full_name"),
             "avatar_url": user.get("avatar_url"),
+            "is_admin": (user.get("email") or "").lower() in _admin_emails(),
             "created_at": user.get("created_at")
         }
 

@@ -1126,11 +1126,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     generateBtn.addEventListener("click", async () => {
         if (!currentTextId) return;
 
-        if (!isLoggedIn()) {
-            openLoginPromptSheet();
-            return;
-        }
-
         closeGenerationModal();
 
         const originalName = uploadedFile ? uploadedFile.name : "unknown_doc";
@@ -1155,6 +1150,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     // 전역 상태 대신 인자만 사용하므로 루프에서 반복 호출해도 안전하다.
     // 성공하면 true, 실패하면 false를 반환한다.
     async function generateAudiobook({ textId, textAccessToken, filename, charCount, voice, rate, pitch }) {
+        const isAnonymousTrial = !isLoggedIn();
+        if (isAnonymousTrial) {
+            if (!(await canStartAnonymousTrial())) {
+                openLoginPromptSheet();
+                return false;
+            }
+            sessionStorage.setItem("anonymousTrialInProgress", "true");
+        }
+
         const audioFilename = filename;
         const safeAudioFilename = escapeHtml(getAudiobookDisplayTitle(audioFilename));
 
@@ -1183,6 +1187,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         const inlineFill = progressItem.querySelector(".generating-progress-fill");
         const inlineStatus = progressItem.querySelector(".generating-status");
+        const generationHeaders = isAnonymousTrial ? anonymousSessionHeaders() : authHeaders();
 
         try {
             trackProductEvent("generation_started");
@@ -1196,7 +1201,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             // 1. Request Job ID from server (Returns immediately)
             const response = await fetch("/api/synthesize", {
                 method: "POST",
-                headers: authHeaders(),
+                headers: generationHeaders,
                 body: formData
             });
 
@@ -1209,7 +1214,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             
             // 2. Poll job status until completed
             const pollJobStatus = async (id) => {
-                const pollRes = await fetch(`/api/job/${id}`, { headers: authHeaders() });
+                const pollRes = await fetch(`/api/job/${id}`, { headers: generationHeaders });
                 if (!pollRes.ok) throw new Error("작업 상태 통신 실패");
                 
                 const jobData = await pollRes.json();
@@ -1243,7 +1248,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             // 오디오는 별도 엔드포인트에서 바이너리로 받는다. 서버가 base64로
             // 메모리에 들고 있지 않으므로 동시 처리 수를 늘려도 안전하다.
-            const audioRes = await fetch(completedJobData.audio_url, { headers: authHeaders() });
+            const audioRes = await fetch(completedJobData.audio_url, { headers: generationHeaders });
             if (!audioRes.ok) throw new Error("오디오 파일 다운로드 실패");
             const audioBlob = await audioRes.blob();
 
@@ -1268,6 +1273,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             };
 
             await saveAudiobookToDB(entry);
+            if (isAnonymousTrial) localStorage.setItem("anonymousTrialUsed", "true");
 
             // 진행 아이템 제거 후 라이브러리 다시 렌더링
             progressItem.remove();
@@ -1289,6 +1295,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             showToast(error.message, "error");
             trackProductEvent("generation_failed");
             return false;
+        } finally {
+            if (isAnonymousTrial) sessionStorage.removeItem("anonymousTrialInProgress");
         }
     }
 
@@ -1857,7 +1865,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     // --- Login Prompt ActionSheet ---
-    // 오디오북 생성을 시도했는데 비로그인 상태일 때 네이티브 confirm() 대신
+    // 체험 한도를 모두 쓴 비로그인 사용자는 네이티브 confirm() 대신
     // 앱의 다른 바텀시트와 같은 톤으로 로그인을 유도한다.
     const loginPromptBackdrop = document.getElementById("loginPromptBackdrop");
     const loginPromptConfirmBtn = document.getElementById("loginPromptConfirmBtn");
@@ -3048,6 +3056,23 @@ document.addEventListener("DOMContentLoaded", async () => {
         return !!localStorage.getItem("authToken");
     }
 
+    function anonymousSessionHeaders() {
+        let sessionId = localStorage.getItem("anonymousSessionId");
+        if (!sessionId) {
+            sessionId = crypto.randomUUID();
+            localStorage.setItem("anonymousSessionId", sessionId);
+        }
+        return { "X-Anonymous-Session": sessionId };
+    }
+
+    async function canStartAnonymousTrial() {
+        if (isLoggedIn()) return true;
+        if (sessionStorage.getItem("anonymousTrialInProgress") === "true") return false;
+        if (localStorage.getItem("anonymousTrialUsed") === "true") return false;
+        const audiobooks = await getAllAudiobooksFromDB();
+        return !audiobooks.some((audiobook) => !audiobook.isDefault);
+    }
+
     function trackProductEvent(eventName) {
         if (!isLoggedIn()) return;
         fetch("/api/events", {
@@ -3062,7 +3087,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     // showAppUI와 applyExtractedText 양쪽에서 호출한다.
     function updateGenerateHint() {
         const hint = document.getElementById("generateHint");
-        if (hint) hint.style.display = isLoggedIn() ? "none" : "block";
+        if (!hint) return;
+        hint.textContent = isLoggedIn()
+            ? ""
+            : "로그인 없이 오디오북 한 권을 만들어 볼 수 있어요";
+        hint.style.display = isLoggedIn() ? "none" : "block";
     }
 
     async function initializeAuth() {
@@ -3104,6 +3133,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         const profileImage = document.getElementById("profileImage");
         const profileInitial = document.getElementById("profileInitial");
         const profileMenuBtn = document.getElementById("profileMenuBtn");
+        const adminDashboardLink = document.getElementById("adminDashboardLink");
+        const brandWordmark = document.getElementById("brandWordmark");
         const headerLoginSlot = document.getElementById("headerLoginSlot");
 
         // 메인 화면은 로그인 여부와 무관하게 항상 보인다 (기본 오디오북 체험용).
@@ -3113,20 +3144,24 @@ document.addEventListener("DOMContentLoaded", async () => {
         appMain.style.display = "flex";
 
         const loggedIn = !!(user && token);
+        const isAdmin = loggedIn && user.is_admin === true;
         userInfo.style.display = loggedIn ? "flex" : "none";
         if (headerLoginSlot) headerLoginSlot.style.display = loggedIn ? "none" : "flex";
+        if (adminDashboardLink) adminDashboardLink.hidden = !isAdmin;
+        if (brandWordmark) brandWordmark.dataset.admin = String(isAdmin);
         if (loggedIn) {
             const profileName = user.full_name || user.email || "사용자";
             userEmail.textContent = user.email || "";
-            profileInitial.textContent = profileName.trim().charAt(0).toUpperCase();
+            profileInitial.textContent = profileName.trim().split(/\s+/)[0].slice(0, 2);
             profileMenuBtn.setAttribute("aria-label", `${profileName} 계정 메뉴`);
-            profileImage.hidden = !user.avatar_url;
-            profileImage.src = user.avatar_url || "";
+            profileImage.hidden = true;
+            profileImage.removeAttribute("src");
         } else {
             // 비로그인일 때만 구글 버튼을 그린다
             setupSocialLogin();
         }
 
+        if (loggedIn && db) syncWithCloud();
         updateGenerateHint();
     }
 
@@ -3263,6 +3298,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         const userInfo = document.getElementById("userInfo");
         const profileMenuBtn = document.getElementById("profileMenuBtn");
         const profileMenu = document.getElementById("profileMenu");
+        const brandWordmark = document.getElementById("brandWordmark");
+        let logoTapCount = 0;
+        let logoTapTimer;
 
         function closeProfileMenu() {
             profileMenu.hidden = true;
@@ -3285,6 +3323,15 @@ document.addEventListener("DOMContentLoaded", async () => {
             });
             document.addEventListener("keydown", (event) => {
                 if (event.key === "Escape") closeProfileMenu();
+            });
+        }
+        if (brandWordmark) {
+            brandWordmark.addEventListener("click", () => {
+                if (brandWordmark.dataset.admin !== "true") return;
+                logoTapCount += 1;
+                clearTimeout(logoTapTimer);
+                logoTapTimer = setTimeout(() => { logoTapCount = 0; }, 700);
+                if (logoTapCount === 3) window.location.assign("/admin");
             });
         }
     }

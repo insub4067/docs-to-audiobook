@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="TextAudio">
     <title>TextAudio - 문서를 오디오북으로</title>
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -13,7 +14,7 @@
     <!-- Lucide Icons & PWA Configurations -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <link rel="manifest" href="/manifest.json">
-    <link rel="apple-touch-icon" href="/static/icon.jpg">
+    <link rel="apple-touch-icon" href="/static/textaudio-icon.png">
     <meta name="theme-color" content="#5d4b40">
     <link rel="stylesheet" href="/static/style.css">
 </head>
@@ -38,7 +39,7 @@
         <header class="app-header">
             <div class="header-left">
                 <div class="logo">
-                    <h1 class="brand-wordmark">TEXTAUDIO</h1>
+                    <h1 class="brand-wordmark" id="brandWordmark">TEXTAUDIO</h1>
                 </div>
             </div>
 
@@ -50,6 +51,10 @@
                 </button>
                 <div class="profile-menu" id="profileMenu" role="menu" hidden>
                     <p class="profile-email" id="userEmail"></p>
+                    <a class="profile-menu-link" id="adminDashboardLink" href="/admin" role="menuitem" hidden>
+                        <i data-lucide="layout-dashboard"></i>
+                        관리자 페이지
+                    </a>
                     <button class="btn-logout" id="logoutBtn" type="button" role="menuitem" aria-label="로그아웃">
                         <i data-lucide="log-out"></i>
                         로그아웃
@@ -326,13 +331,13 @@
         </div>
     </div>
 
-    <!-- Login Prompt ActionSheet (비로그인 상태에서 오디오북 생성 시도 시) -->
+    <!-- Login Prompt ActionSheet (비로그인 체험 한도 초과 시) -->
     <div class="action-sheet-backdrop" id="loginPromptBackdrop" role="dialog" aria-modal="true" aria-label="로그인 안내">
         <div class="action-sheet" id="loginPromptSheet">
             <div class="action-sheet-handle"></div>
             <div class="login-prompt-body">
-                <p class="login-prompt-title">로그인하면 오디오북을 만들 수 있어요</p>
-                <p class="login-prompt-desc">Google 계정으로 로그인하면 지금 설정 그대로 이어서 만들어요</p>
+                <p class="login-prompt-title">추가 생성은 로그인 후 가능해요</p>
+                <p class="login-prompt-desc">로그인하면 지금 설정 그대로 이어서 만들고, 기기에 저장된 체험본도 클라우드에 보관해요</p>
             </div>
             <button class="action-sheet-btn" id="loginPromptConfirmBtn">
                 <i data-lucide="log-in"></i>
@@ -363,7 +368,7 @@
         </button>
         <div class="pwa-prompt-content">
             <div class="pwa-icon">
-                <img src="/static/icon.jpg" alt="App Icon" style="width: 40px; height: 40px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                <img src="/static/textaudio-icon.png" alt="TextAudio 아이콘" style="width: 40px; height: 40px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
             </div>
             <div class="pwa-text">
                 <p>앱처럼 빠르고 편하게 사용하세요!</p>

@@ -1,7 +1,7 @@
 {
-  "name": "Audiobook Maker",
-  "short_name": "Audiobook",
-  "description": "FastAPI + Vanilla JS 오디오북 생성기 및 리더",
+  "name": "TextAudio",
+  "short_name": "TextAudio",
+  "description": "문서를 듣기 좋은 오디오북으로 만드는 TextAudio",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#faf7f2",
@@ -9,9 +9,9 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "/static/icon.jpg",
+      "src": "/static/textaudio-icon.png",
       "sizes": "192x192 512x512",
-      "type": "image/jpeg",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ]

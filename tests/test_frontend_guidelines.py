@@ -8,6 +8,9 @@ STYLE_CSS = ROOT_DIR / "static" / "style.css"
 INDEX_HTML = ROOT_DIR / "static" / "index.html"
 ADMIN_HTML = ROOT_DIR / "static" / "admin.html"
 ADMIN_JS = ROOT_DIR / "static" / "admin.js"
+ADMIN_METRIC_HTML = ROOT_DIR / "static" / "admin-metric.html"
+ADMIN_METRIC_JS = ROOT_DIR / "static" / "admin-metric.js"
+MANIFEST = ROOT_DIR / "static" / "manifest.json"
 
 
 def test_user_generated_titles_are_escaped_before_html_rendering():
@@ -120,6 +123,26 @@ if (getAudiobookDisplayTitle("제목") !== "제목") throw new Error("확장자 
     subprocess.run(["node", "-e", script], check=True)
 
 
+def test_anonymous_trial_uses_a_private_session_header_and_one_time_marker():
+    source = APP_JS.read_text(encoding="utf-8")
+
+    assert '"X-Anonymous-Session"' in source
+    assert "anonymousTrialUsed" in source
+    assert "anonymousTrialInProgress" in source
+
+
+def test_login_prompt_explains_second_generation_requires_login():
+    html = INDEX_HTML.read_text(encoding="utf-8")
+
+    assert "추가 생성은 로그인 후 가능해요" in html
+
+
+def test_login_syncs_local_audiobooks_after_database_is_ready():
+    source = APP_JS.read_text(encoding="utf-8")
+
+    assert "if (loggedIn && db) syncWithCloud();" in source
+
+
 def test_library_syncs_playback_and_can_edit_titles():
     source = APP_JS.read_text(encoding="utf-8")
     html = INDEX_HTML.read_text(encoding="utf-8")
@@ -141,8 +164,45 @@ def test_admin_dashboard_renders_retention_metrics():
     assert '관리자만 접근할 수 있습니다.' in source
 
 
+def test_admin_metric_cards_link_to_dedicated_detail_pages():
+    html = ADMIN_HTML.read_text(encoding="utf-8")
+    detail_html = ADMIN_METRIC_HTML.read_text(encoding="utf-8")
+    detail_source = ADMIN_METRIC_JS.read_text(encoding="utf-8")
+
+    assert 'href="/admin/metrics/weekly_active_users"' in html
+    assert 'id="metricPageList"' in detail_html
+    assert 'function renderPeople(people)' in detail_source
+    assert 'fetch("/api/admin/metrics"' in detail_source
+
+
 def test_profile_menu_can_be_closed_outside_or_with_escape():
     source = APP_JS.read_text(encoding="utf-8")
 
     assert 'if (!userInfo.contains(event.target)) closeProfileMenu();' in source
     assert 'if (event.key === "Escape") closeProfileMenu();' in source
+
+
+def test_profile_badge_uses_a_short_name_instead_of_google_avatar():
+    source = APP_JS.read_text(encoding="utf-8")
+
+    assert 'profileName.trim().split(/\\s+/)[0].slice(0, 2)' in source
+    assert 'profileImage.hidden = true;' in source
+
+
+def test_admin_users_have_menu_and_triple_tap_entry_points():
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    source = APP_JS.read_text(encoding="utf-8")
+
+    assert 'id="adminDashboardLink" href="/admin" role="menuitem" hidden' in html
+    assert 'id="brandWordmark"' in html
+    assert 'adminDashboardLink.hidden = !isAdmin;' in source
+    assert 'if (logoTapCount === 3) window.location.assign("/admin");' in source
+
+
+def test_pwa_uses_the_textaudio_name_and_icon():
+    manifest = MANIFEST.read_text(encoding="utf-8")
+    html = INDEX_HTML.read_text(encoding="utf-8")
+
+    assert '"name": "TextAudio"' in manifest
+    assert '"src": "/static/textaudio-icon.png"' in manifest
+    assert 'apple-mobile-web-app-title" content="TextAudio"' in html
