@@ -1,6 +1,6 @@
 import pytest
 from fastapi import HTTPException
-from main import extract_text
+from main import extract_text, _looks_like_garbled_pdf_extraction
 
 
 def test_extract_text_txt(tmp_path):
@@ -67,6 +67,42 @@ def test_extract_text_pdf(tmp_path):
 
         content = extract_text(str(pdf_file), pdf_file.name)
         assert content == "Hello PDF"
+
+
+def test_extract_text_pdf_rejects_garbled_font_encoding(tmp_path):
+    # ToUnicode CMap이 없는 서브셋 폰트(흔히 PDF 압축 도구가 폰트를
+    # 재서브셋하면서 깨뜨린다)는 서로 다른 글리프가 전부 같은 문자로
+    # 뭉개진 텍스트를 뱉는다. 몇 시간 분량을 엉터리로 합성하는 대신
+    # 여기서 걸러야 한다.
+    from unittest.mock import patch, MagicMock
+
+    garbled = ("PART G  Chapter GG Chapter G Chapter  G G G GGG " * 20)
+
+    with patch("main.pypdf.PdfReader") as mock_pdf:
+        mock_instance = MagicMock()
+        mock_page = MagicMock()
+        mock_page.extract_text.return_value = garbled
+        mock_instance.pages = [mock_page]
+        mock_pdf.return_value = mock_instance
+
+        pdf_file = tmp_path / "test.pdf"
+        pdf_file.write_text("dummy")
+
+        with pytest.raises(HTTPException) as exc_info:
+            extract_text(str(pdf_file), pdf_file.name)
+        assert exc_info.value.status_code == 400
+        assert "정상적으로 추출하지 못했습니다" in exc_info.value.detail
+
+
+def test_looks_like_garbled_pdf_extraction():
+    normal_text = "이것은 정상적인 한국어 문장입니다. 오디오북으로 잘 변환될 것입니다. " * 10
+    assert _looks_like_garbled_pdf_extraction(normal_text) is False
+
+    garbled_text = "G" * 300 + " normal words here"
+    assert _looks_like_garbled_pdf_extraction(garbled_text) is True
+
+    # 너무 짧은 텍스트는(정상 문서의 짧은 발췌일 수 있으니) 판단하지 않는다
+    assert _looks_like_garbled_pdf_extraction("GGGGGGGGGG") is False
 
 
 def test_extract_text_valid_hwp(tmp_path, monkeypatch):

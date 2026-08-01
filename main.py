@@ -12,6 +12,7 @@ import re
 import json
 import shutil
 import secrets
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Response, BackgroundTasks, Header, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
@@ -62,7 +63,11 @@ os.makedirs(JOB_AUDIO_DIR, exist_ok=True)
 # 업로드는 지금까지 클라이언트에서만 검사했다. API를 직접 호출하면 그대로
 # 통과해 파일 전체가 메모리에 올라간다.
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
-MAX_ADMIN_UPLOAD_BYTES = 50 * 1024 * 1024
+# 압축 전 원본 PDF가 175MB대까지 나올 수 있다는 실사용 사례가 있어
+# 여유를 두고 250MB로 잡는다. 파싱 자체의 메모리 사용량은 파일
+# 크기만으로 정확히 예측할 수 없다(PDF 내부 객체 구조에 따라 다름) —
+# 실제로 문제가 되면(느려지거나 인스턴스가 재시작되면) 다시 낮춘다.
+MAX_ADMIN_UPLOAD_BYTES = 250 * 1024 * 1024
 
 # 합성 문자 수 상한. 오디오는 문자당 약 903바이트이고 합성 피크는 그 2배쯤
 # 되므로, 10MB 텍스트(약 350만 자)를 그대로 받으면 오디오만 2.9GB가 되어
@@ -511,6 +516,19 @@ def extract_hwp_text(filepath: str) -> str:
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"HWP 파일 해석 실패: {str(e)}")
 
+def _looks_like_garbled_pdf_extraction(text: str) -> bool:
+    """서브셋 폰트에 ToUnicode CMap이 없는 PDF는 서로 다른 글리프가 전부
+    같은 엉뚱한 문자로 매핑돼, 정상 텍스트라면 나올 수 없는 비율로 특정
+    한 글자가 반복된다("PART G Chapter GG G G GG..." 형태). 완벽히 고칠
+    방법이 마땅치 않은 pypdf/PDF 자체의 한계라, 조용히 진행해 몇 시간
+    분량을 엉터리로 합성하는 대신 여기서 걸러 명확히 알린다."""
+    stripped = re.sub(r"\s", "", text)
+    if len(stripped) < 200:
+        return False
+    most_common_char, most_common_count = Counter(stripped).most_common(1)[0]
+    return (most_common_count / len(stripped)) > 0.15
+
+
 def extract_text(file_path: str, filename: str) -> str:
     ext = os.path.splitext(filename)[1].lower()
     if ext == ".docx":
@@ -523,7 +541,14 @@ def extract_text(file_path: str, filename: str) -> str:
             t = page.extract_text(extraction_mode="layout")
             if t:
                 text_list.append(t)
-        return normalize_pdf_for_reading("\n".join(text_list))
+        result = normalize_pdf_for_reading("\n".join(text_list))
+        if _looks_like_garbled_pdf_extraction(result):
+            raise HTTPException(
+                status_code=400,
+                detail="이 PDF에서 텍스트를 정상적으로 추출하지 못했습니다. "
+                       "폰트가 특수하게 인코딩된 PDF일 수 있습니다. DOCX나 TXT로 다시 시도해 주세요.",
+            )
+        return result
     elif ext in [".txt", ".md", ".markdown"]:
         for encoding in ["utf-8", "cp949", "euc-kr", "utf-16", "latin-1"]:
             try:
@@ -965,10 +990,10 @@ async def upload_file(request: Request, file: UploadFile = File(...), authorizat
                 )
             async with large_admin_upload_lock:
                 await save_upload_limited(file, temp_path, max_upload_bytes)
-                text = extract_text(temp_path, safe_name)
+                text = await asyncio.to_thread(extract_text, temp_path, safe_name)
         else:
             await save_upload_limited(file, temp_path, max_upload_bytes)
-            text = extract_text(temp_path, safe_name)
+            text = await asyncio.to_thread(extract_text, temp_path, safe_name)
     except HTTPException:
         if os.path.exists(temp_path):
             os.remove(temp_path)
