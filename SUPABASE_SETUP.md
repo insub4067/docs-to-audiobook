@@ -139,6 +139,42 @@ GRANT SELECT, INSERT, UPDATE ON background_synthesis_jobs TO service_role;
 서버는 진행 중 작업 조회·등록·상태 갱신만 수행하므로 `service_role`에도 이 세 권한만 부여한다.
 RLS 우회 여부와 별개로 Data API 접근에는 테이블 `GRANT`가 필요하다.
 
+### 2.6 완료 알림 구독 테이블
+
+관리자 대용량 작업의 완료 Web Push 구독은 `push_subscriptions`에 저장한다. 다음 SQL을
+`add_push_subscriptions` migration으로 적용한다.
+
+```sql
+create table public.push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+  endpoint text not null unique,
+  p256dh text not null,
+  auth text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index push_subscriptions_user_id_idx on public.push_subscriptions(user_id);
+alter table public.push_subscriptions enable row level security;
+revoke all on table public.push_subscriptions from anon, authenticated;
+grant select, insert, update, delete on table public.push_subscriptions to service_role;
+```
+
+브라우저는 Supabase에 직접 접근하지 않는다. 인증된 애플리케이션 API가 `service_role`로
+현재 사용자의 구독만 등록·해제하고, 서버가 완료 통지를 보낼 때만 읽는다. 따라서 RLS는
+활성화하되 anon/authenticated 정책과 권한을 두지 않는다.
+
+적용 후에는 다음 SQL의 네 값이 모두 `true`인지 확인한다.
+
+```sql
+select
+  has_table_privilege('service_role', 'public.push_subscriptions', 'SELECT'),
+  has_table_privilege('service_role', 'public.push_subscriptions', 'INSERT'),
+  has_table_privilege('service_role', 'public.push_subscriptions', 'UPDATE'),
+  has_table_privilege('service_role', 'public.push_subscriptions', 'DELETE');
+```
+
 ---
 
 ## 🔐 3단계: Row Level Security (RLS) 정책 설정
