@@ -3,11 +3,19 @@
 docs/large-admin-background-jobs.md 참고. 여기서는 이 기능 고유의 로직만
 검증한다: 백그라운드 작업 동시성 제한(429), 결과 저장 순서(고아 방지),
 재시작 후 재개, 전체 재시도(all or nothing).
+
+이 기능의 실제 구현은 routes/tts.py(라우트·합성 엔진·백그라운드 작업이
+서로 강하게 얽혀 있어 한 모듈에 있다)에 있고, 디스크 여유 판단은
+state.py에 있다. patch 대상은 그 함수를 실제로 호출하는 코드가 정의된
+모듈이어야 한다 — main.X를 patch해도 각 모듈 내부의 호출에는 적용되지
+않는다.
 """
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 
 import main
+import state
+from routes import tts
 
 
 @pytest.fixture
@@ -40,7 +48,7 @@ async def test_synthesize_large_text_starts_background_job(mock_supabase):
     mock_supabase.table().select().in_().limit().execute.return_value = MagicMock(data=[])
 
     with patch("state.require_user_id", return_value="admin-user"), \
-         patch("main.process_background_synthesis_task"):
+         patch("routes.tts.process_background_synthesis_task"):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url="http://test") as client:
             response = await client.post(
                 "/api/synthesize",
@@ -97,7 +105,7 @@ async def test_synthesize_large_text_rejected_when_disk_is_low(mock_supabase):
 
     fake_usage = Mock(free=1024)  # 1KB밖에 안 남았다고 가정
     with patch("state.require_user_id", return_value="admin-user"), \
-         patch("main.shutil.disk_usage", return_value=fake_usage):
+         patch("state.shutil.disk_usage", return_value=fake_usage):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url="http://test") as client:
             response = await client.post(
                 "/api/synthesize",
@@ -115,11 +123,11 @@ async def test_synthesize_large_text_rejected_when_disk_is_low(mock_supabase):
 def test_has_enough_disk_for_synthesis_uses_real_free_space(tmp_path, monkeypatch):
     # 실제 shutil.disk_usage를 그대로 쓰되, 대상 디렉터리만 바꿔서 순수
     # 계산 로직(추정 바이트 vs 여유- 예비분)을 검증한다.
-    monkeypatch.setattr(main, "JOB_AUDIO_DIR", str(tmp_path))
-    assert main._has_enough_disk_for_synthesis(1) is True  # 글자 1개는 항상 충분하다
+    monkeypatch.setattr(state, "JOB_AUDIO_DIR", str(tmp_path))
+    assert state._has_enough_disk_for_synthesis(1) is True  # 글자 1개는 항상 충분하다
 
     huge_char_count = 10**15  # 어떤 실제 디스크보다도 훨씬 큰 값
-    assert main._has_enough_disk_for_synthesis(huge_char_count) is False
+    assert state._has_enough_disk_for_synthesis(huge_char_count) is False
 
 
 @pytest.mark.asyncio
@@ -143,7 +151,7 @@ def test_store_background_audiobook_uploads_before_insert(mock_supabase, tmp_pat
     audio_file.write_bytes(b"fake-mp3-bytes")
     job = {"audio_path": str(audio_file), "sentences": [{"text": "문장", "start": 0, "end": 1}]}
 
-    audiobook_id = main._store_background_audiobook("user-1", "제목", job)
+    audiobook_id = tts._store_background_audiobook("user-1", "제목", job)
 
     storage = mock_supabase.storage.from_()
     assert storage.upload.call_count == 2
@@ -162,7 +170,7 @@ def test_store_background_audiobook_rolls_back_mp3_on_sentences_failure(mock_sup
     storage.upload.side_effect = [None, Exception("sentences 업로드 실패")]
 
     with pytest.raises(Exception, match="sentences 업로드 실패"):
-        main._store_background_audiobook("user-1", "제목", job)
+        tts._store_background_audiobook("user-1", "제목", job)
 
     # mp3는 이미 올라갔으니 고아로 남기지 말고 지워야 한다.
     storage.remove.assert_called_once()
@@ -193,8 +201,8 @@ async def test_resume_reschedules_queued_jobs(mock_supabase):
         data=[{"id": "job-resume-1"}]
     )
 
-    with patch("main.process_background_synthesis_task", new_callable=AsyncMock) as mock_task:
-        await main.resume_background_synthesis_jobs()
+    with patch("routes.tts.process_background_synthesis_task", new_callable=AsyncMock) as mock_task:
+        await tts.resume_background_synthesis_jobs()
         await __import__("asyncio").sleep(0)  # create_task로 예약된 코루틴이 시작되게 한 틱 양보
 
     mock_task.assert_called_once_with(
@@ -221,8 +229,8 @@ async def test_resume_skips_when_another_process_already_claimed(mock_supabase):
     )
     mock_supabase.table().update().eq().eq().execute.return_value = MagicMock(data=[])
 
-    with patch("main.process_background_synthesis_task", new_callable=AsyncMock) as mock_task:
-        await main.resume_background_synthesis_jobs()
+    with patch("routes.tts.process_background_synthesis_task", new_callable=AsyncMock) as mock_task:
+        await tts.resume_background_synthesis_jobs()
         await __import__("asyncio").sleep(0)
 
     mock_task.assert_not_called()
@@ -237,8 +245,8 @@ async def test_resume_skips_rows_without_source_text(mock_supabase):
                "source_text": None, "voice": "v", "rate": "r", "pitch": "p", "status": "queued"}]
     )
 
-    with patch("main.process_background_synthesis_task", new_callable=AsyncMock) as mock_task:
-        await main.resume_background_synthesis_jobs()
+    with patch("routes.tts.process_background_synthesis_task", new_callable=AsyncMock) as mock_task:
+        await tts.resume_background_synthesis_jobs()
         await __import__("asyncio").sleep(0)
 
     mock_task.assert_not_called()
@@ -248,9 +256,9 @@ async def test_resume_skips_rows_without_source_text(mock_supabase):
 # ---- process_background_synthesis_task: 전체 재시도(all or nothing) ----
 #
 # 청크 재시도(synthesize_chunk)로도 못 살린 실패는 asyncio.gather가
-# 파트 하나만 죽어도 문서 전체를 실패시킨다(main.py:1271 근처). 몇
-# 시간짜리 작업이 통째로 날아가는 걸 막기 위해, 문서 전체를 처음부터
-# 최대 3번 다시 시도한다.
+# 파트 하나만 죽어도 문서 전체를 실패시킨다(routes/tts.py의
+# synthesize_document_to_file 근처). 몇 시간짜리 작업이 통째로 날아가는
+# 걸 막기 위해, 문서 전체를 처음부터 최대 3번 다시 시도한다.
 
 @pytest.mark.asyncio
 async def test_process_background_synthesis_task_succeeds_first_try(mock_supabase, tmp_path):
@@ -261,10 +269,10 @@ async def test_process_background_synthesis_task_succeeds_first_try(mock_supabas
         main.jobs[job_id]["audio_path"] = str(audio_path)
         main.jobs[job_id]["sentences"] = []
 
-    with patch("main.process_synthesis_task", side_effect=fake_process), \
-         patch("main._store_background_audiobook", return_value="audiobook-1") as mock_store, \
-         patch("main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
-        await main.process_background_synthesis_task(
+    with patch("routes.tts.process_synthesis_task", side_effect=fake_process), \
+         patch("routes.tts._store_background_audiobook", return_value="audiobook-1") as mock_store, \
+         patch("routes.tts.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        await tts.process_background_synthesis_task(
             "job-first-try", "user-1", "제목", "원문", "voice", "+0%", "+0Hz"
         )
 
@@ -291,10 +299,10 @@ async def test_process_background_synthesis_task_retries_whole_job_on_failure(mo
             main.jobs[job_id]["audio_path"] = str(audio_path)
             main.jobs[job_id]["sentences"] = []
 
-    with patch("main.process_synthesis_task", side_effect=fake_process), \
-         patch("main._store_background_audiobook", return_value="audiobook-1"), \
-         patch("main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
-        await main.process_background_synthesis_task(
+    with patch("routes.tts.process_synthesis_task", side_effect=fake_process), \
+         patch("routes.tts._store_background_audiobook", return_value="audiobook-1"), \
+         patch("routes.tts.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        await tts.process_background_synthesis_task(
             "job-retry-success", "user-1", "제목", "원문", "voice", "+0%", "+0Hz"
         )
 
@@ -310,9 +318,9 @@ async def test_process_background_synthesis_task_gives_up_after_max_attempts(moc
         main.jobs[job_id]["status"] = "error"
         main.jobs[job_id]["error"] = "계속 실패합니다."
 
-    with patch("main.process_synthesis_task", side_effect=always_fails), \
-         patch("main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
-        await main.process_background_synthesis_task(
+    with patch("routes.tts.process_synthesis_task", side_effect=always_fails), \
+         patch("routes.tts.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        await tts.process_background_synthesis_task(
             "job-all-fail", "user-1", "제목", "원문", "voice", "+0%", "+0Hz"
         )
 

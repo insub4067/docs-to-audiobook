@@ -17,7 +17,7 @@ def test_share_id_and_metadata_validation():
 @pytest.mark.asyncio
 async def test_get_voice_preview():
     # Test valid preview
-    with patch("main.synthesize_document") as mock_synth:
+    with patch("routes.tts.synthesize_document") as mock_synth:
         mock_synth.return_value = (b"fake_audio", [], 0)
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/api/voices/ko-KR-SunHiNeural/preview")
@@ -30,7 +30,7 @@ async def test_get_voice_preview():
             
     # Test generation failure mock
     with patch("main.os.path.exists", return_value=False):
-        with patch("main.synthesize_document", side_effect=Exception("Network error")):
+        with patch("routes.tts.synthesize_document", side_effect=Exception("Network error")):
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
                 response = await client.get("/api/voices/ko-KR-SunHiNeural/preview")
                 assert response.status_code == 503

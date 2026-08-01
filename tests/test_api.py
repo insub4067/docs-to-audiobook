@@ -66,7 +66,7 @@ async def test_api_synthesize_allows_anonymous_session():
         "created_at": 0,
         "access_token": "text-token",
     }
-    with patch("main.process_synthesis_task"):
+    with patch("routes.tts.process_synthesis_task"):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post(
                 "/api/synthesize",

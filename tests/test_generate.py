@@ -2,7 +2,7 @@ import os
 import pytest
 import asyncio
 from unittest.mock import patch, MagicMock, AsyncMock
-from main import synthesize_document, synthesize_chunk, process_synthesis_task
+from routes.tts import synthesize_document, synthesize_chunk, process_synthesis_task
 
 @pytest.mark.asyncio
 async def test_synthesize_chunk_success():
@@ -62,7 +62,7 @@ async def test_synthesize_document_splits_orders_and_offsets():
     # "2개 이상"만 요구해 분할 경계 변화에 취약하지 않게 한다.
     raw_text = "# 챕터 1\n\n" + ("가" * 500 + ". ") + ("나" * 500 + ". ")
 
-    with patch("main.synthesize_chunk", side_effect=fake_synthesize_chunk):
+    with patch("routes.tts.synthesize_chunk", side_effect=fake_synthesize_chunk):
         combined_audio, annotated_sentences, heading_index = await synthesize_document(
             raw_text, "voice", "+0%", "+0Hz"
         )
@@ -95,7 +95,7 @@ async def test_synthesize_document_chunk_failure_propagates():
     async def failing_chunk(idx, text_chunk, voice, rate, pitch, max_attempts=3):
         raise RuntimeError("네트워크 끊김")
 
-    with patch("main.synthesize_chunk", side_effect=failing_chunk):
+    with patch("routes.tts.synthesize_chunk", side_effect=failing_chunk):
         with pytest.raises(RuntimeError, match="네트워크 끊김"):
             await synthesize_document("어느 정도 긴 텍스트입니다. " * 5, "voice", "+0%", "+0Hz")
 
@@ -108,7 +108,7 @@ async def test_synthesize_document_reports_completed_chunks():
     progress_updates = []
     raw_text = ("가" * 500 + ". ") + ("나" * 500 + ". ")
 
-    with patch("main.synthesize_chunk", side_effect=fake_synthesize_chunk):
+    with patch("routes.tts.synthesize_chunk", side_effect=fake_synthesize_chunk):
         await synthesize_document(
             raw_text,
             "voice",
@@ -122,7 +122,7 @@ async def test_synthesize_document_reports_completed_chunks():
 
 @pytest.mark.asyncio
 async def test_synthesize_document_to_file_limits_workers_and_preserves_order(tmp_path):
-    import main
+    from routes import tts
 
     active_workers = 0
     max_active_workers = 0
@@ -138,8 +138,8 @@ async def test_synthesize_document_to_file_limits_workers_and_preserves_order(tm
     raw_text = ". ".join(chr(0xAC00 + i) * 800 for i in range(6))
     output_path = tmp_path / "book.mp3"
 
-    with patch("main.synthesize_chunk", side_effect=fake_synthesize_chunk):
-        sentences, _, _ = await main.synthesize_document_to_file(
+    with patch("routes.tts.synthesize_chunk", side_effect=fake_synthesize_chunk):
+        sentences, _, _ = await tts.synthesize_document_to_file(
             raw_text, "voice", "+0%", "+0Hz", str(output_path)
         )
 
@@ -150,7 +150,7 @@ async def test_synthesize_document_to_file_limits_workers_and_preserves_order(tm
 
 @pytest.mark.asyncio
 async def test_process_synthesis_task_success(tmp_path, monkeypatch):
-    monkeypatch.setattr("main.JOB_AUDIO_DIR", str(tmp_path))
+    monkeypatch.setattr("routes.tts.JOB_AUDIO_DIR", str(tmp_path))
     from main import jobs
 
     job_id = "job-success"
@@ -164,7 +164,7 @@ async def test_process_synthesis_task_success(tmp_path, monkeypatch):
             f.write(b"audio-bytes")
         return fake_sentences, fake_headings, "# 제목"
 
-    with patch("main.synthesize_document_to_file", side_effect=fake_synthesize_to_file):
+    with patch("routes.tts.synthesize_document_to_file", side_effect=fake_synthesize_to_file):
         await process_synthesis_task(job_id, "raw text", "voice", "+0%", "+0Hz")
 
     assert jobs[job_id]["status"] == "completed"
@@ -183,7 +183,7 @@ async def test_process_synthesis_task_empty_audio_marks_error():
     job_id = "job-empty"
     jobs[job_id] = {"status": "processing", "audio_path": None, "sentences": [], "headings": [], "error": None}
 
-    with patch("main.synthesize_document_to_file", new=AsyncMock(return_value=([], [], ""))):
+    with patch("routes.tts.synthesize_document_to_file", new=AsyncMock(return_value=([], [], ""))):
         await process_synthesis_task(job_id, "raw text", "voice", "+0%", "+0Hz")
 
     assert jobs[job_id]["status"] == "error"
@@ -197,7 +197,7 @@ async def test_process_synthesis_task_exception_marks_error():
     job_id = "job-exception"
     jobs[job_id] = {"status": "processing", "audio_path": None, "sentences": [], "headings": [], "error": None}
 
-    with patch("main.synthesize_document_to_file", new=AsyncMock(side_effect=RuntimeError("boom"))):
+    with patch("routes.tts.synthesize_document_to_file", new=AsyncMock(side_effect=RuntimeError("boom"))):
         await process_synthesis_task(job_id, "raw text", "voice", "+0%", "+0Hz")
 
     assert jobs[job_id]["status"] == "error"
