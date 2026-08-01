@@ -962,6 +962,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     async function extractText(file) {
         const formData = new FormData();
         formData.append("file", file);
+        formData.append("voice", voiceSelect.value);
+        formData.append("rate", getFormattedSpeed(parseInt(speedSlider.value)));
+        formData.append("pitch", getFormattedPitch(parseInt(pitchSlider.value)));
 
         const response = await fetch("/api/upload", {
             method: "POST",
@@ -1226,7 +1229,20 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             const resData = await response.json();
             const jobId = resData.job_id;
-            
+
+            // 관리자 대용량 문서는 서버가 완료까지 전담하고 보관함에 직접
+            // 저장한다. 브라우저를 닫아도 결과가 남으므로, 여기서는 폴링하지
+            // 않고 안내만 하고 끝낸다 — 진행 아이템을 붙잡고 있어봐야
+            // 갱신되지 않는다.
+            if (resData.background_started) {
+                progressItem.remove();
+                if (audioList.children.length === 0) {
+                    libraryEmpty.style.display = "flex";
+                }
+                showToast("서버에서 백그라운드 생성이 시작되었습니다. 완료되면 보관함에 저장됩니다.", "info");
+                return true;
+            }
+
             // 2. Poll job status until completed
             const pollJobStatus = async (id) => {
                 const pollRes = await fetch(`/api/job/${id}`, { headers: generationHeaders });

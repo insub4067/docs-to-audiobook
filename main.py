@@ -78,6 +78,11 @@ DOCUMENT_PART_CONCURRENCY = 5
 # 여유가 빠르게 사라진다. 관리자 대용량 업로드는 한 번에 하나만 처리한다.
 large_admin_upload_lock = asyncio.Lock()
 
+# 위 락은 업로드(텍스트 추출) 단계만 막는다. 실제로 CPU를 오래 쓰는 건
+# TTS 합성이므로, 백그라운드 합성 작업 자체도 동시에 하나만 실행되게
+# 별도로 막는다. 단일 인스턴스 전제라 프로세스 내 락으로 충분하다.
+background_synthesis_lock = asyncio.Lock()
+
 # 공유되는 오디오는 오디오북 전체라 크다. MAX_SYNTH_CHARS(10만 자) 분량이
 # 약 90MB이므로 여유를 둔다. 대신 메모리에 담지 않고 디스크로 흘려보낸다.
 MAX_SHARE_AUDIO_BYTES = 120 * 1024 * 1024
@@ -1329,11 +1334,29 @@ async def process_synthesis_task(job_id: str, raw_text: str, voice: str, rate: s
 
 
 def _store_background_audiobook(user_id: str, title: str, job: dict) -> str:
-    """브라우저가 없어도 서버가 완성본을 사용자 보관함에 저장한다."""
+    """브라우저가 없어도 서버가 완성본을 사용자 보관함에 저장한다.
+
+    Storage 업로드를 모두 마친 뒤에야 DB 행을 만든다 — 순서를 반대로 하면
+    업로드가 중간에 실패했을 때 파일 없는 audiobooks 행이 고아로 남는다.
+    """
     supabase = _supabase_or_503()
     audiobook_id = str(uuid.uuid4())
     audio_path, sentences_path = _object_paths(user_id, audiobook_id)
     storage = supabase.storage.from_(AUDIOBOOK_BUCKET)
+
+    with open(job["audio_path"], "rb") as audio_file:
+        storage.upload(audio_path, audio_file, {"content-type": "audio/mpeg"})
+    try:
+        storage.upload(
+            sentences_path,
+            json.dumps(job["sentences"], ensure_ascii=False).encode("utf-8"),
+            {"content-type": "application/json"},
+        )
+    except Exception:
+        # 문장 데이터 업로드가 실패하면 방금 올린 mp3도 고아가 되므로 함께 지운다.
+        storage.remove([audio_path])
+        raise
+
     supabase.table("audiobooks").insert({
         "id": audiobook_id,
         "user_id": user_id,
@@ -1341,13 +1364,6 @@ def _store_background_audiobook(user_id: str, title: str, job: dict) -> str:
         "file_name": title[:255],
         "storage_path": audio_path,
     }).execute()
-    with open(job["audio_path"], "rb") as audio_file:
-        storage.upload(audio_path, audio_file, {"content-type": "audio/mpeg"})
-    storage.upload(
-        sentences_path,
-        json.dumps(job["sentences"], ensure_ascii=False).encode("utf-8"),
-        {"content-type": "application/json"},
-    )
     return audiobook_id
 
 
@@ -1410,37 +1426,55 @@ async def synthesize_text(
                    f"(현재 {len(raw_text):,}자)."
         )
 
-    job_id = str(uuid.uuid4())
-    jobs[job_id] = {
-        "status": "processing",
-        "audio_path": None,
-        "sentences": [],
-        "headings": [],
-        "display_markdown": "",
-        "completed_chunks": 0,
-        "total_chunks": 0,
-        "error": None,
-        "created_at": time.time(),
-        "user_id": user_id,
-    }
+    def _new_job_id_and_state() -> str:
+        job_id = str(uuid.uuid4())
+        jobs[job_id] = {
+            "status": "processing",
+            "audio_path": None,
+            "sentences": [],
+            "headings": [],
+            "display_markdown": "",
+            "completed_chunks": 0,
+            "total_chunks": 0,
+            "error": None,
+            "created_at": time.time(),
+            "user_id": user_id,
+        }
+        return job_id
 
     if max_synth_chars > MAX_SYNTH_CHARS:
         # 대용량 작업은 브라우저의 폴링·클라우드 업로드에 의존하지 않는다.
         # 완료 후 서버가 직접 보관함에 저장하므로 앱을 닫아도 결과가 남는다.
         if not authorization:
             raise HTTPException(status_code=401, detail="대용량 문서는 로그인 후 변환할 수 있습니다.")
+
         supabase = _supabase_or_503()
-        await asyncio.to_thread(
-            lambda: supabase.table("background_synthesis_jobs").insert({
-                "id": job_id,
-                "user_id": user_id,
-                "source_text": raw_text,
-                "title": data["filename"],
-                "voice": voice,
-                "rate": rate,
-                "pitch": pitch,
-            }).execute()
-        )
+        async with background_synthesis_lock:
+            # 업로드 단계의 락과 별개다. 실제 CPU를 오래 쓰는 건 합성이므로,
+            # 이미 진행 중인 대용량 작업이 있으면 새 작업을 거부한다. 확인과
+            # 큐 등록을 같은 락 안에서 해 경합으로 두 개가 동시에 뚫리지 않게 한다.
+            existing = await asyncio.to_thread(
+                lambda: supabase.table("background_synthesis_jobs").select("id")
+                .in_("status", ["queued", "processing"]).limit(1).execute().data or []
+            )
+            if existing:
+                raise HTTPException(
+                    status_code=429,
+                    detail="이미 진행 중인 대용량 작업이 있습니다. 완료 후 다시 시도해 주세요.",
+                )
+
+            job_id = _new_job_id_and_state()
+            await asyncio.to_thread(
+                lambda: supabase.table("background_synthesis_jobs").insert({
+                    "id": job_id,
+                    "user_id": user_id,
+                    "source_text": raw_text,
+                    "title": data["filename"],
+                    "voice": voice,
+                    "rate": rate,
+                    "pitch": pitch,
+                }).execute()
+            )
         background_tasks.add_task(
             process_background_synthesis_task,
             job_id,
@@ -1451,9 +1485,10 @@ async def synthesize_text(
             rate,
             pitch,
         )
-    else:
-        background_tasks.add_task(process_synthesis_task, job_id, raw_text, voice, rate, pitch)
-    
+        return {"job_id": job_id, "background_started": True}
+
+    job_id = _new_job_id_and_state()
+    background_tasks.add_task(process_synthesis_task, job_id, raw_text, voice, rate, pitch)
     return {"job_id": job_id}
 
 @app.get("/api/job/{job_id}")
@@ -2321,6 +2356,20 @@ async def resume_background_synthesis_jobs():
             if not row.get("source_text"):
                 continue
             job_id = row["id"]
+
+            # 조건부로 상태를 선점한다. 배포 중 이전·새 프로세스가 잠깐
+            # 겹치는 것처럼 두 재개 시도가 같은 행을 동시에 집어가도,
+            # DB가 원자적으로 처리해 update가 실제로 걸린 쪽만 진행한다.
+            # 이게 없으면 같은 작업이 두 번 처음부터 합성되고, 완료 시
+            # audiobooks 행도 중복으로 만들어질 수 있다.
+            claimed = await asyncio.to_thread(
+                lambda status=row["status"]: supabase.table("background_synthesis_jobs")
+                .update({"status": "processing"})
+                .eq("id", job_id).eq("status", status).execute().data or []
+            )
+            if not claimed:
+                continue
+
             jobs[job_id] = {
                 "status": "processing",
                 "audio_path": None,

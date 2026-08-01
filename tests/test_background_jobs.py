@@ -1,0 +1,211 @@
+"""관리자 대용량 문서 백그라운드 처리 테스트.
+
+docs/large-admin-background-jobs.md 참고. 여기서는 이 기능 고유의 로직만
+검증한다: 백그라운드 작업 동시성 제한(429), 결과 저장 순서(고아 방지),
+재시작 후 재개.
+"""
+import pytest
+from unittest.mock import patch, MagicMock, AsyncMock
+
+import main
+
+
+@pytest.fixture
+def mock_supabase():
+    with patch("auth.get_supabase_client") as mock_get_client:
+        mock_client = MagicMock()
+        mock_get_client.return_value = mock_client
+        yield mock_client
+
+
+def _seed_large_text(text_id="large-doc", max_synth_chars=None):
+    main.text_storage[text_id] = {
+        "filename": "large.pdf",
+        "text": "관리자 대용량 문서 테스트 본문입니다.",
+        "char_count": 20,
+        "max_synth_chars": max_synth_chars or main.MAX_ADMIN_SYNTH_CHARS,
+        "created_at": 0,
+        "access_token": "text-token",
+    }
+
+
+# ---- /api/synthesize 대용량 분기: 동시성 제한 ----
+
+@pytest.mark.asyncio
+async def test_synthesize_large_text_starts_background_job(mock_supabase):
+    import httpx
+
+    _seed_large_text()
+    # 진행 중인 작업이 없다.
+    mock_supabase.table().select().in_().limit().execute.return_value = MagicMock(data=[])
+
+    with patch("main.require_user_id", return_value="admin-user"), \
+         patch("main.process_background_synthesis_task"):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/synthesize",
+                data={"text_id": "large-doc", "text_access_token": "text-token"},
+                headers={"Authorization": "Bearer fake"},
+            )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["background_started"] is True
+    assert "job_id" in data
+    # 진행 중 작업이 없었으므로 새 작업이 큐에 들어갔어야 한다.
+    mock_supabase.table().insert.assert_called_once()
+    inserted = mock_supabase.table().insert.call_args[0][0]
+    assert inserted["id"] == data["job_id"]
+    assert inserted["source_text"] == main.text_storage.get("large-doc", {}).get("text", inserted["source_text"])
+
+    main.jobs.pop(data["job_id"], None)
+    main.text_storage.pop("large-doc", None)
+
+
+@pytest.mark.asyncio
+async def test_synthesize_large_text_rejected_when_job_already_running(mock_supabase):
+    import httpx
+
+    _seed_large_text()
+    # 이미 진행 중인 작업이 있다.
+    mock_supabase.table().select().in_().limit().execute.return_value = MagicMock(
+        data=[{"id": "already-running"}]
+    )
+
+    with patch("main.require_user_id", return_value="admin-user"):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/synthesize",
+                data={"text_id": "large-doc", "text_access_token": "text-token"},
+                headers={"Authorization": "Bearer fake"},
+            )
+
+    assert response.status_code == 429
+    assert "이미 진행 중인" in response.json()["detail"]
+    # 거부됐으니 새 작업을 큐에 넣으면 안 된다.
+    mock_supabase.table().insert.assert_not_called()
+
+    main.text_storage.pop("large-doc", None)
+
+
+@pytest.mark.asyncio
+async def test_synthesize_large_text_requires_login(mock_supabase):
+    _seed_large_text()
+    import httpx
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/synthesize",
+            data={"text_id": "large-doc", "text_access_token": "text-token"},
+            headers={"X-Anonymous-Session": "anonymous-session-123456"},
+        )
+    assert response.status_code == 401
+    main.text_storage.pop("large-doc", None)
+
+
+# ---- _store_background_audiobook: 결과 저장 순서(고아 방지) ----
+
+def test_store_background_audiobook_uploads_before_insert(mock_supabase, tmp_path):
+    audio_file = tmp_path / "out.mp3"
+    audio_file.write_bytes(b"fake-mp3-bytes")
+    job = {"audio_path": str(audio_file), "sentences": [{"text": "문장", "start": 0, "end": 1}]}
+
+    audiobook_id = main._store_background_audiobook("user-1", "제목", job)
+
+    storage = mock_supabase.storage.from_()
+    assert storage.upload.call_count == 2
+    mock_supabase.table().insert.assert_called_once()
+    inserted = mock_supabase.table().insert.call_args[0][0]
+    assert inserted["id"] == audiobook_id
+    assert inserted["user_id"] == "user-1"
+
+
+def test_store_background_audiobook_rolls_back_mp3_on_sentences_failure(mock_supabase, tmp_path):
+    audio_file = tmp_path / "out.mp3"
+    audio_file.write_bytes(b"fake-mp3-bytes")
+    job = {"audio_path": str(audio_file), "sentences": [{"text": "문장", "start": 0, "end": 1}]}
+
+    storage = mock_supabase.storage.from_()
+    storage.upload.side_effect = [None, Exception("sentences 업로드 실패")]
+
+    with pytest.raises(Exception, match="sentences 업로드 실패"):
+        main._store_background_audiobook("user-1", "제목", job)
+
+    # mp3는 이미 올라갔으니 고아로 남기지 말고 지워야 한다.
+    storage.remove.assert_called_once()
+    removed_paths = storage.remove.call_args[0][0]
+    assert len(removed_paths) == 1
+    # 실패했으니 DB 행은 만들면 안 된다.
+    mock_supabase.table().insert.assert_not_called()
+
+
+# ---- resume_background_synthesis_jobs: 재시작 후 재개 ----
+
+@pytest.mark.asyncio
+async def test_resume_reschedules_queued_jobs(mock_supabase):
+    mock_supabase.table().select().in_().execute.return_value = MagicMock(
+        data=[{
+            "id": "job-resume-1",
+            "user_id": "user-1",
+            "title": "재개될 문서",
+            "source_text": "원문 텍스트",
+            "voice": "ko-KR-HyunsuMultilingualNeural",
+            "rate": "+0%",
+            "pitch": "+0Hz",
+            "status": "queued",
+        }]
+    )
+    # 선점(claim) update가 성공해 영향받은 행을 돌려준다.
+    mock_supabase.table().update().eq().eq().execute.return_value = MagicMock(
+        data=[{"id": "job-resume-1"}]
+    )
+
+    with patch("main.process_background_synthesis_task", new_callable=AsyncMock) as mock_task:
+        await main.resume_background_synthesis_jobs()
+        await __import__("asyncio").sleep(0)  # create_task로 예약된 코루틴이 시작되게 한 틱 양보
+
+    mock_task.assert_called_once_with(
+        "job-resume-1", "user-1", "재개될 문서", "원문 텍스트",
+        "ko-KR-HyunsuMultilingualNeural", "+0%", "+0Hz",
+    )
+    assert main.jobs["job-resume-1"]["status"] == "processing"
+    main.jobs.pop("job-resume-1", None)
+
+
+@pytest.mark.asyncio
+async def test_resume_skips_when_another_process_already_claimed(mock_supabase):
+    # 배포 중 이전/새 프로세스가 잠깐 겹쳐 같은 행을 먼저 가져간 경우를
+    # 흉내낸다: 선점 update가 아무 행도 바꾸지 못했다(빈 결과).
+    mock_supabase.table().select().in_().execute.return_value = MagicMock(
+        data=[{
+            "id": "job-already-claimed",
+            "user_id": "user-1",
+            "title": "t",
+            "source_text": "원문",
+            "voice": "v", "rate": "r", "pitch": "p",
+            "status": "processing",
+        }]
+    )
+    mock_supabase.table().update().eq().eq().execute.return_value = MagicMock(data=[])
+
+    with patch("main.process_background_synthesis_task", new_callable=AsyncMock) as mock_task:
+        await main.resume_background_synthesis_jobs()
+        await __import__("asyncio").sleep(0)
+
+    mock_task.assert_not_called()
+    assert "job-already-claimed" not in main.jobs
+
+
+@pytest.mark.asyncio
+async def test_resume_skips_rows_without_source_text(mock_supabase):
+    # source_text가 없는 행은(예: 완료 직후 잠깐 조회된 경우) 재개 대상이 아니다.
+    mock_supabase.table().select().in_().execute.return_value = MagicMock(
+        data=[{"id": "job-no-text", "user_id": "user-1", "title": "t",
+               "source_text": None, "voice": "v", "rate": "r", "pitch": "p", "status": "queued"}]
+    )
+
+    with patch("main.process_background_synthesis_task", new_callable=AsyncMock) as mock_task:
+        await main.resume_background_synthesis_jobs()
+        await __import__("asyncio").sleep(0)
+
+    mock_task.assert_not_called()
+    assert "job-no-text" not in main.jobs

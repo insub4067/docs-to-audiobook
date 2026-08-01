@@ -103,6 +103,37 @@ CREATE INDEX idx_product_events_user_id ON product_events(user_id);
 
 관리자 대시보드는 이 테이블의 생성 시작·완료·실패·재생 시작 이벤트만 집계하며, 문서 내용이나 제목은 저장하지 않는다.
 
+### 2.5 관리자 대용량 백그라운드 작업 테이블
+
+관리자가 10MB를 넘는 문서를 올리면 서버가 브라우저와 무관하게 완료까지 처리한다(`docs/large-admin-background-jobs.md` 참고). 원본 파일이 아니라 이미 추출된 텍스트를 `source_text`에 저장한다 — 원본 PDF를 Storage에 올렸다가 워커가 다시 내려받아 재추출하는 구조보다 단순하고, PDF보다 텍스트가 훨씬 작아 대용량 Storage 업로드의 신뢰성 문제도 피한다. 완료·실패 후에는 `source_text`를 비워 원문을 남기지 않는다.
+
+```sql
+CREATE TABLE background_synthesis_jobs (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title VARCHAR(255) NOT NULL,
+  source_text TEXT,
+  voice VARCHAR(100) NOT NULL,
+  rate VARCHAR(20) NOT NULL,
+  pitch VARCHAR(20) NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'queued',
+  error TEXT,
+  audiobook_id UUID REFERENCES audiobooks(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at TIMESTAMPTZ
+);
+
+CREATE INDEX idx_background_jobs_status ON background_synthesis_jobs(status);
+```
+
+`id`는 애플리케이션이 생성해 넣으므로 기본값을 두지 않는다. `status`는 `queued` → `processing` → `completed`/`error`로 전이한다.
+
+서버(service role)만 이 테이블을 읽고 쓴다. anon/authenticated 키로 직접 접근할 이유가 없으므로 RLS는 활성화만 해두고 별도 정책은 만들지 않는다 — 정책이 없으면 service role을 제외한 모든 요청이 기본적으로 거부된다.
+
+```sql
+ALTER TABLE background_synthesis_jobs ENABLE ROW LEVEL SECURITY;
+```
+
 ---
 
 ## 🔐 3단계: Row Level Security (RLS) 정책 설정
