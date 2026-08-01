@@ -16,6 +16,13 @@ function syncUrlClearButton(input, button) {
     button.hidden = input.value.length === 0;
 }
 
+function getReaderScrollTarget(container, activeElement) {
+    const containerRect = container.getBoundingClientRect();
+    const activeRect = activeElement.getBoundingClientRect();
+    return container.scrollTop + activeRect.top - containerRect.top
+        - container.clientHeight / 2 + activeElement.clientHeight / 2;
+}
+
 
 document.addEventListener("DOMContentLoaded", async () => {
     // Initialize Lucide Icons
@@ -2526,9 +2533,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     activeSpan.classList.add("highlight");
                     
                     isAutoScrolling = true;
-                    const spanTop = activeSpan.offsetTop;
-                    const containerHeight = readerContent.clientHeight;
-                    const targetScroll = spanTop - containerHeight / 2 + activeSpan.clientHeight / 2;
+                    const targetScroll = getReaderScrollTarget(readerContent, activeSpan);
                     readerContent.scrollTo({ top: targetScroll, behavior: "smooth" });
                     setTimeout(() => { isAutoScrolling = false; }, 800);
                     
@@ -2852,9 +2857,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     activeSpan.classList.add("highlight");
 
                     isAutoScrolling = true;
-                    const spanTop = activeSpan.offsetTop;
-                    const containerHeight = readerContent.clientHeight;
-                    const targetScroll = spanTop - containerHeight / 2 + activeSpan.clientHeight / 2;
+                    const targetScroll = getReaderScrollTarget(readerContent, activeSpan);
                     readerContent.scrollTo({ top: targetScroll, behavior: "smooth" });
                     setTimeout(() => { isAutoScrolling = false; }, 800);
 
