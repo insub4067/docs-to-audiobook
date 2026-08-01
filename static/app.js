@@ -3161,7 +3161,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             setupSocialLogin();
         }
 
-        if (loggedIn && db) syncWithCloud();
         updateGenerateHint();
     }
 
