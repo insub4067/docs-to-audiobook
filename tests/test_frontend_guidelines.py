@@ -11,6 +11,7 @@ AUTH_JS = ROOT_DIR / "static" / "js" / "auth.js"
 PWA_JS = ROOT_DIR / "static" / "js" / "pwa.js"
 NOTIFICATIONS_JS = ROOT_DIR / "static" / "js" / "notifications.js"
 GENERATION_STATUS_JS = ROOT_DIR / "static" / "js" / "generation-status.js"
+VOICES_JS = ROOT_DIR / "static" / "js" / "voices.js"
 SW_JS = ROOT_DIR / "static" / "sw.js"
 STYLE_CSS = ROOT_DIR / "static" / "style.css"
 INDEX_HTML = ROOT_DIR / "static" / "index.html"
@@ -94,6 +95,75 @@ controller.remove("job-1");
 if (audioList.children.length !== 0 || libraryEmpty.style.display !== "flex") {{
   throw new Error("완료된 생성 행을 제거하지 않았습니다.");
 }}
+"""
+    subprocess.run(["node", "-e", script], check=True)
+
+
+def test_voice_controller_loads_voices_and_stops_active_preview():
+    assert VOICES_JS.is_file()
+    script = f"""
+const fs = require("fs");
+const vm = require("vm");
+const source = fs.readFileSync({str(VOICES_JS)!r}, "utf8");
+let pauseCount = 0;
+const notifications = [];
+const voiceSelect = {{
+  children: [],
+  value: "",
+  _innerHTML: "",
+  addEventListener(name, handler) {{ this[name] = handler; }},
+  appendChild(option) {{
+    this.children.push(option);
+    if (this.children.length === 1) this.value = option.value;
+  }},
+  set innerHTML(value) {{ this._innerHTML = value; this.children = []; }},
+  get innerHTML() {{ return this._innerHTML; }},
+  set selectedIndex(index) {{ if (this.children[index]) this.value = this.children[index].value; }},
+}};
+const voiceDesc = {{ textContent: "", style: {{}} }};
+const voicePreviewLabel = {{ textContent: "미리듣기" }};
+const voicePreviewBtn = {{
+  disabled: false,
+  addEventListener(name, handler) {{ this[name] = handler; }},
+}};
+const context = {{ window: {{}} }};
+vm.runInNewContext(source, context);
+const controller = context.window.TextAudio.createVoiceController({{
+  voiceSelect,
+  voiceDesc,
+  voicePreviewBtn,
+  voicePreviewLabel,
+  fetch: async (url) => url === "/api/voices"
+    ? {{ ok: true, json: async () => [{{ short_name: "ko-KR-Test", friendly_name: "테스트", locale: "ko-KR", description: "차분함" }}] }}
+    : {{ ok: true, blob: async () => ({{}}) }},
+  createOption: () => ({{ value: "", textContent: "" }}),
+  createAudio: () => ({{
+    pause() {{ pauseCount += 1; }},
+    play: async () => undefined,
+    onended: null,
+    onerror: null,
+  }}),
+  createObjectURL: () => "blob:preview",
+  notify: (...args) => notifications.push(args),
+  logError() {{}},
+}});
+controller.initialize();
+
+(async () => {{
+  await controller.loadVoices();
+  if (voiceSelect.children.length !== 1 || voiceSelect.value !== "ko-KR-Test") {{
+    throw new Error("서버 음성 목록을 선택기에 반영하지 않았습니다.");
+  }}
+  if (voiceDesc.textContent !== "차분함" || controller.getSelectedVoice() !== "ko-KR-Test") {{
+    throw new Error("선택 음성 설명 또는 값을 반영하지 않았습니다.");
+  }}
+  await voicePreviewBtn.click();
+  await voicePreviewBtn.click();
+  if (pauseCount !== 1 || voicePreviewLabel.textContent !== "미리듣기" || voicePreviewBtn.disabled) {{
+    throw new Error("재생 중인 음성 미리듣기를 정리하지 않았습니다.");
+  }}
+  if (notifications.length !== 0) throw new Error("성공 흐름에서 오류 알림을 표시했습니다.");
+}})().catch((error) => {{ console.error(error); process.exit(1); }});
 """
     subprocess.run(["node", "-e", script], check=True)
 
@@ -449,7 +519,7 @@ const context = {{
   pitchSlider: {{ value: "0" }},
   speedSlider: {{ value: "0" }},
   uploadedFile: {{ name: "문서.pdf" }},
-  voiceSelect: {{ value: "ko-KR-SunHiNeural" }},
+  voiceController: {{ getSelectedVoice: () => "ko-KR-SunHiNeural" }},
   window: {{
     __requestPushNotificationSubscription: async () => {{
       notificationRequests += 1;

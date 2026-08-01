@@ -15,6 +15,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     
     const voiceSelect = document.getElementById("voiceSelect");
     const voiceDesc = document.getElementById("voiceDesc");
+    const voicePreviewBtn = document.getElementById("voicePreviewBtn");
+    const voicePreviewLabel = document.getElementById("voicePreviewLabel");
     const speedSlider = document.getElementById("speedSlider");
     const speedVal = document.getElementById("speedVal");
     const pitchSlider = document.getElementById("pitchSlider");
@@ -55,7 +57,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     function closeGenerationModal() {
         generationModal.classList.remove("show");
         document.body.style.overflow = "";
-        stopVoicePreview();
+        voiceController.stopPreview();
         restoreModalFocus(generationModal);
     }
     
@@ -319,7 +321,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     let currentTextId = null;
     let currentTextAccessToken = null;
     let uploadedFile = null;
-    let availableVoices = [];
     let objectUrls = {}; 
     let lastActiveSpan = null;
     let currentReadingAudioId = null;
@@ -328,9 +329,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     let lastPlaybackSyncTime = 0;
     let lastPositionSaveSecond = -1;
 
+    const voiceController = TextAudio.createVoiceController({
+        voiceSelect,
+        voiceDesc,
+        voicePreviewBtn,
+        voicePreviewLabel,
+        fetch: window.fetch.bind(window),
+        createOption: () => document.createElement("option"),
+        createAudio: (url) => new Audio(url),
+        createObjectURL: (blob) => URL.createObjectURL(blob),
+        notify: showToast,
+        logError: (error) => console.error(error),
+    });
+    voiceController.initialize();
+
     // Initialize Database and App
     initDB().then(() => {
-        loadVoices();
+        voiceController.loadVoices();
         renderLibrary();
         seedDefaultBookIfNeeded();
         // DB가 열린 뒤에 동기화한다 — 먼저 돌면 db가 null이라 실패한다
@@ -348,126 +363,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         const dropzoneHint = document.querySelector(".dropzone-hint");
         if (dropzoneHint) {
             dropzoneHint.textContent = "지원: DOCX, PDF, TXT, MD, HWP";
-        }
-    }
-
-    // Voice Selection Change Handler
-    voiceSelect.addEventListener("change", (e) => {
-        const selectedVoiceShortName = e.target.value;
-        updateVoiceDescription(selectedVoiceShortName);
-        stopVoicePreview();
-    });
-
-    // --- 목소리 미리듣기 ---
-    const voicePreviewBtn = document.getElementById("voicePreviewBtn");
-    const voicePreviewLabel = document.getElementById("voicePreviewLabel");
-    let previewAudio = null;
-
-    function stopVoicePreview() {
-        if (previewAudio) {
-            previewAudio.pause();
-            previewAudio = null;
-        }
-        if (voicePreviewBtn) {
-            voicePreviewBtn.disabled = false;
-            if (voicePreviewLabel) voicePreviewLabel.textContent = "미리듣기";
-        }
-    }
-
-    if (voicePreviewBtn) {
-        voicePreviewBtn.addEventListener("click", async () => {
-            // 재생 중이면 정지 토글
-            if (previewAudio) {
-                stopVoicePreview();
-                return;
-            }
-            const voice = voiceSelect.value;
-            if (!voice) return;
-
-            voicePreviewBtn.disabled = true;
-            if (voicePreviewLabel) voicePreviewLabel.textContent = "준비 중...";
-            try {
-                // 서버가 처음 한 번만 합성하고 이후로는 캐시를 준다
-                const res = await fetch(`/api/voices/${encodeURIComponent(voice)}/preview`);
-                if (!res.ok) throw new Error("미리듣기를 불러오지 못했습니다.");
-                const blob = await res.blob();
-
-                previewAudio = new Audio(URL.createObjectURL(blob));
-                previewAudio.onended = stopVoicePreview;
-                previewAudio.onerror = () => {
-                    stopVoicePreview();
-                    showToast("미리듣기를 재생하지 못했습니다.", "error");
-                };
-                voicePreviewBtn.disabled = false;
-                if (voicePreviewLabel) voicePreviewLabel.textContent = "정지";
-                await previewAudio.play();
-            } catch (error) {
-                console.error(error);
-                stopVoicePreview();
-                showToast(error.message || "미리듣기에 실패했습니다.", "error");
-            }
-        });
-    }
-
-    function updateVoiceDescription(shortName) {
-        const voiceObj = availableVoices.find(v => v.short_name === shortName);
-        if (voiceObj) {
-            voiceDesc.textContent = voiceObj.description || "선택한 음성의 상세 특징이 표시됩니다.";
-            voiceDesc.style.opacity = 1;
-        } else {
-            voiceDesc.textContent = "선택한 음성의 상세 특징이 표시됩니다.";
-        }
-    }
-
-
-
-    // ----------------------------------------------------
-    // 1. API Call: Load Voices
-    // ----------------------------------------------------
-    async function loadVoices() {
-        try {
-            const response = await fetch("/api/voices");
-            if (!response.ok) throw new Error("목소리 목록을 불러오지 못했습니다.");
-            const voices = await response.json();
-            availableVoices = voices;
-            
-            voiceSelect.innerHTML = "";
-            
-            if (voices.length === 0) {
-                voiceSelect.innerHTML = '<option value="ko-KR-SunHiNeural">선희 (차분한 뉴스/정보 전달 - 여성)</option>';
-                return;
-            }
-            
-            voices.forEach(voice => {
-                const option = document.createElement("option");
-                option.value = voice.short_name;
-                
-                const flag = voice.locale.startsWith("ko-KR") ? "🇰🇷" : "🇺🇸";
-                let displayName = voice.friendly_name;
-                
-                option.textContent = `${flag} ${displayName}`;
-                voiceSelect.appendChild(option);
-            });
-
-            // 서버가 SUPPORTED_VOICES 순서로 내려주고 첫 번째가 기본값이다
-            voiceSelect.selectedIndex = 0;
-
-            updateVoiceDescription(voiceSelect.value);
-
-        } catch (error) {
-            console.error(error);
-            showToast("음성 목록을 가져오지 못했습니다. 기본 설정을 사용합니다.", "error");
-            availableVoices = [
-                {"short_name": "ko-KR-SunHiNeural", "friendly_name": "선희 (차분한 뉴스/정보 전달 - 여성)", "locale": "ko-KR", "description": "단정하고 차분하며, 정보 전달이나 지적인 낭독에 적합합니다."},
-                {"short_name": "ko-KR-InJoonNeural", "friendly_name": "인준 (신뢰감 있는 소설/다큐 - 남성)", "locale": "ko-KR", "description": "진중하고 신뢰감 있는 남성 톤으로, 다큐멘터리나 소설 낭독에 적합합니다."},
-                {"short_name": "ko-KR-JiMinNeural", "friendly_name": "지민 (밝고 상냥한 동화/안내 - 여성)", "locale": "ko-KR", "description": "밝고 친근하며, 동화책 낭독이나 상냥한 안내 멘트에 잘 어울립니다."}
-            ];
-            voiceSelect.innerHTML = `
-                <option value="ko-KR-SunHiNeural" selected>🇰🇷 선희 (차분한 뉴스/정보 전달 - 여성)</option>
-                <option value="ko-KR-InJoonNeural">🇰🇷 인준 (신뢰감 있는 소설/다큐 - 남성)</option>
-                <option value="ko-KR-JiMinNeural">🇰🇷 지민 (밝고 상냥한 동화/안내 - 여성)</option>
-            `;
-            updateVoiceDescription(voiceSelect.value);
         }
     }
 
@@ -830,7 +725,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             textAccessToken: currentTextAccessToken,
             filename: toAudioFilename(originalName),
             charCount: parseInt(charCountBadge.textContent.replace(/[^0-9]/g, "")) || 0,
-            voice: voiceSelect.value,
+            voice: voiceController.getSelectedVoice(),
             rate: getFormattedSpeed(parseInt(speedSlider.value)),
             pitch: getFormattedPitch(parseInt(pitchSlider.value))
         });
