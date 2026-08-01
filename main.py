@@ -71,13 +71,20 @@ MAX_SYNTH_CHARS = 100_000
 
 # 관리자 경로(synthesize_document_to_file)는 위와 달리 메모리에 오디오를
 # 쌓지 않고 곧장 디스크에 쓰므로 위 903바이트/자 계산이 적용되지 않는다 —
-# 실제 제약은 디스크다. Fly 머신의 루트 디스크(영구 볼륨 없음, `flyctl ssh
-# console -C "df -h /"`로 확인)가 총 7.8GB, 여유 7.4GB였다. 결합 단계에서
-# 최종 파일과 파트 파일이 잠깐 동시에 존재해 순간 사용량이 최종 크기의
-# 최대 2배까지 갈 수 있고, 이 디스크를 다른 업로드·공유 파일과도 나눠
-# 쓰므로 여유의 절반 정도만 이 용도로 잡는다. 300만 자 × 903바이트 ≈
-# 2.6GB(최악의 경우 순간 최대 ~5.2GB)로, 이 여유 안에 들어온다.
-MAX_ADMIN_SYNTH_CHARS = 3_000_000
+# 실제 제약은 디스크다. 고정 숫자로 "안전할 것 같은 상한"을 추측하는
+# 대신, 요청이 올 때마다 실제 여유 디스크를 재보고 판단한다
+# (_has_enough_disk_for_synthesis). 아래 값은 그 실제 판단 전에 걸러낼
+# 순수 방어용 상한이다 — 손상된 PDF 추출 등으로 텍스트가 병적으로
+# 부풀었을 때를 막을 뿐, 정상적인 문서에서는 사실상 걸릴 일이 없다.
+MAX_ADMIN_SYNTH_CHARS = 50_000_000
+
+# 문자당 오디오 바이트 추정치(위 MAX_SYNTH_CHARS 계산과 동일 근거).
+# 결합 단계에서 최종 파일과 파트 파일이 잠깐 동시에 존재해 순간 디스크
+# 사용량이 최종 크기의 최대 2배까지 갈 수 있어 SAFETY_FACTOR로 반영한다.
+AUDIO_BYTES_PER_CHAR_ESTIMATE = 903
+DISK_ESTIMATE_SAFETY_FACTOR = 2
+# 이 디스크를 다른 업로드·공유 파일과도 나눠 쓰므로 항상 이만큼은 비워둔다.
+DISK_RESERVE_BYTES = 1 * 1024 ** 3
 
 # 긴 관리자 문서는 다섯 묶음으로 나눠 각각의 MP3를 디스크에 기록한다.
 # 묶음 안의 청크는 순서대로 처리해 메모리에 오디오를 쌓지 않는다.
@@ -276,6 +283,14 @@ def synth_limit_for(upload_limit_bytes: int) -> int:
         if upload_limit_bytes == MAX_ADMIN_UPLOAD_BYTES
         else MAX_SYNTH_CHARS
     )
+
+
+def _has_enough_disk_for_synthesis(char_count: int) -> bool:
+    """지금 이 문서를 합성해도 디스크가 안 찰지, 고정 상한 대신 그 순간의
+    실제 여유 공간을 재서 판단한다."""
+    estimated_bytes = char_count * AUDIO_BYTES_PER_CHAR_ESTIMATE * DISK_ESTIMATE_SAFETY_FACTOR
+    free_bytes = shutil.disk_usage(JOB_AUDIO_DIR).free
+    return estimated_bytes <= free_bytes - DISK_RESERVE_BYTES
 
 
 def _parse_event_time(value: str | None):
@@ -1497,6 +1512,13 @@ async def synthesize_text(
                 raise HTTPException(
                     status_code=429,
                     detail="이미 진행 중인 대용량 작업이 있습니다. 완료 후 다시 시도해 주세요.",
+                )
+
+            if not _has_enough_disk_for_synthesis(len(raw_text)):
+                raise HTTPException(
+                    status_code=413,
+                    detail="지금 서버 디스크 여유가 부족해 이 문서를 처리할 수 없습니다. "
+                           "다른 작업이 끝난 뒤 다시 시도해 주세요.",
                 )
 
             job_id = _new_job_id_and_state()

@@ -82,10 +82,44 @@ async def test_synthesize_large_text_rejected_when_job_already_running(mock_supa
 
     assert response.status_code == 429
     assert "이미 진행 중인" in response.json()["detail"]
-    # 거부됐으니 새 작업을 큐에 넣으면 안 된다.
+
+
+@pytest.mark.asyncio
+async def test_synthesize_large_text_rejected_when_disk_is_low(mock_supabase):
+    # 고정 상한이 아니라 그 순간의 실제 여유 디스크로 판단한다 — 여유가
+    # 거의 없다고 응답하면(디스크의 남은 용량 반환값을 가짜로 아주
+    # 작게 준다) 큐에 올리지 않고 거절해야 한다.
+    import httpx
+    from unittest.mock import Mock
+
+    _seed_large_text()
+    mock_supabase.table().select().in_().limit().execute.return_value = MagicMock(data=[])
+
+    fake_usage = Mock(free=1024)  # 1KB밖에 안 남았다고 가정
+    with patch("main.require_user_id", return_value="admin-user"), \
+         patch("main.shutil.disk_usage", return_value=fake_usage):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/synthesize",
+                data={"text_id": "large-doc", "text_access_token": "text-token"},
+                headers={"Authorization": "Bearer fake"},
+            )
+
+    assert response.status_code == 413
+    assert "디스크 여유가 부족" in response.json()["detail"]
     mock_supabase.table().insert.assert_not_called()
 
     main.text_storage.pop("large-doc", None)
+
+
+def test_has_enough_disk_for_synthesis_uses_real_free_space(tmp_path, monkeypatch):
+    # 실제 shutil.disk_usage를 그대로 쓰되, 대상 디렉터리만 바꿔서 순수
+    # 계산 로직(추정 바이트 vs 여유- 예비분)을 검증한다.
+    monkeypatch.setattr(main, "JOB_AUDIO_DIR", str(tmp_path))
+    assert main._has_enough_disk_for_synthesis(1) is True  # 글자 1개는 항상 충분하다
+
+    huge_char_count = 10**15  # 어떤 실제 디스크보다도 훨씬 큰 값
+    assert main._has_enough_disk_for_synthesis(huge_char_count) is False
 
 
 @pytest.mark.asyncio
