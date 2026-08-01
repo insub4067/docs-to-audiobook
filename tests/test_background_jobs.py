@@ -284,6 +284,31 @@ async def test_process_background_synthesis_task_succeeds_first_try(mock_supabas
 
 
 @pytest.mark.asyncio
+async def test_background_completion_updates_database_before_push(mock_supabase):
+    calls = []
+    mock_supabase.table().update.side_effect = (
+        lambda payload: calls.append(("update", payload)) or MagicMock()
+    )
+
+    async def complete_job(job_id, *_):
+        state.jobs[job_id]["status"] = "completed"
+
+    with patch("routes.tts.process_synthesis_task", side_effect=complete_job), \
+         patch("routes.tts._store_background_audiobook", return_value="book-1"), \
+         patch("routes.tts.send_background_job_ready", side_effect=lambda *_: calls.append(("push", None))):
+        await tts.process_background_synthesis_task(
+            "job-1", "user-1", "제목", "원문", "voice", "+0%", "+0Hz"
+        )
+
+    completed_index = next(
+        i for i, call in enumerate(calls)
+        if call[0] == "update" and call[1].get("status") == "completed"
+    )
+    push_index = calls.index(("push", None))
+    assert completed_index < push_index
+
+
+@pytest.mark.asyncio
 async def test_process_background_synthesis_task_retries_whole_job_on_failure(mock_supabase, tmp_path):
     attempts = []
 

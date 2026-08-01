@@ -26,6 +26,7 @@ from text_processing import (
     build_document_representations, extract_markdown_headings,
     annotate_sentences_with_headings, annotate_sentences_with_tables, clean_tts_text,
 )
+from push_notifications import send_background_job_ready
 
 router = APIRouter()
 
@@ -470,6 +471,7 @@ async def process_background_synthesis_task(job_id: str, user_id: str, title: st
                         "completed_at": datetime.now(timezone.utc).isoformat(),
                     }).eq("id", job_id).execute()
                 )
+                await asyncio.to_thread(send_background_job_ready, user_id, job_id)
                 return
             last_error = job.get("error") or last_error
         except Exception as e:
