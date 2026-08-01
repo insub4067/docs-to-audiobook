@@ -843,46 +843,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // Background job loading rows
-    function createGeneratingItem(audioFilename) {
-        const safeAudioFilename = escapeHtml(getAudiobookDisplayTitle(audioFilename));
-        const item = document.createElement("div");
-        item.className = "audio-item audio-item-generating";
-        item.innerHTML = `
-            <div class="audio-title-group">
-                <div class="generating-spinner"></div>
-                <div class="generating-info">
-                    <span class="audio-title">${safeAudioFilename}</span>
-                    <div class="generating-progress-track">
-                        <div class="generating-progress-fill" style="width: 0%"></div>
-                    </div>
-                    <span class="generating-status">오디오북 생성 중...</span>
-                </div>
-            </div>
-        `;
-        return item;
-    }
-
-    function findBackgroundJobLoading(jobId) {
-        return Array.from(audioList.querySelectorAll(".audio-item-generating"))
-            .find((item) => item.dataset.backgroundJobId === jobId) || null;
-    }
-
-    function showBackgroundJobLoading(jobId, title = "오디오북") {
-        const existing = findBackgroundJobLoading(jobId);
-        if (existing) return existing;
-
-        const item = createGeneratingItem(title);
-        item.dataset.backgroundJobId = jobId;
-        item.querySelector(".generating-status").textContent = "서버에서 생성 중...";
-        audioList.prepend(item);
-        libraryEmpty.style.display = "none";
-        return item;
-    }
-
-    function removeBackgroundJobLoading(jobId) {
-        findBackgroundJobLoading(jobId)?.remove();
-        if (audioList.children.length === 0) libraryEmpty.style.display = "flex";
-    }
+    const generationStatus = TextAudio.createGenerationStatusController({ audioList, libraryEmpty });
+    const showBackgroundJobLoading = generationStatus.show;
+    const removeBackgroundJobLoading = generationStatus.remove;
 
     window.__showBackgroundJobLoading = showBackgroundJobLoading;
     window.__removeBackgroundJobLoading = removeBackgroundJobLoading;

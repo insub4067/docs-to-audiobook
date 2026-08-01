@@ -10,6 +10,7 @@ UTILS_JS = ROOT_DIR / "static" / "js" / "utils.js"
 AUTH_JS = ROOT_DIR / "static" / "js" / "auth.js"
 PWA_JS = ROOT_DIR / "static" / "js" / "pwa.js"
 NOTIFICATIONS_JS = ROOT_DIR / "static" / "js" / "notifications.js"
+GENERATION_STATUS_JS = ROOT_DIR / "static" / "js" / "generation-status.js"
 SW_JS = ROOT_DIR / "static" / "sw.js"
 STYLE_CSS = ROOT_DIR / "static" / "style.css"
 INDEX_HTML = ROOT_DIR / "static" / "index.html"
@@ -45,15 +46,12 @@ def test_background_job_is_remembered_and_checked_on_resume():
     assert "window.__checkPendingBackgroundJobs" in pwa
 
 
-def test_background_loading_row_is_unique_and_removed_by_job_id():
+def test_generation_status_controller_keeps_one_row_per_job_and_removes_it():
+    assert GENERATION_STATUS_JS.is_file()
     script = f"""
 const fs = require("fs");
 const vm = require("vm");
-const source = fs.readFileSync({str(APP_JS)!r}, "utf8");
-const start = source.indexOf("// Background job loading rows");
-const end = source.indexOf("// End background job loading rows", start);
-if (start < 0 || end < 0) throw new Error("백그라운드 로딩 행 함수가 없습니다.");
-
+const source = fs.readFileSync({str(GENERATION_STATUS_JS)!r}, "utf8");
 const audioList = {{
   children: [],
   prepend(item) {{ this.children.unshift(item); item.parent = this; }},
@@ -66,8 +64,6 @@ const audioList = {{
 const libraryEmpty = {{ style: {{ display: "flex" }} }};
 const context = {{
   Array,
-  audioList,
-  libraryEmpty,
   document: {{
     createElement() {{
       const status = {{ textContent: "" }};
@@ -76,9 +72,7 @@ const context = {{
         dataset: {{}},
         innerHTML: "",
         querySelector(selector) {{ return selector === ".generating-status" ? status : null; }},
-        remove() {{
-          this.parent.children = this.parent.children.filter((item) => item !== this);
-        }},
+        remove() {{ this.parent.children = this.parent.children.filter((item) => item !== this); }},
       }};
     }},
   }},
@@ -86,19 +80,19 @@ const context = {{
   getAudiobookDisplayTitle: (value) => value.replace(/\\.mp3$/i, ""),
   window: {{}},
 }};
-vm.runInNewContext(source.slice(start, end), context);
-
-const first = context.window.__showBackgroundJobLoading("job-1", "첫 번째.mp3");
-const duplicate = context.window.__showBackgroundJobLoading("job-1", "중복.mp3");
+vm.runInNewContext(source, context);
+const controller = context.window.TextAudio.createGenerationStatusController({{ audioList, libraryEmpty }});
+const first = controller.show("job-1", "첫 번째.mp3");
+const duplicate = controller.show("job-1", "중복.mp3");
 if (first !== duplicate || audioList.children.length !== 1) {{
-  throw new Error("같은 작업의 로딩 행이 중복 생성되었습니다.");
+  throw new Error("같은 작업의 생성 행이 중복되었습니다.");
 }}
 if (!first.innerHTML.includes("첫 번째") || libraryEmpty.style.display !== "none") {{
-  throw new Error("로딩 행의 제목 또는 빈 상태가 올바르지 않습니다.");
+  throw new Error("생성 행의 제목 또는 빈 상태가 올바르지 않습니다.");
 }}
-context.window.__removeBackgroundJobLoading("job-1");
+controller.remove("job-1");
 if (audioList.children.length !== 0 || libraryEmpty.style.display !== "flex") {{
-  throw new Error("완료된 작업의 로딩 행을 제거하지 않았습니다.");
+  throw new Error("완료된 생성 행을 제거하지 않았습니다.");
 }}
 """
     subprocess.run(["node", "-e", script], check=True)
