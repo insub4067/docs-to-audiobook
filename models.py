@@ -47,7 +47,7 @@ class AudiobookUpload(BaseModel):
     file_name: str
 
 # ============================================================
-# Database Models (for SQLAlchemy ORM - optional for future)
+# Database Models
 # ============================================================
 
 class UserDB(BaseModel):

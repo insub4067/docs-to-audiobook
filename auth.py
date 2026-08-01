@@ -4,7 +4,6 @@ import os
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
-import bcrypt
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -20,19 +19,6 @@ def get_secret_key() -> str:
     if not secret_key:
         raise RuntimeError("SECRET_KEY 환경변수가 설정되어야 합니다.")
     return secret_key
-
-# ============================================================
-# Password Functions
-# ============================================================
-
-def hash_password(password: str) -> str:
-    """Hash a password using bcrypt."""
-    salt = bcrypt.gensalt(rounds=12)
-    return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a plain password against its hash."""
-    return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
 
 # ============================================================
 # JWT Token Functions

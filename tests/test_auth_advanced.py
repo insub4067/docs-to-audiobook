@@ -2,7 +2,6 @@ import os
 import pytest
 from unittest.mock import patch, MagicMock
 from auth import (
-    hash_password, verify_password,
     create_access_token, decode_token,
     get_supabase_client
 )
@@ -20,13 +19,6 @@ def test_default_token_lifetime_is_one_year():
     import auth
 
     assert auth.DEFAULT_ACCESS_TOKEN_EXPIRE_MINUTES == 525_600
-
-def test_password_hashing():
-    pwd = "my_secure_password"
-    hashed = hash_password(pwd)
-    assert hashed != pwd
-    assert verify_password(pwd, hashed) is True
-    assert verify_password("wrong", hashed) is False
 
 def test_jwt_tokens():
     data = {"sub": "user123"}
