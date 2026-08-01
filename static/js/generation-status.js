@@ -46,6 +46,6 @@
             if (audioList.children.length === 0) libraryEmpty.style.display = "flex";
         }
 
-        return { show, remove };
+        return { create: createItem, show, remove };
     };
 })();

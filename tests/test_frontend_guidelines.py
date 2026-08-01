@@ -89,6 +89,10 @@ const context = {{
 }};
 vm.runInNewContext(source, context);
 const controller = context.window.TextAudio.createGenerationStatusController({{ audioList, libraryEmpty }});
+const pending = controller.create("대기 중.mp3");
+if (!pending.innerHTML.includes("대기 중") || !pending.className.includes("audio-item-generating")) {{
+  throw new Error("전경 생성 작업 행을 만들지 않았습니다.");
+}}
 const first = controller.show("job-1", "첫 번째.mp3");
 const duplicate = controller.show("job-1", "중복.mp3");
 if (first !== duplicate || audioList.children.length !== 1) {{

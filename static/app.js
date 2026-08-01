@@ -744,6 +744,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Background job loading rows
     const generationStatus = TextAudio.createGenerationStatusController({ audioList, libraryEmpty });
+    const createGeneratingItem = generationStatus.create;
     const showBackgroundJobLoading = generationStatus.show;
     const removeBackgroundJobLoading = generationStatus.remove;
 
