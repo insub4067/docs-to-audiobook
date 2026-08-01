@@ -1511,9 +1511,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
 
             result.ok = result.failed === 0;
-            if ((result.uploaded || result.added) && !silent) {
+            if (result.uploaded || result.added) {
                 renderLibrary();
-                showToast(`동기화 완료 (올림 ${result.uploaded}, 받음 ${result.added})`, "success");
+                if (!silent) {
+                    showToast(`동기화 완료 (올림 ${result.uploaded}, 받음 ${result.added})`, "success");
+                }
             }
             return result;
         } catch (e) {

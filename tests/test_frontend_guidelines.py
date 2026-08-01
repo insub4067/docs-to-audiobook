@@ -115,6 +115,44 @@ Promise.race([
     subprocess.run(["node", "-e", script], check=True)
 
 
+def test_silent_cloud_sync_renders_new_audiobooks_without_a_toast():
+    script = f"""
+const fs = require("fs");
+const vm = require("vm");
+const source = fs.readFileSync({str(APP_JS)!r}, "utf8");
+const start = source.indexOf("    let syncing = false;");
+const end = source.indexOf("    // 로그아웃(최상위 스코프)", start);
+if (start < 0 || end < 0) throw new Error("클라우드 동기화 함수를 찾을 수 없습니다.");
+let renders = 0;
+let toasts = 0;
+const context = {{
+  Date,
+  Map,
+  Set,
+  fetch: async () => ({{
+    ok: true,
+    json: async () => ({{ audiobooks: [{{ id: "cloud-book", title: "완료된 책", created_at: "2026-08-01T00:00:00Z" }}] }}),
+  }}),
+  fetchPlaybackState: async (entry) => entry,
+  getAllAudiobooksFromDB: async () => [],
+  authHeaders: () => ({{}}),
+  isLoggedIn: () => true,
+  renderLibrary: () => {{ renders += 1; }},
+  saveAudiobookToDB: async () => {{}},
+  showToast: () => {{ toasts += 1; }},
+}};
+vm.runInNewContext(`${{source.slice(start, end)}}; this.syncWithCloud = syncWithCloud;`, context);
+
+(async () => {{
+  const result = await context.syncWithCloud({{ silent: true }});
+  if (result.added !== 1 || renders !== 1 || toasts !== 0) {{
+    throw new Error("silent 동기화가 새 보관함 항목을 렌더링하지 않거나 토스트를 표시합니다.");
+  }}
+}})().catch((error) => {{ console.error(error); process.exit(1); }});
+"""
+    subprocess.run(["node", "-e", script], check=True)
+
+
 def test_split_app_scripts_exist_and_load_before_app_in_dependency_order():
     html = INDEX_HTML.read_text(encoding="utf-8")
     script_paths = [*SPLIT_APP_SCRIPTS, "/static/app.js"]
