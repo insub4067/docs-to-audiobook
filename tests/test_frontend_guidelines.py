@@ -313,11 +313,71 @@ if (getReaderScrollTarget(container, nestedCell) !== 630) {{
 
 
 def test_library_clears_existing_rows_after_async_database_read():
-    source = APP_JS.read_text(encoding="utf-8")
-    start = source.index("async function renderLibrary()")
-    end = source.index("// --- ActionSheet ---", start)
-    render_source = source[start:end]
+    script = f"""
+const fs = require("fs");
+const vm = require("vm");
+const source = fs.readFileSync({str(APP_JS)!r}, "utf8");
+const start = source.indexOf("async function renderLibrary()");
+const end = source.indexOf("// ============================================================", start);
+const pendingReads = [];
+const audioList = {{
+  children: [],
+  querySelectorAll(selector) {{
+    return selector === ".audio-item-generating"
+      ? this.children.filter((item) => item.className.includes("audio-item-generating"))
+      : [];
+  }},
+  appendChild(item) {{ this.children.push(item); }},
+}};
+Object.defineProperty(audioList, "innerHTML", {{
+  set(value) {{
+    if (value !== "") throw new Error("목록 초기화가 빈 문자열이 아닙니다.");
+    this.children = [];
+  }},
+}});
+function createElement() {{
+  const front = {{ addEventListener() {{}}, classList: {{ add() {{}}, remove() {{}}, contains() {{ return false; }} }}, style: {{}} }};
+  const background = {{ addEventListener() {{}}, style: {{}} }};
+  const moreButton = {{ addEventListener() {{}} }};
+  return {{
+    className: "",
+    innerHTML: "",
+    addEventListener() {{}},
+    querySelector(selector) {{
+      if (selector === ".audio-item-front") return front;
+      if (selector === ".audio-item-bg") return background;
+      if (selector === ".btn-more") return moreButton;
+      return null;
+    }},
+  }};
+}}
+const context = {{
+  Array,
+  audioList,
+  libraryEmpty: {{ style: {{}} }},
+  document: {{ addEventListener() {{}}, createElement }},
+  escapeHtml: (value) => value,
+  getAudiobookDisplayTitle: (title) => title,
+  getAllAudiobooksFromDB: () => new Promise((resolve) => pendingReads.push(resolve)),
+  lucide: {{ createIcons() {{}} }},
+  console,
+  showToast() {{}},
+}};
+vm.runInNewContext(`${{source.slice(start, end)}}; this.renderLibrary = renderLibrary;`, context);
 
-    read_position = render_source.index("await getAllAudiobooksFromDB()")
-    clear_position = render_source.index('audioList.innerHTML = ""')
-    assert read_position < clear_position
+(async () => {{
+  const firstRender = context.renderLibrary();
+  const secondRender = context.renderLibrary();
+  if (pendingReads.length !== 2) throw new Error("겹친 DB 조회가 시작되지 않았습니다.");
+
+  const sharedBook = {{ id: "same-book", title: "같은 책", sentences: [] }};
+  pendingReads[1]([sharedBook]);
+  await secondRender;
+  pendingReads[0]([sharedBook]);
+  await firstRender;
+
+  const sharedRows = audioList.children.filter((item) => item.innerHTML.includes('data-id="same-book"'));
+  if (sharedRows.length !== 1) throw new Error(`같은 오디오북 행이 ${{sharedRows.length}}개 남았습니다.`);
+}})().catch((error) => {{ console.error(error); process.exit(1); }});
+"""
+    subprocess.run(["node", "-e", script], check=True)
