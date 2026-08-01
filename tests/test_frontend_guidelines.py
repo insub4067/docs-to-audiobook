@@ -15,6 +15,8 @@ GENERATION_JS = ROOT_DIR / "static" / "js" / "generation.js"
 VOICES_JS = ROOT_DIR / "static" / "js" / "voices.js"
 WEB_SPEECH_JS = ROOT_DIR / "static" / "js" / "web-speech.js"
 READER_CONTROLS_JS = ROOT_DIR / "static" / "js" / "reader-controls.js"
+LIBRARY_JS = ROOT_DIR / "static" / "js" / "library.js"
+READER_JS = ROOT_DIR / "static" / "js" / "reader.js"
 SW_JS = ROOT_DIR / "static" / "sw.js"
 STYLE_CSS = ROOT_DIR / "static" / "style.css"
 INDEX_HTML = ROOT_DIR / "static" / "index.html"
@@ -35,7 +37,232 @@ SPLIT_APP_SCRIPTS = [
     "/static/js/voices.js",
     "/static/js/web-speech.js",
     "/static/js/reader-controls.js",
+    "/static/js/reader.js",
+    "/static/js/library.js",
 ]
+
+
+def test_library_controller_renders_db_books_and_exposes_public_contract():
+    assert LIBRARY_JS.is_file()
+    script = f"""
+const fs = require("fs");
+const vm = require("vm");
+const source = fs.readFileSync({str(LIBRARY_JS)!r}, "utf8");
+const audioList = {{
+  children: [],
+  querySelectorAll(selector) {{
+    return selector === ".audio-item-generating"
+      ? this.children.filter((item) => item.className.includes("audio-item-generating"))
+      : [];
+  }},
+  appendChild(item) {{ this.children.push(item); }},
+}};
+Object.defineProperty(audioList, "innerHTML", {{
+  set(value) {{
+    if (value !== "") throw new Error("목록 초기화가 빈 문자열이 아닙니다.");
+    this.children = [];
+  }},
+}});
+function createElement() {{
+  const front = {{ addEventListener() {{}}, classList: {{ add() {{}}, remove() {{}}, contains() {{ return false; }} }}, style: {{}} }};
+  const background = {{ addEventListener() {{}}, style: {{}} }};
+  const moreButton = {{ addEventListener() {{}} }};
+  return {{
+    className: "",
+    innerHTML: "",
+    addEventListener() {{}},
+    querySelector(selector) {{
+      if (selector === ".audio-item-front") return front;
+      if (selector === ".audio-item-bg") return background;
+      if (selector === ".btn-more") return moreButton;
+      return null;
+    }},
+  }};
+}}
+const actionSheetBackdrop = {{ classList: {{ contains: () => true, remove() {{}} }}, style: {{}}, addEventListener() {{}} }};
+const actionButton = {{ style: {{}}, addEventListener() {{}} }};
+const context = {{
+  Array,
+  Blob,
+  URL: {{ revokeObjectURL() {{}} }},
+  document: {{
+    body: {{ style: {{}} }},
+    addEventListener() {{}},
+    createElement,
+    getElementById(id) {{
+      if (id === "actionSheetBackdrop") return actionSheetBackdrop;
+      if (["actionShareBtn", "actionDownloadBtn", "actionEditTitleBtn", "actionDeleteBtn", "actionCancelBtn"].includes(id)) return actionButton;
+      return null;
+    }},
+  }},
+  window: {{ location: {{ origin: "https://app.example.com" }}, TextAudio: {{}} }},
+  navigator: {{}},
+  confirm: () => false,
+  escapeHtml: (value) => value,
+  getAudiobookDisplayTitle: (title) => title,
+  getAllAudiobooksFromDB: async () => [{{ id: "same-book", title: "같은 책", sentences: [] }}],
+  getAudiobookFromDB: async () => null,
+  isLoggedIn: () => false,
+  lucide: {{ createIcons() {{}} }},
+  showToast() {{}},
+  console,
+}};
+vm.runInNewContext(source, context);
+const controller = context.window.TextAudio.createLibraryController({{
+  audioList,
+  libraryEmpty: {{ style: {{}} }},
+  readerControls: {{ getPlaybackSettings: () => ({{ playbackSpeed: 1, repeatMode: "off" }}) }},
+  openReaderMode() {{}},
+  getCurrentAudio: () => null,
+  rememberModalFocus() {{}},
+  restoreModalFocus() {{}},
+  objectUrls: {{}},
+}});
+for (const name of ["initialize", "load", "render", "sync", "savePlaybackState", "closeActionSheetIfOpen"]) {{
+  if (typeof controller[name] !== "function") throw new Error(`공개 메서드가 없습니다: ${{name}}`);
+}}
+(async () => {{
+  await controller.render();
+  const sharedRows = audioList.children.filter((item) => item.innerHTML.includes('data-id="same-book"'));
+  if (sharedRows.length !== 1) throw new Error("DB 오디오북을 한 개의 행으로 렌더링하지 않았습니다.");
+  if (controller.closeActionSheetIfOpen() !== true) throw new Error("열린 액션시트를 닫지 않았습니다.");
+}})().catch((error) => {{ console.error(error); process.exit(1); }});
+"""
+    subprocess.run(["node", "-e", script], check=True)
+
+
+def test_reader_controller_opens_local_audio_and_auto_scrolls_current_sentence():
+    assert READER_JS.is_file()
+    script = f"""
+const fs = require("fs");
+const vm = require("vm");
+const source = fs.readFileSync({str(READER_JS)!r}, "utf8");
+function element() {{
+  const classes = new Set();
+  return {{
+    style: {{ setProperty() {{}} }}, textContent: "", innerHTML: "", clientHeight: 400,
+    classList: {{ add: (name) => classes.add(name), remove: (name) => classes.delete(name), toggle(name, enabled) {{ enabled ? classes.add(name) : classes.delete(name); }}, contains: (name) => classes.has(name) }},
+    addEventListener(name, listener) {{ this[name] = listener; }}, appendChild(child) {{ (this.children ||= []).push(child); }},
+    querySelector() {{ return null; }}, scrollTo(options) {{ this.lastScroll = options; }},
+  }};
+}}
+const nodes = {{}};
+const document = {{
+  body: {{ style: {{}} }}, activeElement: null, contains: () => true, addEventListener() {{}},
+  getElementById(id) {{ return nodes[id] || null; }},
+  createElement() {{
+    const node = element();
+    Object.defineProperty(node, "id", {{ set(value) {{ this._id = value; nodes[value] = this; }}, get() {{ return this._id; }} }});
+    return node;
+  }},
+}};
+const readerAudio = Object.assign(element(), {{ paused: true, duration: 120, currentTime: 0, playbackRate: 1, load() {{ if (this.onloadedmetadata) this.onloadedmetadata(); }}, play: async function() {{ this.paused = false; if (this.onplay) this.onplay(); }}, pause() {{ this.paused = true; if (this.onpause) this.onpause(); }} }});
+const readerContent = element();
+const readerOverlay = element();
+const readerIndexBtn = element();
+nodes.readerIndexBtn = readerIndexBtn;
+const context = {{
+  window: {{ TextAudio: {{
+    createReaderControls: () => ({{ initialize() {{}}, applyPlaybackSettings() {{}}, getPlaybackSettings: () => ({{ playbackSpeed: 1, repeatMode: "off" }}), clearSleepTimer() {{}} }}),
+    createWebSpeechController: () => ({{ speak() {{}}, stop() {{}} }}),
+  }}, location: {{ pathname: "/" }}, fetch: async () => ({{ ok: true }}), localStorage: {{ getItem: () => null, setItem() {{}} }}, setInterval, clearInterval, addEventListener() {{}} }},
+  document, Blob, URL: {{ createObjectURL: () => "blob:reader", revokeObjectURL() {{}} }},
+  HTMLElement: function HTMLElement() {{}}, requestAnimationFrame: (callback) => callback(),
+  setTimeout: (callback) => {{ callback(); return 1; }}, clearTimeout() {{}}, Date, console,
+  formatTime: () => "00:00", getAudiobookDisplayTitle: (title) => title, getReaderScrollTarget: () => 180,
+  showToast() {{}}, trackProductEvent() {{}}, updateAudiobookPosition() {{}}, saveAudiobookToDB: async () => {{}},
+  fetch: async () => ({{ ok: true, json: async () => ({{}}), blob: async () => new Blob() }}),
+}};
+vm.runInNewContext(source, context);
+const elements = {{
+  readerOverlay, readerContainer: element(), readerBookTitle: element(), readerShareBtn: element(), closeReaderBtn: element(),
+  readerContent, readerAudio, readerPlayPauseBtn: element(), playIconSvg: element(), pauseIconSvg: element(),
+  readerCurrentTime: element(), readerDuration: element(), readerProgressBar: Object.assign(element(), {{ getBoundingClientRect: () => ({{ left: 0, width: 100 }}) }}), readerProgressFill: element(),
+  readerSkipBackBtn: element(), readerSkipForwardBtn: element(), readerRepeatBtn: element(), readerRepeatText: element(), readerSpeedBtn: element(), readerSpeedText: element(), readerTimerBtn: element(), readerTimerText: element(),
+  importLinkBtn: element(), indexSheetList: element(), indexSheetBackdrop: element(), indexSheetCancelBtn: element(), saveSharedBtn: null,
+}};
+const reader = context.window.TextAudio.createReaderController({{ elements, state: {{}}, services: {{ library: {{ savePlaybackState: async () => {{}}, render() {{}} }} }}, setupSwipeToDismiss() {{}}, rememberModalFocus() {{}}, restoreModalFocus() {{}} }});
+for (const name of ["initialize", "open", "getCurrentAudio", "getPlaybackSettings", "closeIndexSheetIfOpen"]) {{ if (typeof reader[name] !== "function") throw new Error(`공개 메서드가 없습니다: ${{name}}`); }}
+reader.initialize();
+reader.open({{ id: "book-1", title: "책", audioData: new Uint8Array([1]), sentences: [{{ text: "첫 문장", start: 0, end: 1000 }}] }});
+readerAudio.currentTime = 0.5;
+readerAudio.ontimeupdate();
+if (!readerOverlay.classList.contains("show") || reader.getCurrentAudio().id !== "book-1") throw new Error("로컬 오디오북을 리더로 열지 않았습니다.");
+if (!readerContent.lastScroll || readerContent.lastScroll.top !== 180) throw new Error("현재 문장을 자동 스크롤하지 않았습니다.");
+"""
+    subprocess.run(["node", "-e", script], check=True)
+
+
+def test_reader_replaces_the_shared_save_button_on_each_shared_open():
+    script = f"""
+const fs = require("fs");
+const vm = require("vm");
+const source = fs.readFileSync({str(READER_JS)!r}, "utf8");
+function element() {{
+  const classes = new Set();
+  return {{
+    style: {{ setProperty() {{}} }}, textContent: "", innerHTML: "", clientHeight: 400,
+    classList: {{ add: (name) => classes.add(name), remove: (name) => classes.delete(name), toggle(name, enabled) {{ enabled ? classes.add(name) : classes.delete(name); }}, contains: (name) => classes.has(name) }},
+    addEventListener(name, listener) {{ this[name] = listener; }}, appendChild() {{}}, querySelector() {{ return null; }}, scrollTo() {{}},
+  }};
+}}
+const nodes = {{}};
+const document = {{
+  body: {{ style: {{}} }}, addEventListener() {{}}, getElementById: (id) => nodes[id] || null,
+  createElement: () => element(), contains: () => true,
+}};
+const readerAudio = Object.assign(element(), {{ paused: true, duration: 60, currentTime: 0, load() {{ if (this.onloadedmetadata) this.onloadedmetadata(); }}, play: async function() {{ this.paused = false; if (this.onplay) this.onplay(); }}, pause() {{ this.paused = true; if (this.onpause) this.onpause(); }} }});
+let activeSaveButton;
+let replaceCount = 0;
+const saveButtonParent = {{
+  replaceChild(newButton, oldButton) {{
+    if (oldButton !== activeSaveButton) throw new Error("분리된 저장 버튼을 교체하려 했습니다.");
+    oldButton.parentNode = null;
+    newButton.parentNode = this;
+    activeSaveButton = newButton;
+    replaceCount += 1;
+  }},
+}};
+function createSaveButton() {{
+  const button = element();
+  button.parentNode = saveButtonParent;
+  button.cloneNode = () => createSaveButton();
+  return button;
+}}
+activeSaveButton = createSaveButton();
+const importLinkBtn = element();
+const closeReaderBtn = element();
+const context = {{
+  window: {{ TextAudio: {{
+    createReaderControls: () => ({{ initialize() {{}}, applyPlaybackSettings() {{}}, getPlaybackSettings: () => ({{ playbackSpeed: 1, repeatMode: "off" }}), clearSleepTimer() {{}} }}),
+    createWebSpeechController: () => ({{ stop() {{}}, speak() {{}} }}),
+  }}, location: {{ pathname: "/" }}, localStorage: {{ getItem: () => null, setItem() {{}} }}, setInterval, clearInterval, addEventListener() {{}} }},
+  document, Blob, URL: {{ createObjectURL: () => "blob:test", revokeObjectURL() {{}} }}, requestAnimationFrame: (callback) => callback(),
+  setTimeout: (callback) => {{ callback(); return 1; }}, clearTimeout() {{}}, Date, console,
+  prompt: () => "https://app.example.com/share/first", confirm: () => false,
+  fetch: async () => ({{ ok: true, json: async () => ({{ title: "공유 책", sentences: [], audio_url: "https://audio.example.com/book.mp3" }}) }}),
+  formatTime: () => "00:00", getAudiobookDisplayTitle: (title) => title, getReaderScrollTarget: () => 0,
+  showToast() {{}}, trackProductEvent() {{}}, updateAudiobookPosition() {{}}, saveAudiobookToDB: async () => {{}},
+}};
+vm.runInNewContext(source, context);
+const elements = {{
+  readerOverlay: element(), readerContainer: element(), readerBookTitle: element(), readerShareBtn: element(), closeReaderBtn,
+  readerContent: element(), readerAudio, readerPlayPauseBtn: element(), playIconSvg: element(), pauseIconSvg: element(),
+  readerCurrentTime: element(), readerDuration: element(), readerProgressBar: Object.assign(element(), {{ getBoundingClientRect: () => ({{ left: 0, width: 100 }}) }}), readerProgressFill: element(),
+  readerSkipBackBtn: element(), readerSkipForwardBtn: element(), readerRepeatBtn: element(), readerRepeatText: element(), readerSpeedBtn: element(), readerSpeedText: element(), readerTimerBtn: element(), readerTimerText: element(),
+  importLinkBtn, indexSheetList: element(), indexSheetBackdrop: element(), indexSheetCancelBtn: element(), saveSharedBtn: activeSaveButton, readerIndexBtn: element(),
+}};
+const reader = context.window.TextAudio.createReaderController({{ elements, services: {{ library: {{ savePlaybackState: async () => {{}}, render() {{}} }} }}, setupSwipeToDismiss() {{}}, rememberModalFocus() {{}}, restoreModalFocus() {{}} }});
+reader.initialize();
+(async () => {{
+  await importLinkBtn.click();
+  closeReaderBtn.click({{ preventDefault() {{}}, stopPropagation() {{}} }});
+  if (activeSaveButton.style.display !== "none") throw new Error("첫 공유 리더 종료에서 활성 저장 버튼을 숨기지 않았습니다.");
+  await importLinkBtn.click();
+  if (replaceCount !== 2) throw new Error("두 번째 공유 리더 진입에서 저장 버튼을 다시 교체하지 않았습니다.");
+}})().catch((error) => {{ console.error(error); process.exit(1); }});
+"""
+    subprocess.run(["node", "-e", script], check=True)
 
 
 def test_generation_controller_exposes_initialization_and_pending_generation_contract():
@@ -982,33 +1209,51 @@ def test_silent_cloud_sync_renders_new_audiobooks_without_a_toast():
     script = f"""
 const fs = require("fs");
 const vm = require("vm");
-const source = fs.readFileSync({str(APP_JS)!r}, "utf8");
-const start = source.indexOf("    let syncing = false;");
-const end = source.indexOf("    // 로그아웃(최상위 스코프)", start);
-if (start < 0 || end < 0) throw new Error("클라우드 동기화 함수를 찾을 수 없습니다.");
-let renders = 0;
+const source = fs.readFileSync({str(LIBRARY_JS)!r}, "utf8");
+const savedEntries = [];
+let rendered = 0;
 let toasts = 0;
+const actionButton = {{ addEventListener() {{}}, style: {{}} }};
 const context = {{
   Date,
+  Array,
   Map,
   Set,
+  Promise,
+  window: {{ TextAudio: {{}} }},
+  document: {{
+    body: {{ style: {{}} }},
+    getElementById() {{ return actionButton; }},
+    addEventListener() {{}},
+    createElement() {{ return {{ addEventListener() {{}}, querySelector() {{ return actionButton; }}, style: {{}}, classList: {{}} }}; }},
+  }},
+  audioList: {{ children: [], querySelectorAll: () => [], appendChild() {{ rendered += 1; }}, set innerHTML(value) {{}} }},
   fetch: async () => ({{
     ok: true,
     json: async () => ({{ audiobooks: [{{ id: "cloud-book", title: "완료된 책", created_at: "2026-08-01T00:00:00Z" }}] }}),
   }}),
-  fetchPlaybackState: async (entry) => entry,
-  getAllAudiobooksFromDB: async () => [],
+  getAllAudiobooksFromDB: async () => savedEntries,
   authHeaders: () => ({{}}),
   isLoggedIn: () => true,
-  renderLibrary: () => {{ renders += 1; }},
-  saveAudiobookToDB: async () => {{}},
+  saveAudiobookToDB: async (entry) => {{ savedEntries.push(entry); }},
+  getAudiobookFromDB: async () => null,
+  deleteAudiobookFromDB: async () => {{}},
+  escapeHtml: (value) => value,
+  getAudiobookDisplayTitle: (value) => value,
+  lucide: {{ createIcons() {{}} }},
   showToast: () => {{ toasts += 1; }},
 }};
-vm.runInNewContext(`${{source.slice(start, end)}}; this.syncWithCloud = syncWithCloud;`, context);
+vm.runInNewContext(source, context);
+const controller = context.window.TextAudio.createLibraryController({{
+  audioList: context.audioList, libraryEmpty: {{ style: {{}} }},
+  readerControls: {{ getPlaybackSettings: () => ({{}}) }}, openReaderMode() {{}}, getCurrentAudio: () => null,
+  rememberModalFocus() {{}}, restoreModalFocus() {{}}, objectUrls: {{}},
+}});
 
 (async () => {{
-  const result = await context.syncWithCloud({{ silent: true }});
-  if (result.added !== 1 || renders !== 1 || toasts !== 0) {{
+  const result = await controller.sync({{ silent: true }});
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  if (result.added !== 1 || rendered !== 1 || toasts !== 0) {{
     throw new Error("silent 동기화가 새 보관함 항목을 렌더링하지 않거나 토스트를 표시합니다.");
   }}
 }})().catch((error) => {{ console.error(error); process.exit(1); }});
@@ -1134,7 +1379,9 @@ async function dispatchClick() {{
 def test_service_worker_precaches_notification_client_with_new_cache_version():
     source = SW_JS.read_text(encoding="utf-8")
 
-    assert 'const CACHE_NAME = "2026.08.02.4";' in source
+    assert 'const CACHE_NAME = "2026.08.02.6";' in source
+    assert '"/static/js/reader.js"' in source
+    assert '"/static/js/library.js"' in source
     assert '"/static/js/notifications.js"' in source
 
 
@@ -1189,7 +1436,7 @@ def test_user_generated_titles_are_escaped_before_html_rendering():
     script = f"""
 const fs = require("fs");
 const utilsSource = fs.readFileSync({str(UTILS_JS)!r}, "utf8");
-const appSource = fs.readFileSync({str(APP_JS)!r}, "utf8");
+const librarySource = fs.readFileSync({str(LIBRARY_JS)!r}, "utf8");
 const generationStatusSource = fs.readFileSync({str(GENERATION_STATUS_JS)!r}, "utf8");
 const match = utilsSource.match(/function escapeHtml\\(value\\) \\{{[\\s\\S]*?\\n\\}}/);
 if (!match) throw new Error("escapeHtml 함수가 없습니다.");
@@ -1197,7 +1444,7 @@ eval(match[0]);
 if (escapeHtml('<img src=x onerror=alert(1)>') !== '&lt;img src=x onerror=alert(1)&gt;') {{
   throw new Error("HTML 특수문자를 이스케이프하지 않습니다.");
 }}
-if (!generationStatusSource.includes('escapeHtml(getAudiobookDisplayTitle(audioFilename))') || !appSource.includes('escapeHtml(getAudiobookDisplayTitle(audio.title))')) {{
+if (!generationStatusSource.includes('escapeHtml(getAudiobookDisplayTitle(audioFilename))') || !librarySource.includes('escapeHtml(getAudiobookDisplayTitle(audio.title))')) {{
   throw new Error("사용자 제목을 안전하게 렌더링하지 않습니다.");
 }}
 """
@@ -1316,11 +1563,11 @@ def test_login_does_not_access_database_before_it_initializes():
 
     assert source.index("await initializeAuth();") < source.index("initDB()")
     assert "if (loggedIn && db) syncWithCloud();" not in source
-    assert "if (isLoggedIn()) syncWithCloud();" in source
+    assert "services.library.load();" in source
 
 
 def test_library_syncs_playback_and_can_edit_titles():
-    source = APP_JS.read_text(encoding="utf-8")
+    source = LIBRARY_JS.read_text(encoding="utf-8")
     html = INDEX_HTML.read_text(encoding="utf-8")
 
     assert 'fetch(`/api/audiobooks/${entry.cloudId}/playback`' in source
@@ -1409,71 +1656,68 @@ if (getReaderScrollTarget(container, nestedCell) !== 630) {{
 
 
 def test_library_clears_existing_rows_after_async_database_read():
-    script = f"""
+    script = """
 const fs = require("fs");
 const vm = require("vm");
-const source = fs.readFileSync({str(APP_JS)!r}, "utf8");
-const start = source.indexOf("async function renderLibrary()");
-const end = source.indexOf("// ============================================================", start);
+const source = fs.readFileSync("__LIBRARY_JS__", "utf8");
 const pendingReads = [];
-const audioList = {{
+const audioList = {
   children: [],
-  querySelectorAll(selector) {{
-    return selector === ".audio-item-generating"
-      ? this.children.filter((item) => item.className.includes("audio-item-generating"))
-      : [];
-  }},
-  appendChild(item) {{ this.children.push(item); }},
-}};
-Object.defineProperty(audioList, "innerHTML", {{
-  set(value) {{
+  querySelectorAll: () => [],
+  appendChild(item) { this.children.push(item); },
+};
+Object.defineProperty(audioList, "innerHTML", {
+  set(value) {
     if (value !== "") throw new Error("목록 초기화가 빈 문자열이 아닙니다.");
     this.children = [];
-  }},
-}});
-function createElement() {{
-  const front = {{ addEventListener() {{}}, classList: {{ add() {{}}, remove() {{}}, contains() {{ return false; }} }}, style: {{}} }};
-  const background = {{ addEventListener() {{}}, style: {{}} }};
-  const moreButton = {{ addEventListener() {{}} }};
-  return {{
-    className: "",
-    innerHTML: "",
-    addEventListener() {{}},
-    querySelector(selector) {{
-      if (selector === ".audio-item-front") return front;
-      if (selector === ".audio-item-bg") return background;
-      if (selector === ".btn-more") return moreButton;
-      return null;
-    }},
-  }};
-}}
-const context = {{
+  },
+});
+const actionButton = { addEventListener() {}, style: {} };
+const context = {
   Array,
-  audioList,
-  libraryEmpty: {{ style: {{}} }},
-  document: {{ addEventListener() {{}}, createElement }},
+  Promise,
+  window: { TextAudio: {} },
+  document: {
+    body: { style: {} },
+    addEventListener() {},
+    getElementById() { return actionButton; },
+    createElement() {
+      const front = { addEventListener() {}, classList: { add() {}, remove() {}, contains() { return false; } }, style: {} };
+      const background = { addEventListener() {}, style: {} };
+      return { className: "", innerHTML: "", addEventListener() {}, querySelector(selector) {
+        if (selector === ".audio-item-front") return front;
+        if (selector === ".audio-item-bg") return background;
+        if (selector === ".btn-more") return actionButton;
+        return null;
+      }};
+    },
+  },
   escapeHtml: (value) => value,
   getAudiobookDisplayTitle: (title) => title,
   getAllAudiobooksFromDB: () => new Promise((resolve) => pendingReads.push(resolve)),
-  lucide: {{ createIcons() {{}} }},
+  getAudiobookFromDB: async () => null,
+  lucide: { createIcons() {} },
   console,
-  showToast() {{}},
-}};
-vm.runInNewContext(`${{source.slice(start, end)}}; this.renderLibrary = renderLibrary;`, context);
+  showToast() {},
+};
+vm.runInNewContext(source, context);
+const controller = context.window.TextAudio.createLibraryController({
+  audioList, libraryEmpty: { style: {} },
+  readerControls: { getPlaybackSettings: () => ({}) }, openReaderMode() {}, getCurrentAudio: () => null,
+  rememberModalFocus() {}, restoreModalFocus() {}, objectUrls: {},
+});
 
-(async () => {{
-  const firstRender = context.renderLibrary();
-  const secondRender = context.renderLibrary();
+(async () => {
+  const firstRender = controller.render();
+  const secondRender = controller.render();
   if (pendingReads.length !== 2) throw new Error("겹친 DB 조회가 시작되지 않았습니다.");
-
-  const sharedBook = {{ id: "same-book", title: "같은 책", sentences: [] }};
+  const sharedBook = { id: "same-book", title: "같은 책", sentences: [] };
   pendingReads[1]([sharedBook]);
   await secondRender;
   pendingReads[0]([sharedBook]);
   await firstRender;
-
   const sharedRows = audioList.children.filter((item) => item.innerHTML.includes('data-id="same-book"'));
-  if (sharedRows.length !== 1) throw new Error(`같은 오디오북 행이 ${{sharedRows.length}}개 남았습니다.`);
-}})().catch((error) => {{ console.error(error); process.exit(1); }});
-"""
+  if (sharedRows.length !== 1) throw new Error(`같은 오디오북 행이 ${sharedRows.length}개 남았습니다.`);
+})().catch((error) => { console.error(error); process.exit(1); });
+""".replace("__LIBRARY_JS__", str(LIBRARY_JS))
     subprocess.run(["node", "-e", script], check=True)
