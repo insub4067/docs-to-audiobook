@@ -12,6 +12,7 @@ PWA_JS = ROOT_DIR / "static" / "js" / "pwa.js"
 NOTIFICATIONS_JS = ROOT_DIR / "static" / "js" / "notifications.js"
 GENERATION_STATUS_JS = ROOT_DIR / "static" / "js" / "generation-status.js"
 VOICES_JS = ROOT_DIR / "static" / "js" / "voices.js"
+WEB_SPEECH_JS = ROOT_DIR / "static" / "js" / "web-speech.js"
 SW_JS = ROOT_DIR / "static" / "sw.js"
 STYLE_CSS = ROOT_DIR / "static" / "style.css"
 INDEX_HTML = ROOT_DIR / "static" / "index.html"
@@ -164,6 +165,48 @@ controller.initialize();
   }}
   if (notifications.length !== 0) throw new Error("성공 흐름에서 오류 알림을 표시했습니다.");
 }})().catch((error) => {{ console.error(error); process.exit(1); }});
+"""
+    subprocess.run(["node", "-e", script], check=True)
+
+
+def test_web_speech_controller_speaks_stops_and_reports_unsupported_browsers():
+    assert WEB_SPEECH_JS.is_file()
+    script = f"""
+const fs = require("fs");
+const vm = require("vm");
+const source = fs.readFileSync({str(WEB_SPEECH_JS)!r}, "utf8");
+const context = {{ window: {{}} }};
+vm.runInNewContext(source, context);
+let cancelCount = 0;
+const spoken = [];
+const notifications = [];
+const controller = context.window.TextAudio.createWebSpeechController({{
+  speechSynthesis: {{
+    cancel() {{ cancelCount += 1; }},
+    speak(utterance) {{ spoken.push(utterance); }},
+  }},
+  createUtterance: (text) => ({{ text }}),
+  notify: (...args) => notifications.push(args),
+}});
+controller.speak("본문", "ko-KR", 1.25, 0.8);
+if (cancelCount !== 1 || spoken.length !== 1 || spoken[0].text !== "본문") {{
+  throw new Error("Web Speech 발화를 시작하지 않았습니다.");
+}}
+if (spoken[0].lang !== "ko-KR" || spoken[0].rate !== 1.25 || spoken[0].pitch !== 0.8) {{
+  throw new Error("Web Speech 발화 설정을 적용하지 않았습니다.");
+}}
+controller.stop();
+if (cancelCount !== 2) throw new Error("Web Speech 발화를 정지하지 않았습니다.");
+
+const unsupported = context.window.TextAudio.createWebSpeechController({{
+  speechSynthesis: null,
+  createUtterance: (text) => ({{ text }}),
+  notify: (...args) => notifications.push(args),
+}});
+unsupported.speak("본문");
+if (notifications.length !== 1 || notifications[0][1] !== "error") {{
+  throw new Error("Web Speech 미지원 상태를 알리지 않았습니다.");
+}}
 """
     subprocess.run(["node", "-e", script], check=True)
 

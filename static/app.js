@@ -342,6 +342,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         logError: (error) => console.error(error),
     });
     voiceController.initialize();
+    const webSpeechController = TextAudio.createWebSpeechController({
+        speechSynthesis: window.speechSynthesis,
+        createUtterance: (text) => new SpeechSynthesisUtterance(text),
+        notify: showToast,
+    });
 
     // Initialize Database and App
     initDB().then(() => {
@@ -1775,44 +1780,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     // 6. Helpers
     // ----------------------------------------------------
 
-    // Web Speech API Fallback System
-    let webSpeechSynthesis = window.speechSynthesis;
-    let currentUtterance = null;
-
-    function speakWithWebSpeech(text, voice = "ko-KR", rate = 1.0, pitch = 1.0) {
-        if (!webSpeechSynthesis) {
-            showToast("Web Speech API를 지원하지 않는 브라우저입니다.", "error");
-            return;
-        }
-
-        webSpeechSynthesis.cancel();
-        currentUtterance = new SpeechSynthesisUtterance(text);
-        currentUtterance.lang = "ko-KR";
-        currentUtterance.rate = rate;
-        currentUtterance.pitch = pitch;
-        currentUtterance.volume = 1.0;
-
-        currentUtterance.onstart = () => {
-            showToast("🎤 Web Speech API로 읽는 중...", "info");
-        };
-        currentUtterance.onend = () => {
-            currentUtterance = null;
-        };
-        currentUtterance.onerror = (event) => {
-            showToast(`Web Speech 오류: ${event.error}`, "error");
-        };
-
-        webSpeechSynthesis.speak(currentUtterance);
-    }
-
-    function stopWebSpeech() {
-        if (webSpeechSynthesis) {
-            webSpeechSynthesis.cancel();
-            currentUtterance = null;
-        }
-    }
-
-
     // ----------------------------------------------------
     // 7. Synced Reader Mode Implementation
     // ----------------------------------------------------
@@ -2332,7 +2299,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                         setTimeout(() => {
                             if (confirm("Web Speech API로 텍스트를 읽으시겠습니까?\n(오디오북을 생성할 수 없는 경우의 대체 방법입니다)")) {
                                 const speed = readerAudio.playbackRate || 1.0;
-                                speakWithWebSpeech(textContent, "ko-KR", speed, 1.0);
+                                webSpeechController.speak(textContent, "ko-KR", speed, 1.0);
                                 showPauseIcon();
                             }
                         }, 100);
@@ -2340,7 +2307,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 });
             } else {
                 readerAudio.pause();
-                stopWebSpeech();
+                webSpeechController.stop();
             }
         }
 
