@@ -394,14 +394,26 @@ async function scenario(initialPermission, initialSubscription, failingMethod = 
 
   const disabled = await scenario("default", null);
   if (disabled.label.textContent !== "완료 알림 꺼짐") throw new Error("미구독 상태를 꺼짐으로 표시하지 않았습니다.");
-  await disabled.button.click();
+  const enabledFromGeneration = await disabled.context.window.__requestPushNotificationSubscription();
+  if (!enabledFromGeneration) throw new Error("생성 시 알림 구독 결과를 반환하지 않았습니다.");
   if (disabled.counts().requestCount !== 1 || disabled.counts().subscribeCount !== 1) throw new Error("꺼진 토글에서 구독하지 않았습니다.");
   if (!disabled.requests.some((request) => request.method === "POST") || disabled.toasts.length !== 1 || disabled.label.textContent !== "완료 알림 켜짐") {{
     throw new Error("구독 설정 상태 또는 토스트가 정확하지 않습니다.");
   }}
+  await disabled.context.window.__requestPushNotificationSubscription();
+  if (disabled.counts().requestCount !== 1 || disabled.counts().subscribeCount !== 1) {{
+    throw new Error("이미 등록된 알림을 다시 요청했습니다.");
+  }}
+
+  const blockedGeneration = await scenario("denied", null);
+  if (await blockedGeneration.context.window.__requestPushNotificationSubscription()) {{
+    throw new Error("차단된 권한을 생성 시 다시 요청했습니다.");
+  }}
+  if (blockedGeneration.counts().requestCount !== 0) throw new Error("차단된 권한 요청 창을 다시 열었습니다.");
 
   const failedSave = await scenario("default", null, "POST");
-  await failedSave.button.click();
+  const failedResult = await failedSave.context.window.__requestPushNotificationSubscription();
+  if (failedResult) throw new Error("서버 등록 실패를 성공으로 반환했습니다.");
   if (failedSave.counts().unsubscribeCount !== 1 || failedSave.label.textContent !== "완료 알림 꺼짐" || failedSave.toasts.length !== 1) {{
     throw new Error("서버 등록 실패 구독을 브라우저에 켜진 채 남겼습니다.");
   }}
@@ -411,6 +423,58 @@ async function scenario(initialPermission, initialSubscription, failingMethod = 
   disabled.serviceWorkerListeners.message({{ data: {{ type: "check_pending_background_jobs" }} }});
   await Promise.resolve();
   if (messageChecks !== 1) throw new Error("서비스워커 확인 메시지를 처리하지 않았습니다.");
+}})().catch((error) => {{ console.error(error); process.exit(1); }});
+"""
+    subprocess.run(["node", "-e", script], check=True)
+
+
+def test_generation_requests_completion_notification_without_blocking_synthesis():
+    script = f"""
+const fs = require("fs");
+const vm = require("vm");
+const source = fs.readFileSync({str(APP_JS)!r}, "utf8");
+const start = source.indexOf("// 4. Generate Audiobook Action");
+const end = source.indexOf("// Background job loading rows", start);
+if (start < 0 || end < 0) throw new Error("오디오북 생성 처리기를 찾지 못했습니다.");
+
+let notificationRequests = 0;
+let generationRequests = 0;
+const generateBtn = {{
+  addEventListener(name, handler) {{ this[name] = handler; }},
+}};
+const context = {{
+  charCountBadge: {{ textContent: "1,234자" }},
+  closeGenerationModal() {{}},
+  console: {{ warn() {{}} }},
+  currentTextAccessToken: "access-token",
+  currentTextId: "text-1",
+  generateAudiobook: async (options) => {{
+    generationRequests += 1;
+    if (options.textId !== "text-1" || options.charCount !== 1234) {{
+      throw new Error("생성 인자가 유지되지 않았습니다.");
+    }}
+  }},
+  generateBtn,
+  getFormattedPitch: () => "+0Hz",
+  getFormattedSpeed: () => "+0%",
+  parseInt,
+  pitchSlider: {{ value: "0" }},
+  speedSlider: {{ value: "0" }},
+  uploadedFile: {{ name: "문서.pdf" }},
+  voiceSelect: {{ value: "ko-KR-SunHiNeural" }},
+  window: {{
+    __requestPushNotificationSubscription: async () => {{
+      notificationRequests += 1;
+      throw new Error("알림 등록 실패");
+    }},
+  }},
+}};
+vm.runInNewContext(source.slice(start, end), context);
+
+(async () => {{
+  await generateBtn.click();
+  if (notificationRequests !== 1) throw new Error("생성 시 완료 알림을 요청하지 않았습니다.");
+  if (generationRequests !== 1) throw new Error("알림 실패로 오디오북 생성을 중단했습니다.");
 }})().catch((error) => {{ console.error(error); process.exit(1); }});
 """
     subprocess.run(["node", "-e", script], check=True)

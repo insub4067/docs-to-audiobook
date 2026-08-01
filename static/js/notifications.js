@@ -8,6 +8,7 @@ const backgroundNotificationTabId = typeof crypto !== "undefined" && crypto.rand
 let backgroundJobCheckInterval = null;
 let checkingBackgroundJobs = false;
 let backgroundNotificationMessageListenerAdded = false;
+let pushNotificationContext = null;
 
 function pendingBackgroundJobNamespace(userId = getCurrentAuthenticatedUserId()) {
     if (!userId) return null;
@@ -183,7 +184,64 @@ function renderPushNotificationState(button, label, state) {
         : state === "blocked" ? "알림 차단됨" : "완료 알림 꺼짐";
 }
 
+async function requestPushNotificationSubscription() {
+    const context = pushNotificationContext;
+    if (!context) return false;
+    if (context.subscriptionIsRegistered) return true;
+    if (Notification.permission === "denied") {
+        renderPushNotificationState(context.button, context.label, "blocked");
+        return false;
+    }
+
+    let createdSubscription = false;
+    try {
+        const permissionRequest = Notification.permission === "granted"
+            ? Promise.resolve("granted")
+            : Notification.requestPermission();
+        const permission = await permissionRequest;
+        if (permission !== "granted") {
+            renderPushNotificationState(
+                context.button,
+                context.label,
+                permission === "denied" ? "blocked" : "off",
+            );
+            showToast("완료 알림 권한이 허용되지 않았습니다.", "error");
+            return false;
+        }
+
+        createdSubscription = !context.subscription;
+        if (createdSubscription) {
+            context.subscription = await context.registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(context.config.public_key),
+            });
+        }
+        await savePushSubscription(context.subscription);
+        context.subscriptionIsRegistered = true;
+        localStorage.setItem(PUSH_SUBSCRIPTION_OWNER_KEY, getCurrentAuthenticatedUserId());
+        renderPushNotificationState(context.button, context.label, "on");
+        showToast("완료 알림 켜짐", "success");
+        return true;
+    } catch (error) {
+        if (createdSubscription && context.subscription) {
+            await Promise.allSettled([context.subscription.unsubscribe()]);
+            context.subscription = null;
+        }
+        context.subscriptionIsRegistered = false;
+        renderPushNotificationState(
+            context.button,
+            context.label,
+            Notification.permission === "denied" ? "blocked" : "off",
+        );
+        console.warn("푸시 알림 설정 실패");
+        showToast("완료 알림 설정에 실패했습니다.", "error");
+        return false;
+    }
+}
+
 async function initializeBackgroundNotifications() {
+    pushNotificationContext = null;
+    window.__requestPushNotificationSubscription = requestPushNotificationSubscription;
     window.__checkPendingBackgroundJobs = checkPendingBackgroundJobs;
     window.__refreshBackgroundNotificationNamespace = () => {
         updateBackgroundJobCheckInterval();
@@ -224,7 +282,7 @@ async function initializeBackgroundNotifications() {
         if (!config.enabled || !config.public_key) return;
 
         const registration = await navigator.serviceWorker.ready;
-        let subscription = await registration.pushManager.getSubscription();
+        const subscription = await registration.pushManager.getSubscription();
         let subscriptionIsRegistered = false;
         if (!subscription) {
             localStorage.removeItem(PUSH_SUBSCRIPTION_OWNER_KEY);
@@ -242,6 +300,14 @@ async function initializeBackgroundNotifications() {
                 }
             }
         }
+        pushNotificationContext = {
+            button,
+            label,
+            config,
+            registration,
+            subscription,
+            subscriptionIsRegistered,
+        };
         button.hidden = false;
         renderPushNotificationState(
             button,
@@ -256,60 +322,27 @@ async function initializeBackgroundNotifications() {
             button.dataset.busy = "true";
             button.disabled = true;
             try {
-                if (subscription && button.dataset.state === "on") {
+                const context = pushNotificationContext;
+                if (context?.subscription && button.dataset.state === "on") {
                     const { timedOut, result } = await runBoundedPushUnsubscribe(
-                        (signal) => performSubscriptionUnsubscribe(subscription, signal),
+                        (signal) => performSubscriptionUnsubscribe(context.subscription, signal),
                     );
                     if (timedOut || (!result.serverDisabled && !result.browserDisabled)) {
                         if (timedOut) localStorage.removeItem(PUSH_SUBSCRIPTION_OWNER_KEY);
-                        subscription = await registration.pushManager.getSubscription();
-                        if (subscription) {
+                        context.subscription = await registration.pushManager.getSubscription();
+                        if (context.subscription) {
                             renderPushNotificationState(button, label, "on");
                             throw new Error("구독 해제 실패");
                         }
                     }
-                    subscription = null;
-                    subscriptionIsRegistered = false;
+                    context.subscription = null;
+                    context.subscriptionIsRegistered = false;
                     localStorage.removeItem(PUSH_SUBSCRIPTION_OWNER_KEY);
                     renderPushNotificationState(button, label, "off");
                     showToast("완료 알림 꺼짐", "success");
                     return;
                 }
-
-                if (Notification.permission === "denied") {
-                    renderPushNotificationState(button, label, "blocked");
-                    return;
-                }
-                const permission = Notification.permission === "granted"
-                    ? "granted"
-                    : await Notification.requestPermission();
-                if (permission !== "granted") {
-                    renderPushNotificationState(button, label, permission === "denied" ? "blocked" : "off");
-                    showToast("완료 알림 권한이 허용되지 않았습니다.", "error");
-                    return;
-                }
-
-                const createdSubscription = !subscription;
-                if (createdSubscription) {
-                    subscription = await registration.pushManager.subscribe({
-                        userVisibleOnly: true,
-                        applicationServerKey: urlBase64ToUint8Array(config.public_key),
-                    });
-                }
-                try {
-                    await savePushSubscription(subscription);
-                } catch (error) {
-                    if (createdSubscription) {
-                        await Promise.allSettled([subscription.unsubscribe()]);
-                        subscription = null;
-                    }
-                    renderPushNotificationState(button, label, "off");
-                    throw error;
-                }
-                subscriptionIsRegistered = true;
-                localStorage.setItem(PUSH_SUBSCRIPTION_OWNER_KEY, getCurrentAuthenticatedUserId());
-                renderPushNotificationState(button, label, "on");
-                showToast("완료 알림 켜짐", "success");
+                await requestPushNotificationSubscription();
             } catch (error) {
                 console.warn("푸시 알림 설정 실패");
                 showToast("완료 알림 설정에 실패했습니다.", "error");

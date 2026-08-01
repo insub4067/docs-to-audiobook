@@ -818,6 +818,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         closeGenerationModal();
 
+        try {
+            await window.__requestPushNotificationSubscription?.();
+        } catch (error) {
+            console.warn("완료 알림 요청 실패");
+        }
+
         const originalName = uploadedFile ? uploadedFile.name : "unknown_doc";
         await generateAudiobook({
             textId: currentTextId,
