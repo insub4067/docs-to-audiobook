@@ -137,6 +137,12 @@ def test_login_prompt_explains_second_generation_requires_login():
     assert "추가 생성은 로그인 후 가능해요" in html
 
 
+def test_login_syncs_local_audiobooks_after_database_is_ready():
+    source = APP_JS.read_text(encoding="utf-8")
+
+    assert "if (loggedIn && db) syncWithCloud();" in source
+
+
 def test_library_syncs_playback_and_can_edit_titles():
     source = APP_JS.read_text(encoding="utf-8")
     html = INDEX_HTML.read_text(encoding="utf-8")
