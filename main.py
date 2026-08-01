@@ -1367,31 +1367,69 @@ def _store_background_audiobook(user_id: str, title: str, job: dict) -> str:
     return audiobook_id
 
 
+def _fresh_job_state(user_id: str) -> dict:
+    """새로 시작하거나(첫 시도·재개·재시도) 다시 시작하는 작업의 초기 상태.
+    이 모양을 쓰는 세 곳(최초 시작, 재시작 후 재개, 전체 재시도)이 서로
+    어긋나지 않게 한 곳에 모은다."""
+    return {
+        "status": "processing",
+        "audio_path": None,
+        "sentences": [],
+        "headings": [],
+        "display_markdown": "",
+        "completed_chunks": 0,
+        "total_chunks": 0,
+        "error": None,
+        "created_at": time.time(),
+        "user_id": user_id,
+    }
+
+
 async def process_background_synthesis_task(job_id: str, user_id: str, title: str, raw_text: str, voice: str, rate: str, pitch: str):
+    """청크 단위 재시도로도 못 살린 실패는 문서 전체를 처음부터 다시 돌린다.
+
+    몇 시간짜리 관리자 작업이 청크 하나의 일시적 오류 때문에 통째로
+    날아가는 게 부분 재시도 인프라를 만드는 것보다 더 나쁘다고 판단해,
+    "전체 성공 아니면 처음부터 다시"(all or nothing)로 간다 — 이미
+    background_tasks로 돌아가는 fire-and-forget 작업이라 몇 번 더
+    돌리는 비용은 낮고, 원문은 완료 전까지 DB에 그대로 있어 재시도가
+    항상 안전하다.
+    """
     supabase = _supabase_or_503()
-    try:
-        await asyncio.to_thread(
-            lambda: supabase.table("background_synthesis_jobs").update({"status": "processing"}).eq("id", job_id).execute()
-        )
-        await process_synthesis_task(job_id, raw_text, voice, rate, pitch)
-        job = jobs.get(job_id, {})
-        if job.get("status") != "completed":
-            raise RuntimeError(job.get("error") or "음성 합성에 실패했습니다.")
-        audiobook_id = await asyncio.to_thread(_store_background_audiobook, user_id, title, job)
-        await asyncio.to_thread(
-            lambda: supabase.table("background_synthesis_jobs").update({
-                "status": "completed",
-                "source_text": None,
-                "audiobook_id": audiobook_id,
-                "completed_at": datetime.now(timezone.utc).isoformat(),
-            }).eq("id", job_id).execute()
-        )
-    except Exception as e:
-        jobs.setdefault(job_id, {})["status"] = "error"
-        jobs[job_id]["error"] = str(e)
-        await asyncio.to_thread(
-            lambda: supabase.table("background_synthesis_jobs").update({"status": "error", "error": str(e)}).eq("id", job_id).execute()
-        )
+    max_job_attempts = 3
+    last_error = "음성 합성에 실패했습니다."
+
+    for attempt in range(1, max_job_attempts + 1):
+        try:
+            await asyncio.to_thread(
+                lambda: supabase.table("background_synthesis_jobs").update({"status": "processing"}).eq("id", job_id).execute()
+            )
+            jobs[job_id] = _fresh_job_state(user_id)
+            await process_synthesis_task(job_id, raw_text, voice, rate, pitch)
+            job = jobs.get(job_id, {})
+            if job.get("status") == "completed":
+                audiobook_id = await asyncio.to_thread(_store_background_audiobook, user_id, title, job)
+                await asyncio.to_thread(
+                    lambda: supabase.table("background_synthesis_jobs").update({
+                        "status": "completed",
+                        "source_text": None,
+                        "audiobook_id": audiobook_id,
+                        "completed_at": datetime.now(timezone.utc).isoformat(),
+                    }).eq("id", job_id).execute()
+                )
+                return
+            last_error = job.get("error") or last_error
+        except Exception as e:
+            last_error = str(e)
+
+        if attempt < max_job_attempts:
+            await asyncio.sleep(30 * attempt)
+
+    jobs.setdefault(job_id, {})["status"] = "error"
+    jobs[job_id]["error"] = last_error
+    await asyncio.to_thread(
+        lambda: supabase.table("background_synthesis_jobs").update({"status": "error", "error": last_error}).eq("id", job_id).execute()
+    )
 
 
 @app.post("/api/synthesize")
@@ -1428,18 +1466,7 @@ async def synthesize_text(
 
     def _new_job_id_and_state() -> str:
         job_id = str(uuid.uuid4())
-        jobs[job_id] = {
-            "status": "processing",
-            "audio_path": None,
-            "sentences": [],
-            "headings": [],
-            "display_markdown": "",
-            "completed_chunks": 0,
-            "total_chunks": 0,
-            "error": None,
-            "created_at": time.time(),
-            "user_id": user_id,
-        }
+        jobs[job_id] = _fresh_job_state(user_id)
         return job_id
 
     if max_synth_chars > MAX_SYNTH_CHARS:
@@ -2370,18 +2397,7 @@ async def resume_background_synthesis_jobs():
             if not claimed:
                 continue
 
-            jobs[job_id] = {
-                "status": "processing",
-                "audio_path": None,
-                "sentences": [],
-                "headings": [],
-                "display_markdown": "",
-                "completed_chunks": row.get("completed_chunks", 0),
-                "total_chunks": row.get("total_chunks", 0),
-                "error": None,
-                "created_at": time.time(),
-                "user_id": row["user_id"],
-            }
+            jobs[job_id] = _fresh_job_state(row["user_id"])
             asyncio.create_task(process_background_synthesis_task(
                 job_id, row["user_id"], row["title"], row["source_text"],
                 row["voice"], row["rate"], row["pitch"],

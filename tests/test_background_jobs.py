@@ -2,7 +2,7 @@
 
 docs/large-admin-background-jobs.md 참고. 여기서는 이 기능 고유의 로직만
 검증한다: 백그라운드 작업 동시성 제한(429), 결과 저장 순서(고아 방지),
-재시작 후 재개.
+재시작 후 재개, 전체 재시도(all or nothing).
 """
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
@@ -209,3 +209,82 @@ async def test_resume_skips_rows_without_source_text(mock_supabase):
 
     mock_task.assert_not_called()
     assert "job-no-text" not in main.jobs
+
+
+# ---- process_background_synthesis_task: 전체 재시도(all or nothing) ----
+#
+# 청크 재시도(synthesize_chunk)로도 못 살린 실패는 asyncio.gather가
+# 파트 하나만 죽어도 문서 전체를 실패시킨다(main.py:1271 근처). 몇
+# 시간짜리 작업이 통째로 날아가는 걸 막기 위해, 문서 전체를 처음부터
+# 최대 3번 다시 시도한다.
+
+@pytest.mark.asyncio
+async def test_process_background_synthesis_task_succeeds_first_try(mock_supabase, tmp_path):
+    async def fake_process(job_id, raw_text, voice, rate, pitch):
+        audio_path = tmp_path / f"{job_id}.mp3"
+        audio_path.write_bytes(b"fake-audio")
+        main.jobs[job_id]["status"] = "completed"
+        main.jobs[job_id]["audio_path"] = str(audio_path)
+        main.jobs[job_id]["sentences"] = []
+
+    with patch("main.process_synthesis_task", side_effect=fake_process), \
+         patch("main._store_background_audiobook", return_value="audiobook-1") as mock_store, \
+         patch("main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        await main.process_background_synthesis_task(
+            "job-first-try", "user-1", "제목", "원문", "voice", "+0%", "+0Hz"
+        )
+
+    mock_store.assert_called_once()
+    mock_sleep.assert_not_called()  # 한 번에 성공했으니 재시도 대기가 없어야 한다
+    update_calls = mock_supabase.table().update.call_args_list
+    assert any(call.args[0].get("status") == "completed" for call in update_calls)
+    main.jobs.pop("job-first-try", None)
+
+
+@pytest.mark.asyncio
+async def test_process_background_synthesis_task_retries_whole_job_on_failure(mock_supabase, tmp_path):
+    attempts = []
+
+    async def fake_process(job_id, raw_text, voice, rate, pitch):
+        attempts.append(len(attempts) + 1)
+        if len(attempts) == 1:
+            main.jobs[job_id]["status"] = "error"
+            main.jobs[job_id]["error"] = "청크 하나가 계속 실패했습니다."
+        else:
+            audio_path = tmp_path / f"{job_id}.mp3"
+            audio_path.write_bytes(b"fake-audio")
+            main.jobs[job_id]["status"] = "completed"
+            main.jobs[job_id]["audio_path"] = str(audio_path)
+            main.jobs[job_id]["sentences"] = []
+
+    with patch("main.process_synthesis_task", side_effect=fake_process), \
+         patch("main._store_background_audiobook", return_value="audiobook-1"), \
+         patch("main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        await main.process_background_synthesis_task(
+            "job-retry-success", "user-1", "제목", "원문", "voice", "+0%", "+0Hz"
+        )
+
+    assert len(attempts) == 2  # 첫 시도 실패, 두 번째에 성공
+    assert mock_sleep.call_count == 1  # 재시도 사이에 한 번만 쉰다
+    assert main.jobs["job-retry-success"]["status"] == "completed"
+    main.jobs.pop("job-retry-success", None)
+
+
+@pytest.mark.asyncio
+async def test_process_background_synthesis_task_gives_up_after_max_attempts(mock_supabase):
+    async def always_fails(job_id, raw_text, voice, rate, pitch):
+        main.jobs[job_id]["status"] = "error"
+        main.jobs[job_id]["error"] = "계속 실패합니다."
+
+    with patch("main.process_synthesis_task", side_effect=always_fails), \
+         patch("main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        await main.process_background_synthesis_task(
+            "job-all-fail", "user-1", "제목", "원문", "voice", "+0%", "+0Hz"
+        )
+
+    assert main.jobs["job-all-fail"]["status"] == "error"
+    assert main.jobs["job-all-fail"]["error"] == "계속 실패합니다."
+    assert mock_sleep.call_count == 2  # 3번 시도, 사이에 2번만 쉰다
+    update_calls = mock_supabase.table().update.call_args_list
+    assert any(call.args[0].get("status") == "error" for call in update_calls)
+    main.jobs.pop("job-all-fail", None)
