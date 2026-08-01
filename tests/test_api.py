@@ -83,7 +83,7 @@ async def test_api_synthesize_allows_anonymous_session():
 async def test_api_synthesize_unknown_text_id():
     # 인증은 통과했지만 text_id가 text_storage에 없으면(만료/오타) 404.
     from unittest.mock import patch
-    with patch("main.require_user_id", return_value="test_user_id"):
+    with patch("state.require_user_id", return_value="test_user_id"):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post(
                 "/api/synthesize",
@@ -108,7 +108,7 @@ async def test_api_synthesize_text_too_long():
         "created_at": 0,
         "access_token": "text-token",
     }
-    with patch("main.require_user_id", return_value="test_user_id"):
+    with patch("state.require_user_id", return_value="test_user_id"):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post(
                 "/api/synthesize",
@@ -146,7 +146,7 @@ async def test_api_synthesize_rejects_wrong_text_access_token():
         "created_at": 0,
         "access_token": "correct-token",
     }
-    with patch("main.require_user_id", return_value="test_user_id"):
+    with patch("state.require_user_id", return_value="test_user_id"):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post(
                 "/api/synthesize",

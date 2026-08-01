@@ -39,7 +39,7 @@ async def test_synthesize_large_text_starts_background_job(mock_supabase):
     # 진행 중인 작업이 없다.
     mock_supabase.table().select().in_().limit().execute.return_value = MagicMock(data=[])
 
-    with patch("main.require_user_id", return_value="admin-user"), \
+    with patch("state.require_user_id", return_value="admin-user"), \
          patch("main.process_background_synthesis_task"):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url="http://test") as client:
             response = await client.post(
@@ -72,7 +72,7 @@ async def test_synthesize_large_text_rejected_when_job_already_running(mock_supa
         data=[{"id": "already-running"}]
     )
 
-    with patch("main.require_user_id", return_value="admin-user"):
+    with patch("state.require_user_id", return_value="admin-user"):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url="http://test") as client:
             response = await client.post(
                 "/api/synthesize",
@@ -96,7 +96,7 @@ async def test_synthesize_large_text_rejected_when_disk_is_low(mock_supabase):
     mock_supabase.table().select().in_().limit().execute.return_value = MagicMock(data=[])
 
     fake_usage = Mock(free=1024)  # 1KB밖에 안 남았다고 가정
-    with patch("main.require_user_id", return_value="admin-user"), \
+    with patch("state.require_user_id", return_value="admin-user"), \
          patch("main.shutil.disk_usage", return_value=fake_usage):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url="http://test") as client:
             response = await client.post(

@@ -17,7 +17,7 @@ async def test_get_job_status_pending():
         "user_id": "owner",
     }
     
-    with patch("main.require_user_id", side_effect=_owner_from_header):
+    with patch("state.require_user_id", side_effect=_owner_from_header):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get(f"/api/job/{job_id}", headers={"Authorization": "Bearer owner"})
             assert response.status_code == 200
@@ -36,7 +36,7 @@ async def test_get_job_status_generating():
         "user_id": "owner",
     }
     
-    with patch("main.require_user_id", side_effect=_owner_from_header):
+    with patch("state.require_user_id", side_effect=_owner_from_header):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get(f"/api/job/{job_id}", headers={"Authorization": "Bearer owner"})
             assert response.status_code == 200
@@ -56,7 +56,7 @@ async def test_get_job_status_processing_includes_chunk_progress():
         "user_id": "owner",
     }
 
-    with patch("main.require_user_id", side_effect=_owner_from_header):
+    with patch("state.require_user_id", side_effect=_owner_from_header):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get(f"/api/job/{job_id}", headers={"Authorization": "Bearer owner"})
 
@@ -71,7 +71,7 @@ async def test_get_job_status_processing_includes_chunk_progress():
 
 @pytest.mark.asyncio
 async def test_get_job_status_not_found():
-    with patch("main.require_user_id", return_value="owner"):
+    with patch("state.require_user_id", return_value="owner"):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/api/job/non_existent_job_id", headers={"Authorization": "Bearer owner"})
             assert response.status_code == 404
@@ -82,7 +82,7 @@ async def test_get_job_status_not_found():
 async def test_get_job_status_rejects_other_user():
     jobs["private_job"] = {"status": "pending", "user_id": "owner"}
 
-    with patch("main.require_user_id", side_effect=_owner_from_header):
+    with patch("state.require_user_id", side_effect=_owner_from_header):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/api/job/private_job", headers={"Authorization": "Bearer other"})
 

@@ -66,14 +66,15 @@ def test_rate_limit():
 
 def test_admin_upload_limit_is_separate_from_regular_upload_limit(monkeypatch):
     import main
+    import state
 
-    monkeypatch.setattr(main, "require_admin_user", lambda authorization: "admin-user")
+    monkeypatch.setattr(state, "require_admin_user", lambda authorization: "admin-user")
     assert main.upload_limit_for("Bearer admin-token") == main.MAX_ADMIN_UPLOAD_BYTES
     assert main.synth_limit_for(main.MAX_ADMIN_UPLOAD_BYTES) == main.MAX_ADMIN_SYNTH_CHARS
 
     def reject_non_admin(authorization):
         raise HTTPException(status_code=403, detail="관리자만 접근할 수 있습니다.")
 
-    monkeypatch.setattr(main, "require_admin_user", reject_non_admin)
+    monkeypatch.setattr(state, "require_admin_user", reject_non_admin)
     assert main.upload_limit_for("Bearer regular-token") == main.MAX_UPLOAD_BYTES
     assert main.synth_limit_for(main.MAX_UPLOAD_BYTES) == main.MAX_SYNTH_CHARS

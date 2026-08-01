@@ -28,6 +28,24 @@ import mimetypes
 mimetypes.add_type("text/css", ".css")
 mimetypes.add_type("application/javascript", ".js")
 
+from state import (
+    BASE_DIR, UPLOAD_DIR, STATIC_DIR, SHARED_DIR, JOB_AUDIO_DIR,
+    MAX_UPLOAD_BYTES, MAX_ADMIN_UPLOAD_BYTES, MAX_SYNTH_CHARS, MAX_ADMIN_SYNTH_CHARS,
+    AUDIO_BYTES_PER_CHAR_ESTIMATE, DISK_ESTIMATE_SAFETY_FACTOR, DISK_RESERVE_BYTES,
+    DOCUMENT_PART_CONCURRENCY, large_admin_upload_lock, background_synthesis_lock,
+    _too_large, read_upload_limited, save_upload_limited, _rate_buckets, enforce_rate_limit,
+    AUDIOBOOK_BUCKET, SIGNED_URL_TTL, require_user_id, resolve_job_owner, require_job_owner,
+    _supabase_or_503, require_admin_user, _admin_emails, upload_limit_for, synth_limit_for,
+    _has_enough_disk_for_synthesis, _object_paths, APP_BUILD_ID, text_storage, jobs,
+)
+from text_processing import (
+    extract_hwp_text, _looks_like_garbled_pdf_extraction, extract_text, parse_heading_line,
+    _pdf_layout_cells, normalize_pdf_for_reading, _markdown_table_cells, _is_markdown_table_separator,
+    normalize_markdown_for_reading, extract_markdown_tables, build_document_representations,
+    _normalized_match_text, annotate_sentences_with_tables, preprocess_text,
+    extract_markdown_headings, annotate_sentences_with_headings, clean_tts_text,
+)
+
 app = FastAPI(title="Docs to Audiobook Converter - Hybrid")
 
 # 프론트엔드는 같은 출처에서 상대 경로로만 API를 호출하므로 와일드카드가
@@ -47,32 +65,18 @@ app.add_middleware(
 )
 
 # Directories config
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
-STATIC_DIR = os.path.join(BASE_DIR, "static")
-SHARED_DIR = os.path.join(BASE_DIR, "shared")
-# 합성이 끝난 오디오를 클라이언트가 받아갈 때까지 잠시 두는 곳
-JOB_AUDIO_DIR = os.path.join(BASE_DIR, "job_audio")
-
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-os.makedirs(STATIC_DIR, exist_ok=True)
-os.makedirs(SHARED_DIR, exist_ok=True)
-os.makedirs(JOB_AUDIO_DIR, exist_ok=True)
 
 # ---- 리소스 상한 ----
 # 업로드는 지금까지 클라이언트에서만 검사했다. API를 직접 호출하면 그대로
 # 통과해 파일 전체가 메모리에 올라간다.
-MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 # 압축 전 원본 PDF가 175MB대까지 나올 수 있다는 실사용 사례가 있어
 # 여유를 두고 250MB로 잡는다. 파싱 자체의 메모리 사용량은 파일
 # 크기만으로 정확히 예측할 수 없다(PDF 내부 객체 구조에 따라 다름) —
 # 실제로 문제가 되면(느려지거나 인스턴스가 재시작되면) 다시 낮춘다.
-MAX_ADMIN_UPLOAD_BYTES = 250 * 1024 * 1024
 
 # 합성 문자 수 상한. 오디오는 문자당 약 903바이트이고 합성 피크는 그 2배쯤
 # 되므로, 10MB 텍스트(약 350만 자)를 그대로 받으면 오디오만 2.9GB가 되어
 # 반드시 죽는다. 10만 자면 약 4시간 분량이라 실사용에는 충분하다.
-MAX_SYNTH_CHARS = 100_000
 
 # 관리자 경로(synthesize_document_to_file)는 위와 달리 메모리에 오디오를
 # 쌓지 않고 곧장 디스크에 쓰므로 위 903바이트/자 계산이 적용되지 않는다 —
@@ -81,28 +85,20 @@ MAX_SYNTH_CHARS = 100_000
 # (_has_enough_disk_for_synthesis). 아래 값은 그 실제 판단 전에 걸러낼
 # 순수 방어용 상한이다 — 손상된 PDF 추출 등으로 텍스트가 병적으로
 # 부풀었을 때를 막을 뿐, 정상적인 문서에서는 사실상 걸릴 일이 없다.
-MAX_ADMIN_SYNTH_CHARS = 50_000_000
 
 # 문자당 오디오 바이트 추정치(위 MAX_SYNTH_CHARS 계산과 동일 근거).
 # 결합 단계에서 최종 파일과 파트 파일이 잠깐 동시에 존재해 순간 디스크
 # 사용량이 최종 크기의 최대 2배까지 갈 수 있어 SAFETY_FACTOR로 반영한다.
-AUDIO_BYTES_PER_CHAR_ESTIMATE = 903
-DISK_ESTIMATE_SAFETY_FACTOR = 2
-# 이 디스크를 다른 업로드·공유 파일과도 나눠 쓰므로 항상 이만큼은 비워둔다.
-DISK_RESERVE_BYTES = 1 * 1024 ** 3
 
 # 긴 관리자 문서는 다섯 묶음으로 나눠 각각의 MP3를 디스크에 기록한다.
 # 묶음 안의 청크는 순서대로 처리해 메모리에 오디오를 쌓지 않는다.
-DOCUMENT_PART_CONCURRENCY = 5
 
 # 1GB 인스턴스에서는 대용량 문서의 텍스트 추출을 병렬로 처리하면 메모리
 # 여유가 빠르게 사라진다. 관리자 대용량 업로드는 한 번에 하나만 처리한다.
-large_admin_upload_lock = asyncio.Lock()
 
 # 위 락은 업로드(텍스트 추출) 단계만 막는다. 실제로 CPU를 오래 쓰는 건
 # TTS 합성이므로, 백그라운드 합성 작업 자체도 동시에 하나만 실행되게
 # 별도로 막는다. 단일 인스턴스 전제라 프로세스 내 락으로 충분하다.
-background_synthesis_lock = asyncio.Lock()
 
 # 공유되는 오디오는 오디오북 전체라 크다. MAX_SYNTH_CHARS(10만 자) 분량이
 # 약 90MB이므로 여유를 둔다. 대신 메모리에 담지 않고 디스크로 흘려보낸다.
@@ -115,11 +111,6 @@ URL_FETCH_TIMEOUT_SEC = 10
 URL_FETCH_MAX_REDIRECTS = 5
 
 
-def _too_large(max_bytes: int) -> HTTPException:
-    return HTTPException(
-        status_code=413,
-        detail=f"파일이 너무 큽니다. 최대 {max_bytes // (1024 * 1024)}MB까지 지원합니다."
-    )
 
 
 def validate_share_id(share_id: str) -> str:
@@ -141,161 +132,33 @@ def parse_share_metadata(sentences: str, headings: str) -> tuple[list, list]:
     return parsed_sentences, parsed_headings
 
 
-async def read_upload_limited(upload: UploadFile, max_bytes: int) -> bytes:
-    """상한을 넘으면 즉시 중단한다. 전체를 읽고 나서 검사하면 이미 늦다."""
-    parts = []
-    total = 0
-    while True:
-        chunk = await upload.read(1024 * 1024)
-        if not chunk:
-            break
-        total += len(chunk)
-        if total > max_bytes:
-            raise _too_large(max_bytes)
-        parts.append(chunk)
-    return b"".join(parts)
-
-
-async def save_upload_limited(upload: UploadFile, dest_path: str, max_bytes: int) -> int:
-    """업로드를 메모리에 모으지 않고 곧바로 파일에 쓴다."""
-    total = 0
-    try:
-        with open(dest_path, "wb") as f:
-            while True:
-                chunk = await upload.read(1024 * 1024)
-                if not chunk:
-                    break
-                total += len(chunk)
-                if total > max_bytes:
-                    raise _too_large(max_bytes)
-                f.write(chunk)
-    except HTTPException:
-        # 상한 초과 시 쓰다 만 파일을 남기지 않는다
-        try:
-            os.remove(dest_path)
-        except OSError:
-            pass
-        raise
-    return total
 
 
 # ---- 레이트 리밋 ----
 # 모든 콘텐츠 엔드포인트가 무인증이라 합성 요청을 무제한으로 받을 수 있다.
 # 단일 인스턴스라 인메모리 슬라이딩 윈도우로 충분하다.
-_rate_buckets = {}
 
-def enforce_rate_limit(request: Request, name: str, limit: int, window_sec: int):
-    ip = request.client.host if request.client else "unknown"
-    key = (name, ip)
-    now = time.time()
-    hits = [t for t in _rate_buckets.get(key, []) if now - t < window_sec]
-    if len(hits) >= limit:
-        raise HTTPException(
-            status_code=429,
-            detail="요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요."
-        )
-    hits.append(now)
-    _rate_buckets[key] = hits
 
 
 # ---- 클라우드 보관함 ----
-AUDIOBOOK_BUCKET = "audiobooks"
-# 서명 URL 유효시간. 다운로드는 큰 파일이라 넉넉히 준다.
-SIGNED_URL_TTL = 3600
 
 
-def require_user_id(authorization: str) -> str:
-    """Bearer 토큰에서 user_id를 꺼낸다. 없거나 잘못되면 401."""
-    from auth import decode_token
-
-    if not authorization:
-        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
-    token = authorization.split(" ")[-1] if " " in authorization else authorization
-    payload = decode_token(token)
-    if not payload or not payload.get("sub"):
-        raise HTTPException(status_code=401, detail="유효하지 않은 토큰입니다.")
-    return payload["sub"]
 
 
-def resolve_job_owner(authorization: str, anonymous_session: str) -> str:
-    if authorization:
-        return require_user_id(authorization)
-
-    session_id = (anonymous_session or "").strip()
-    if len(session_id) < 16 or len(session_id) > 128:
-        raise HTTPException(status_code=401, detail="로그인 또는 체험 세션이 필요합니다.")
-    return f"anonymous:{session_id}"
 
 
-def require_job_owner(job_id: str, authorization: str, anonymous_session: str) -> dict:
-    user_id = resolve_job_owner(authorization, anonymous_session)
-    job = jobs.get(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="해당 작업을 찾을 수 없습니다.")
-    if job.get("user_id") != user_id:
-        raise HTTPException(status_code=403, detail="이 작업에 접근할 권한이 없습니다.")
-    return job
 
 
-def _supabase_or_503():
-    from auth import get_supabase_client
-
-    client = get_supabase_client(use_service_role=True)
-    if not client:
-        raise HTTPException(status_code=503, detail="클라우드 저장소에 연결할 수 없습니다.")
-    return client
 
 
-def require_admin_user(authorization: str) -> str:
-    """환경변수 허용 목록에 등록된 사용자만 관리자 통계를 볼 수 있게 한다."""
-    user_id = require_user_id(authorization)
-    allowed_emails = _admin_emails()
-    if not allowed_emails:
-        raise HTTPException(status_code=403, detail="관리자 계정이 설정되지 않았습니다.")
-
-    supabase = _supabase_or_503()
-    try:
-        user = supabase.table("users").select("email").eq("id", user_id).maybe_single().execute().data
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=f"관리자 권한을 확인하지 못했습니다: {e}")
-    if not user or (user.get("email") or "").lower() not in allowed_emails:
-        raise HTTPException(status_code=403, detail="관리자만 접근할 수 있습니다.")
-    return user_id
 
 
-def _admin_emails() -> set[str]:
-    return {
-        email.strip().lower()
-        for email in os.getenv("ADMIN_EMAILS", "").split(",")
-        if email.strip()
-    }
 
 
-def upload_limit_for(authorization: str | None) -> int:
-    """관리자로 검증된 요청에만 대용량 파일 상한을 적용한다."""
-    if not authorization:
-        return MAX_UPLOAD_BYTES
-    try:
-        require_admin_user(authorization)
-    except HTTPException:
-        return MAX_UPLOAD_BYTES
-    return MAX_ADMIN_UPLOAD_BYTES
 
 
-def synth_limit_for(upload_limit_bytes: int) -> int:
-    return (
-        MAX_ADMIN_SYNTH_CHARS
-        if upload_limit_bytes == MAX_ADMIN_UPLOAD_BYTES
-        else MAX_SYNTH_CHARS
-    )
 
 
-def _has_enough_disk_for_synthesis(char_count: int) -> bool:
-    """지금 이 문서를 합성해도 디스크가 안 찰지, 고정 상한 대신 그 순간의
-    실제 여유 공간을 재서 판단한다."""
-    estimated_bytes = char_count * AUDIO_BYTES_PER_CHAR_ESTIMATE * DISK_ESTIMATE_SAFETY_FACTOR
-    free_bytes = shutil.disk_usage(JOB_AUDIO_DIR).free
-    return estimated_bytes <= free_bytes - DISK_RESERVE_BYTES
 
 
 def _parse_event_time(value: str | None):
@@ -423,24 +286,16 @@ def load_admin_metrics():
     }
 
 
-def _object_paths(user_id: str, audiobook_id: str):
-    """오디오와 문장 데이터를 나란히 둔다. audiobooks 테이블에 sentences
-    컬럼이 없어 스키마 변경 없이 버킷에 함께 보관한다."""
-    base = f"{user_id}/{audiobook_id}"
-    return f"{base}.mp3", f"{base}.sentences.json"
 
 
 # App build ID: generated once at server startup.
 # Changes on every redeploy (new process start), used by client to detect updates.
-APP_BUILD_ID = str(int(time.time()))
 
 # In-memory storage for extracted texts
 # Keeps text temporarily for 30 minutes. Auto-expired by background task.
-text_storage = {}
 
 # In-memory storage for synthesis jobs
 # Tracks the status of background edge-tts generation tasks
-jobs = {}
 
 # 실제로 제공할 음성. edge-tts가 주는 ko-KR 음성은 3개뿐이고, 예전
 # 메타데이터에 있던 지민/서현/순복/유진/현민은 존재하지 않아 선택할 수
@@ -470,369 +325,34 @@ VOICE_METADATA = {
     },
 }
 
-def extract_hwp_text(filepath: str) -> str:
-    try:
-        import olefile
-        import zlib
-        import struct
-
-        f = olefile.OleFileIO(filepath)
-        dirs = f.listdir()
-        if ['FileHeader'] not in dirs:
-            return ""
-        header = f.openstream('FileHeader').read()
-        is_compressed = (header[36] & 1) != 0
-
-        sections = [d for d in dirs if d[0] == 'BodyText']
-        text_chunks = []
-        for sec in sections:
-            stream = f.openstream(sec).read()
-            if is_compressed:
-                stream = zlib.decompress(stream, -15)
-            
-            i = 0
-            while i < len(stream):
-                if i + 4 > len(stream):
-                    break
-                header_val = struct.unpack('<I', stream[i:i+4])[0]
-                rec_type = header_val & 0x3FF
-                rec_len = (header_val >> 20) & 0xFFF
-                if rec_len == 0xFFF:
-                    if i + 8 > len(stream):
-                        break
-                    rec_len = struct.unpack('<I', stream[i+4:i+8])[0]
-                    i += 8
-                else:
-                    i += 4
-                
-                if rec_type == 67:  # HWPTAG_PARA_TEXT
-                    data = stream[i:i+rec_len]
-                    text = data.decode('utf-16le', errors='ignore')
-                    # Remove HWP control characters / inline objects
-                    clean_chars = [c for c in text if ord(c) >= 32 or c in ('\n', '\r', '\t')]
-                    text_chunks.append("".join(clean_chars))
-                i += rec_len
-        return "\n".join(text_chunks)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"HWP 파일 해석 실패: {str(e)}")
-
-def _looks_like_garbled_pdf_extraction(text: str) -> bool:
-    """서브셋 폰트에 ToUnicode CMap이 없는 PDF는 서로 다른 글리프가 전부
-    같은 엉뚱한 문자로 매핑돼, 정상 텍스트라면 나올 수 없는 비율로 특정
-    한 글자가 반복된다("PART G Chapter GG G G GG..." 형태). 완벽히 고칠
-    방법이 마땅치 않은 pypdf/PDF 자체의 한계라, 조용히 진행해 몇 시간
-    분량을 엉터리로 합성하는 대신 여기서 걸러 명확히 알린다."""
-    stripped = re.sub(r"\s", "", text)
-    if len(stripped) < 200:
-        return False
-    most_common_char, most_common_count = Counter(stripped).most_common(1)[0]
-    return (most_common_count / len(stripped)) > 0.15
 
 
-def extract_text(file_path: str, filename: str) -> str:
-    ext = os.path.splitext(filename)[1].lower()
-    if ext == ".docx":
-        doc = docx.Document(file_path)
-        return "\n".join([para.text for para in doc.paragraphs])
-    elif ext == ".pdf":
-        reader = pypdf.PdfReader(file_path)
-        text_list = []
-        for page in reader.pages:
-            t = page.extract_text(extraction_mode="layout")
-            if t:
-                text_list.append(t)
-        result = normalize_pdf_for_reading("\n".join(text_list))
-        if _looks_like_garbled_pdf_extraction(result):
-            raise HTTPException(
-                status_code=400,
-                detail="이 PDF에서 텍스트를 정상적으로 추출하지 못했습니다. "
-                       "폰트가 특수하게 인코딩된 PDF일 수 있습니다. DOCX나 TXT로 다시 시도해 주세요.",
-            )
-        return result
-    elif ext in [".txt", ".md", ".markdown"]:
-        for encoding in ["utf-8", "cp949", "euc-kr", "utf-16", "latin-1"]:
-            try:
-                with open(file_path, "r", encoding=encoding) as f:
-                    content = f.read()
-                    return content
-            except UnicodeDecodeError:
-                continue
-        raise HTTPException(status_code=400, detail="텍스트 파일 인코딩을 분석할 수 없습니다. UTF-8로 변환해 주세요.")
-    elif ext == ".hwp":
-        text = extract_hwp_text(file_path)
-        if not text.strip():
-            raise HTTPException(status_code=400, detail="HWP 파일에서 텍스트를 추출할 수 없습니다.")
-        return text
-    else:
-        raise HTTPException(status_code=400, detail="지원하지 않는 파일 형식입니다. (지원: .docx, .pdf, .txt, .md, .hwp)")
-
-def parse_heading_line(line: str) -> tuple[int, str] | None:
-    stripped = line.strip().lstrip("\ufeff")
-    markdown_match = re.match(r'^(#{1,3})\s+(.+)$', stripped)
-    if markdown_match:
-        return len(markdown_match.group(1)), re.sub(r'[*_~`\\]', '', markdown_match.group(2)).strip()
-    if re.search(r'(?:^|[\s\-—:])제\s*\d+\s*(?:장|부|절)(?=\s|$)', stripped):
-        return 1, stripped
-    if re.match(r'^\d+(?:\.\d+)*[.)]\s+\S', stripped):
-        return 1, stripped
-    return None
 
 
-def _pdf_layout_cells(line: str) -> list[str]:
-    return [cell.strip() for cell in re.split(r"\s{2,}", line.strip()) if cell.strip()]
 
 
-def normalize_pdf_for_reading(text: str) -> str:
-    """PDF 레이아웃 텍스트를 리더용 Markdown 구조로 정리한다."""
-    lines = text.split("\n")
-    normalized = []
-    index = 0
-
-    while index < len(lines):
-        line = lines[index].strip()
-        cells = _pdf_layout_cells(line)
-
-        if len(cells) >= 2:
-            rows = [cells]
-            next_index = index + 1
-            while next_index < len(lines):
-                next_cells = _pdf_layout_cells(lines[next_index])
-                if len(next_cells) != len(cells):
-                    break
-                rows.append(next_cells)
-                next_index += 1
-
-            if len(rows) >= 2:
-                normalized.append("| " + " | ".join(rows[0]) + " |")
-                normalized.append("| " + " | ".join("---" for _ in rows[0]) + " |")
-                normalized.extend("| " + " | ".join(row) + " |" for row in rows[1:])
-                index = next_index
-                continue
-
-        heading = parse_heading_line(line)
-        if heading:
-            level, display = heading
-            normalized.append("#" * level + " " + display)
-        elif re.match(r"^[•◦▪]\s+", line):
-            normalized.append("- " + re.sub(r"^[•◦▪]\s+", "", line))
-        else:
-            normalized.append(line)
-        index += 1
-
-    return "\n".join(normalized)
 
 
-def _markdown_table_cells(line: str) -> list[str]:
-    return [cell.strip() for cell in line.strip().strip("|").split("|")]
 
 
-def _is_markdown_table_separator(line: str) -> bool:
-    cells = _markdown_table_cells(line)
-    return bool(cells) and all(re.fullmatch(r":?-{3,}:?", cell) for cell in cells)
 
 
-def normalize_markdown_for_reading(text: str) -> str:
-    """표와 문법 기호를 TTS·리더에서 자연스러운 문장으로 바꾼다."""
-    lines = re.sub(r"<br\s*/?>", ". ", text, flags=re.IGNORECASE).split("\n")
-    normalized = []
-    index = 0
-
-    while index < len(lines):
-        line = lines[index]
-        if (
-            "|" in line
-            and index + 1 < len(lines)
-            and _is_markdown_table_separator(lines[index + 1])
-        ):
-            headers = _markdown_table_cells(line)
-            index += 2
-            while index < len(lines) and "|" in lines[index]:
-                values = _markdown_table_cells(lines[index])
-                pairs = [
-                    f"{header or '항목'}: {value}"
-                    for header, value in zip(headers, values)
-                    if value
-                ]
-                if pairs:
-                    normalized.append(". ".join(pairs) + ".")
-                index += 1
-            continue
-
-        if re.fullmatch(r"\s*(?:[-*_]\s*){3,}", line):
-            index += 1
-            continue
-
-        normalized.append(re.sub(r"^\s*>\s?", "", line))
-        index += 1
-
-    return "\n".join(normalized)
 
 
-def extract_markdown_tables(text: str) -> list:
-    tables = []
-    lines = text.split("\n")
-    index = 0
-    while index + 1 < len(lines):
-        if "|" not in lines[index] or not _is_markdown_table_separator(lines[index + 1]):
-            index += 1
-            continue
-        headers = _markdown_table_cells(lines[index])
-        rows = []
-        index += 2
-        while index < len(lines) and "|" in lines[index]:
-            values = _markdown_table_cells(lines[index])
-            if len(values) == len(headers):
-                rows.append(values)
-            index += 1
-        if headers and rows:
-            tables.append({"headers": headers, "rows": rows})
-    return tables
 
 
-def build_document_representations(raw_text: str) -> tuple[str, str, list]:
-    """표 구조를 보존한 표시용 Markdown과 낭독용 평탄 텍스트를 분리한다."""
-    display_markdown = raw_text.lstrip("\ufeff").replace("\r\n", "\n")
-    return display_markdown, preprocess_text(display_markdown), extract_markdown_tables(display_markdown)
 
 
-def _normalized_match_text(text: str) -> str:
-    return re.sub(r"[^\w가-힣]", "", clean_tts_text(text))
 
 
-def annotate_sentences_with_tables(sentences: list, tables: list) -> None:
-    """TTS 문장에 표시용 표의 행·열 정보를 붙인다. 완전 매칭된 표만 표시한다."""
-    search_start = 0
-    for table_id, table in enumerate(tables):
-        table_start = search_start
-        matches = []
-        for row_index, row in enumerate(table["rows"]):
-            for column_index, value in enumerate(row):
-                expected = _normalized_match_text(f"{table['headers'][column_index]}: {value}")
-                found = None
-                for sentence_index in range(search_start, len(sentences)):
-                    actual = _normalized_match_text(sentences[sentence_index]["text"])
-                    if expected and (actual == expected or expected in actual):
-                        found = sentence_index
-                        break
-                if found is None:
-                    matches = []
-                    break
-                matches.append((found, row_index, column_index))
-                search_start = found + 1
-            if not matches:
-                break
-        if not matches:
-            search_start = table_start
-            continue
-        for sentence_index, row_index, column_index in matches:
-            sentences[sentence_index]["table"] = {
-                "id": table_id,
-                "row": row_index,
-                "column": column_index,
-                "header": table["headers"][column_index],
-            }
 
 
-def preprocess_text(text: str) -> str:
-    # 1. Clean line breaks: single newline to space, double newline to paragraph break with pause indicator
-    cleaned_text = normalize_markdown_for_reading(
-        text.lstrip("\ufeff").replace("\r\n", "\n")
-    )
-    
-    # 2. Prevent headings from merging with the next paragraph
-    lines = cleaned_text.split('\n')
-    for i in range(len(lines)):
-        line = lines[i].strip()
-        # 제목을 별도 문장으로 유지해 다음 본문이 제목 처리되는 것을 막는다.
-        if parse_heading_line(line) and not line.endswith('.'):
-            lines[i] = line + "."
-    cleaned_text = '\n'.join(lines)
-
-    cleaned_text = cleaned_text.replace("\n\n", ".   ")
-    cleaned_text = cleaned_text.replace("\n", " ")
-    
-    # 3. Clean consecutive spaces
-    while "  " in cleaned_text:
-        cleaned_text = cleaned_text.replace("  ", " ")
-    cleaned_text = re.sub(r"([.!?])\s*\.", r"\1", cleaned_text)
-
-    return cleaned_text.strip()
 
 
-def extract_markdown_headings(raw_text: str) -> list:
-    """Parse markdown headings from original text before TTS cleaning.
-    Returns a list of {cleaned_text, level, display_text} dicts.
-    """
-    headings = []
-    for line in raw_text.split('\n'):
-        stripped = line.strip()
-        if not stripped:
-            continue
-
-        heading = parse_heading_line(stripped)
-        if not heading:
-            continue
-
-        level, display = heading
-
-        cleaned = clean_tts_text(display)
-        if cleaned:
-            headings.append({
-                "cleaned_text": cleaned,
-                "display_text": display,
-                "level": level
-            })
-    return headings
 
 
-def annotate_sentences_with_headings(sentences: list, headings: list) -> tuple:
-    """Match TTS sentences to extracted headings and annotate them.
-    Returns (annotated_sentences, matched_headings_for_index).
-    """
-    heading_index = []
-    remaining_headings = list(headings)  # copy so we can consume matches
 
-    for i, s in enumerate(sentences):
-        s_text = s["text"].strip()
-        matched = False
 
-        # Only check the next 3 headings to maintain order and allow for at most 2 skipped headings
-        for h in remaining_headings[:3]:
-            h_text = h["cleaned_text"].strip()
-            
-            # Remove all punctuation and spaces for a super robust match.
-            # This handles cases where TTS splits "1. Title" into "1" and "Title".
-            s_super_clean = re.sub(r'[^\w가-힣]', '', s_text)
-            h_super_clean = re.sub(r'[^\w가-힣]', '', h_text)
-
-            is_match = False
-            if s_super_clean == h_super_clean:
-                is_match = True
-            elif h_super_clean in s_super_clean:
-                is_match = True
-            elif s_super_clean in h_super_clean and len(s_super_clean) >= len(h_super_clean) * 0.5:
-                # If s_text is a substring of the heading, it must be at least half its length 
-                # to prevent short random words/punctuation from stealing the heading.
-                is_match = True
-
-            if is_match:
-                s["type"] = "heading"
-                s["level"] = h["level"]
-                s["display"] = h["display_text"]
-                heading_index.append({
-                    "text": h["display_text"],
-                    "level": h["level"],
-                    "sentIndex": i,
-                    "startMs": s["start"]
-                })
-                remaining_headings.remove(h)
-                matched = True
-                break
-
-        if not matched:
-            s["type"] = "text"
-
-    return sentences, heading_index
 
 
 # ---- URL에서 기사 가져오기 ----
@@ -1128,19 +648,6 @@ async def get_voice_preview(short_name: str):
 
     return FileResponse(path, media_type="audio/mpeg")
 
-def clean_tts_text(text: str) -> str:
-    # 1. 마크다운 특수문자 제거 (#, *, _, ~, `, \, > 등)
-    t = re.sub(r'#+\s*', '', text)
-    t = re.sub(r'[*_~`\\]', '', t)
-    t = re.sub(r'>\s*', '', t)
-    
-    # 2. 한글 뒤 괄호 안의 영문(원문 표기) 제거: 예) 스캔들(A Scandal in Bohemia) -> 스캔들
-    # 한글 문자나 숫자 바로 뒤에 오는 (영어/공백/문장부호) 괄호 패턴 제거
-    t = re.sub(r'([가-힣0-9])\s*\([A-Za-z0-9\s.,\-\'\"]+\)', r'\1', t)
-    
-    # 3. 연속 공백 정리
-    t = re.sub(r'\s+', ' ', t).strip()
-    return t
 
 # Edge-TTS 동시 연결 상한. 이전에는 문서의 모든 청크를 상한 없이
 # asyncio.gather로 한꺼번에 띄웠고(2만 자 = 25개 동시), 여러 작업이 겹치면
