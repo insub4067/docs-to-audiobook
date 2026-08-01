@@ -132,7 +132,12 @@ CREATE INDEX idx_background_jobs_status ON background_synthesis_jobs(status);
 
 ```sql
 ALTER TABLE background_synthesis_jobs ENABLE ROW LEVEL SECURITY;
+
+GRANT SELECT, INSERT, UPDATE ON background_synthesis_jobs TO service_role;
 ```
+
+서버는 진행 중 작업 조회·등록·상태 갱신만 수행하므로 `service_role`에도 이 세 권한만 부여한다.
+RLS 우회 여부와 별개로 Data API 접근에는 테이블 `GRANT`가 필요하다.
 
 ---
 
@@ -180,6 +185,8 @@ CREATE POLICY "Users can update own history" ON playback_history
 ### 3.4 제품 이벤트 테이블 정책
 ```sql
 ALTER TABLE product_events ENABLE ROW LEVEL SECURITY;
+
+GRANT SELECT, INSERT ON product_events TO service_role;
 
 CREATE POLICY "Users can insert own events" ON product_events
   FOR INSERT WITH CHECK (auth.uid() = user_id);
