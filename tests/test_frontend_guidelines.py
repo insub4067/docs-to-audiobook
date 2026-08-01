@@ -35,12 +35,6 @@ def test_background_notification_client_is_loaded():
     assert '<script src="/static/js/notifications.js"></script>' in html
 
 
-def test_background_loading_row_release_bumps_service_worker_cache():
-    source = SW_JS.read_text(encoding="utf-8")
-
-    assert 'const CACHE_NAME = "2026.08.02.1";' in source
-
-
 def test_background_job_is_remembered_and_checked_on_resume():
     app = APP_JS.read_text(encoding="utf-8")
     notifications = NOTIFICATIONS_JS.read_text(encoding="utf-8")
@@ -889,7 +883,7 @@ async function dispatchClick() {{
 def test_service_worker_precaches_notification_client_with_new_cache_version():
     source = SW_JS.read_text(encoding="utf-8")
 
-    assert 'const CACHE_NAME = "2026.08.02.1";' in source
+    assert 'const CACHE_NAME = "2026.08.02.2";' in source
     assert '"/static/js/notifications.js"' in source
 
 
