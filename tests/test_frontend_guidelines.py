@@ -208,3 +208,27 @@ def test_pwa_uses_the_textaudio_name_and_icon():
     assert '"name": "TextAudio"' in manifest
     assert '"src": "/static/textaudio-icon.png"' in manifest
     assert 'apple-mobile-web-app-title" content="TextAudio"' in html
+
+
+def test_reader_scroll_target_uses_viewport_coordinates_for_nested_table_cells():
+    script = f"""
+const fs = require("fs");
+const source = fs.readFileSync({str(APP_JS)!r}, "utf8");
+const start = source.indexOf("function getReaderScrollTarget(container, activeElement)");
+const end = source.indexOf("\\n}}", start) + 2;
+if (start < 0 || end < 2) throw new Error("스크롤 위치 계산 함수가 없습니다.");
+eval(source.slice(start, end));
+const container = {{
+  scrollTop: 480,
+  clientHeight: 600,
+  getBoundingClientRect: () => ({{ top: 100 }}),
+}};
+const nestedCell = {{
+  clientHeight: 60,
+  getBoundingClientRect: () => ({{ top: 520 }}),
+}};
+if (getReaderScrollTarget(container, nestedCell) !== 630) {{
+  throw new Error("중첩된 표 셀의 스크롤 위치를 컨테이너 기준으로 계산하지 않습니다.");
+}}
+"""
+    subprocess.run(["node", "-e", script], check=True)

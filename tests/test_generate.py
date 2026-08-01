@@ -121,6 +121,34 @@ async def test_synthesize_document_reports_completed_chunks():
 
 
 @pytest.mark.asyncio
+async def test_synthesize_document_to_file_limits_workers_and_preserves_order(tmp_path):
+    import main
+
+    active_workers = 0
+    max_active_workers = 0
+
+    async def fake_synthesize_chunk(idx, text_chunk, voice, rate, pitch, max_attempts=3):
+        nonlocal active_workers, max_active_workers
+        active_workers += 1
+        max_active_workers = max(max_active_workers, active_workers)
+        await asyncio.sleep(0.01)
+        active_workers -= 1
+        return idx, str(idx).encode(), [{"text": f"문장 {idx}", "start": 0, "end": 100}]
+
+    raw_text = ". ".join(chr(0xAC00 + i) * 800 for i in range(6))
+    output_path = tmp_path / "book.mp3"
+
+    with patch("main.synthesize_chunk", side_effect=fake_synthesize_chunk):
+        sentences, _, _ = await main.synthesize_document_to_file(
+            raw_text, "voice", "+0%", "+0Hz", str(output_path)
+        )
+
+    assert output_path.read_bytes() == b"012345"
+    assert max_active_workers == 5
+    assert [sentence["start"] for sentence in sentences] == [0, 100, 200, 300, 400, 500]
+
+
+@pytest.mark.asyncio
 async def test_process_synthesis_task_success(tmp_path, monkeypatch):
     monkeypatch.setattr("main.JOB_AUDIO_DIR", str(tmp_path))
     from main import jobs
@@ -131,7 +159,12 @@ async def test_process_synthesis_task_success(tmp_path, monkeypatch):
     fake_sentences = [{"text": "안녕", "start": 0, "end": 100, "type": "text"}]
     fake_headings = [{"text": "제목", "level": 1, "sentIndex": 0, "startMs": 0}]
 
-    with patch("main.synthesize_document", new=AsyncMock(return_value=(b"audio-bytes", fake_sentences, fake_headings))):
+    async def fake_synthesize_to_file(raw_text, voice, rate, pitch, output_path, progress_callback=None):
+        with open(output_path, "wb") as f:
+            f.write(b"audio-bytes")
+        return fake_sentences, fake_headings, "# 제목"
+
+    with patch("main.synthesize_document_to_file", side_effect=fake_synthesize_to_file):
         await process_synthesis_task(job_id, "raw text", "voice", "+0%", "+0Hz")
 
     assert jobs[job_id]["status"] == "completed"
@@ -150,7 +183,7 @@ async def test_process_synthesis_task_empty_audio_marks_error():
     job_id = "job-empty"
     jobs[job_id] = {"status": "processing", "audio_path": None, "sentences": [], "headings": [], "error": None}
 
-    with patch("main.synthesize_document", new=AsyncMock(return_value=(b"", [], []))):
+    with patch("main.synthesize_document_to_file", new=AsyncMock(return_value=([], [], ""))):
         await process_synthesis_task(job_id, "raw text", "voice", "+0%", "+0Hz")
 
     assert jobs[job_id]["status"] == "error"
@@ -164,7 +197,7 @@ async def test_process_synthesis_task_exception_marks_error():
     job_id = "job-exception"
     jobs[job_id] = {"status": "processing", "audio_path": None, "sentences": [], "headings": [], "error": None}
 
-    with patch("main.synthesize_document", new=AsyncMock(side_effect=RuntimeError("boom"))):
+    with patch("main.synthesize_document_to_file", new=AsyncMock(side_effect=RuntimeError("boom"))):
         await process_synthesis_task(job_id, "raw text", "voice", "+0%", "+0Hz")
 
     assert jobs[job_id]["status"] == "error"

@@ -119,6 +119,22 @@ async def test_api_synthesize_text_too_long():
 
 
 @pytest.mark.asyncio
+async def test_api_upload_rejects_text_that_cannot_be_synthesized():
+    from unittest.mock import patch
+    from main import MAX_SYNTH_CHARS
+
+    with patch("main.extract_text", return_value="가" * (MAX_SYNTH_CHARS + 1)):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/upload",
+                files={"file": ("large-text.txt", b"small source file", "text/plain")},
+            )
+
+    assert response.status_code == 413
+    assert "100,000자" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
 async def test_api_synthesize_rejects_wrong_text_access_token():
     from unittest.mock import patch
     from main import text_storage

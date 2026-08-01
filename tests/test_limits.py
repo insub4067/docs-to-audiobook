@@ -62,3 +62,18 @@ def test_rate_limit():
     with pytest.raises(HTTPException) as exc_info:
         enforce_rate_limit(mock_request, "test_action", 2, 60)
     assert exc_info.value.status_code == 429
+
+
+def test_admin_upload_limit_is_separate_from_regular_upload_limit(monkeypatch):
+    import main
+
+    monkeypatch.setattr(main, "require_admin_user", lambda authorization: "admin-user")
+    assert main.upload_limit_for("Bearer admin-token") == main.MAX_ADMIN_UPLOAD_BYTES
+    assert main.synth_limit_for(main.MAX_ADMIN_UPLOAD_BYTES) == main.MAX_ADMIN_SYNTH_CHARS
+
+    def reject_non_admin(authorization):
+        raise HTTPException(status_code=403, detail="관리자만 접근할 수 있습니다.")
+
+    monkeypatch.setattr(main, "require_admin_user", reject_non_admin)
+    assert main.upload_limit_for("Bearer regular-token") == main.MAX_UPLOAD_BYTES
+    assert main.synth_limit_for(main.MAX_UPLOAD_BYTES) == main.MAX_SYNTH_CHARS
