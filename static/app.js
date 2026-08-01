@@ -1311,13 +1311,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     async function savePlaybackState(entry, position) {
         if (!entry.cloudId || !isLoggedIn()) return;
+        const playbackSettings = readerControls.getPlaybackSettings();
         const res = await fetch(`/api/audiobooks/${entry.cloudId}/playback`, {
             method: "PUT",
             headers: { ...authHeaders(), "Content-Type": "application/json" },
             body: JSON.stringify({
                 current_time_seconds: position,
-                playback_speed: entry.playbackSpeed || speedOptions[currentSpeedIndex],
-                repeat_mode: entry.repeatMode || repeatModes[currentRepeatMode],
+                playback_speed: entry.playbackSpeed || playbackSettings.playbackSpeed,
+                repeat_mode: entry.repeatMode || playbackSettings.repeatMode,
             })
         });
         if (!res.ok) throw new Error("재생 상태 저장 실패");
@@ -1801,12 +1802,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         currentAudioObject = audio;
         trackProductEvent("playback_started");
         lastPositionSaveSecond = -1;
-        const savedSpeedIndex = speedOptions.indexOf(audio.playbackSpeed);
-        if (savedSpeedIndex !== -1) currentSpeedIndex = savedSpeedIndex;
-        const savedRepeatIndex = repeatModes.indexOf(audio.repeatMode);
-        if (savedRepeatIndex !== -1) currentRepeatMode = savedRepeatIndex;
-        applySpeedUI();
-        applyRepeatUI();
+        readerControls.applyPlaybackSettings({
+            playbackSpeed: audio.playbackSpeed,
+            repeatMode: audio.repeatMode,
+        });
 
         // UI 리셋
         readerBookTitle.textContent = getAudiobookDisplayTitle(audio.title);
@@ -1955,7 +1954,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 readerAudio.currentTime = audio.lastPosition;
             }
             // Apply saved speed
-            readerAudio.playbackRate = speedOptions ? speedOptions[currentSpeedIndex] : 1.0;
+            readerAudio.playbackRate = readerControls.getPlaybackSettings().playbackSpeed;
             readerAudio.play().catch(err => console.log("Autoplay blocked:", err));
             showPauseIcon();
         };
@@ -2058,8 +2057,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             const currentSecond = Math.floor(currentSec);
             if (currentAudioObject && currentSecond % 5 === 0 && currentSecond > 0 && currentSecond !== lastPositionSaveSecond) {
                 lastPositionSaveSecond = currentSecond;
-                currentAudioObject.playbackSpeed = speedOptions[currentSpeedIndex];
-                currentAudioObject.repeatMode = repeatModes[currentRepeatMode];
+                const playbackSettings = readerControls.getPlaybackSettings();
+                currentAudioObject.playbackSpeed = playbackSettings.playbackSpeed;
+                currentAudioObject.repeatMode = playbackSettings.repeatMode;
                 updateAudiobookPosition(currentAudioObject.id, currentSec);
                 if (Date.now() - lastPlaybackSyncTime >= 30000) {
                     lastPlaybackSyncTime = Date.now();
@@ -2077,8 +2077,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (currentAudioObject && readerAudio.currentTime > 0) {
             updateAudiobookPosition(currentAudioObject.id, readerAudio.currentTime);
             currentAudioObject.lastPosition = readerAudio.currentTime;
-            currentAudioObject.playbackSpeed = speedOptions[currentSpeedIndex];
-            currentAudioObject.repeatMode = repeatModes[currentRepeatMode];
+            const playbackSettings = readerControls.getPlaybackSettings();
+            currentAudioObject.playbackSpeed = playbackSettings.playbackSpeed;
+            currentAudioObject.repeatMode = playbackSettings.repeatMode;
             savePlaybackState(currentAudioObject, readerAudio.currentTime).catch((error) => {
                 console.error("재생 상태 저장 실패:", error);
             });
@@ -2088,7 +2089,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         // closeReader 내부의 이벤트 초기화 부분
         readerAudio.pause();
         
-        if (window.clearSleepTimer) window.clearSleepTimer();
+        readerControls.clearSleepTimer();
 
         readerAudio.onplay = null;
         readerAudio.onpause = null;
@@ -2270,7 +2271,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 readerDuration.textContent = formatTime(readerAudio.duration);
             }
             // Apply saved speed
-            readerAudio.playbackRate = speedOptions ? speedOptions[currentSpeedIndex] : 1.0;
+            readerAudio.playbackRate = readerControls.getPlaybackSettings().playbackSpeed;
             readerAudio.play().catch(function(err) { console.log("Autoplay blocked:", err); });
             showPauseIcon();
         };
@@ -2406,142 +2407,28 @@ document.addEventListener("DOMContentLoaded", async () => {
     // --------------------------------------------------
     const readerSkipBackBtn = document.getElementById("readerSkipBackBtn");
     const readerSkipForwardBtn = document.getElementById("readerSkipForwardBtn");
-
-    readerSkipBackBtn.addEventListener("click", () => {
-        if (readerAudio && !isNaN(readerAudio.currentTime)) {
-            readerAudio.currentTime = Math.max(0, readerAudio.currentTime - 10);
-        }
-    });
-
-    readerSkipForwardBtn.addEventListener("click", () => {
-        if (readerAudio && !isNaN(readerAudio.duration)) {
-            readerAudio.currentTime = Math.min(readerAudio.duration, readerAudio.currentTime + 10);
-        }
-    });
-
-    // --------------------------------------------------
-    // 10. Secondary Controls (Repeat, Speed & Timer)
-    // --------------------------------------------------
     const readerRepeatBtn = document.getElementById("readerRepeatBtn");
     const readerRepeatText = document.getElementById("readerRepeatText");
-    const repeatModes = ["off", "all", "one"];
-    let currentRepeatMode = 0;
-
-    const savedRepeatMode = localStorage.getItem("textAudio_repeatMode");
-    if (savedRepeatMode) {
-        const idx = repeatModes.indexOf(savedRepeatMode);
-        if (idx !== -1) currentRepeatMode = idx;
-    }
-
-    const repeatModeLabels = {
-        "off": "반복 안 함",
-        "all": "전체 반복",
-        "one": "한 곡 반복"
-    };
-
-    function applyRepeatUI() {
-        const mode = repeatModes[currentRepeatMode];
-        readerRepeatText.textContent = repeatModeLabels[mode];
-        readerRepeatBtn.classList.toggle("active", mode !== "off");
-    }
-    applyRepeatUI();
-
-    readerRepeatBtn.addEventListener("click", () => {
-        currentRepeatMode = (currentRepeatMode + 1) % repeatModes.length;
-        const newMode = repeatModes[currentRepeatMode];
-        applyRepeatUI();
-        localStorage.setItem("textAudio_repeatMode", newMode);
-        showToast(`반복 모드: ${repeatModeLabels[newMode]}`, "info");
-    });
-
-    // Handle audio end event for repeat
-    readerAudio.addEventListener("ended", () => {
-        const mode = repeatModes[currentRepeatMode];
-        if (mode === "all") {
-            readerAudio.currentTime = 0;
-            readerAudio.play().catch(err => console.log("Autoplay blocked:", err));
-        } else if (mode === "one") {
-            readerAudio.currentTime = 0;
-            readerAudio.play().catch(err => console.log("Autoplay blocked:", err));
-        }
-    });
-
     const readerSpeedBtn = document.getElementById("readerSpeedBtn");
     const readerSpeedText = document.getElementById("readerSpeedText");
-    const speedOptions = [0.75, 1.0, 1.25, 1.5, 2.0];
-    let currentSpeedIndex = 1;
-
-    const savedSpeed = localStorage.getItem("textAudio_playbackSpeed");
-    if (savedSpeed) {
-        const idx = speedOptions.indexOf(parseFloat(savedSpeed));
-        if (idx !== -1) currentSpeedIndex = idx;
-    }
-    
-    function applySpeedUI() {
-        const speed = speedOptions[currentSpeedIndex];
-        readerSpeedText.textContent = speed.toFixed(2).replace(/\.00$/, '.0') + "x";
-        readerSpeedBtn.classList.toggle("active", speed !== 1.0);
-    }
-    applySpeedUI();
-
-    readerSpeedBtn.addEventListener("click", () => {
-        currentSpeedIndex = (currentSpeedIndex + 1) % speedOptions.length;
-        const newSpeed = speedOptions[currentSpeedIndex];
-        readerAudio.playbackRate = newSpeed;
-        applySpeedUI();
-        localStorage.setItem("textAudio_playbackSpeed", newSpeed);
-        showToast(`재생 속도 ${newSpeed}x`, "info");
-    });
-
     const readerTimerBtn = document.getElementById("readerTimerBtn");
     const readerTimerText = document.getElementById("readerTimerText");
-    const timerOptions = [0, 15, 30, 60];
-    let currentTimerIndex = 0;
-    let sleepTimerInterval = null;
-    let sleepTimeRemaining = 0;
-
-    window.clearSleepTimer = function() {
-        clearInterval(sleepTimerInterval);
-        readerTimerBtn.classList.remove("active");
-        readerTimerText.textContent = "타이머";
-        currentTimerIndex = 0;
-    };
-
-    function updateTimerDisplay() {
-        if (sleepTimeRemaining <= 0) return;
-        const m = Math.floor(sleepTimeRemaining / 60);
-        const s = sleepTimeRemaining % 60;
-        readerTimerText.textContent = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    }
-
-    readerTimerBtn.addEventListener("click", () => {
-        currentTimerIndex = (currentTimerIndex + 1) % timerOptions.length;
-        const mins = timerOptions[currentTimerIndex];
-        
-        clearInterval(sleepTimerInterval);
-
-        if (mins === 0) {
-            window.clearSleepTimer();
-            showToast("취침 타이머가 해제되었습니다.", "info");
-        } else {
-            readerTimerBtn.classList.add("active");
-            sleepTimeRemaining = mins * 60;
-            updateTimerDisplay();
-            
-            sleepTimerInterval = setInterval(() => {
-                sleepTimeRemaining--;
-                if (sleepTimeRemaining <= 0) {
-                    readerAudio.pause();
-                    window.clearSleepTimer();
-                    showToast("타이머가 종료되어 재생을 멈췄습니다.", "info");
-                } else {
-                    updateTimerDisplay();
-                }
-            }, 1000);
-            
-            showToast(`${mins}분 뒤에 재생이 자동 종료됩니다.`, "info");
-        }
+    const readerControls = TextAudio.createReaderControls({
+        readerAudio,
+        skipBackBtn: readerSkipBackBtn,
+        skipForwardBtn: readerSkipForwardBtn,
+        repeatBtn: readerRepeatBtn,
+        repeatText: readerRepeatText,
+        speedBtn: readerSpeedBtn,
+        speedText: readerSpeedText,
+        timerBtn: readerTimerBtn,
+        timerText: readerTimerText,
+        storage: localStorage,
+        notify: showToast,
+        setInterval: window.setInterval.bind(window),
+        clearInterval: window.clearInterval.bind(window),
     });
+    readerControls.initialize();
 
     // 미처리된 생성 예약(로그인 팝업 전 저장된 상태)이 있다면 실행
     const pendingGen = sessionStorage.getItem("pendingGeneration");

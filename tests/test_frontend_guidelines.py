@@ -13,6 +13,7 @@ NOTIFICATIONS_JS = ROOT_DIR / "static" / "js" / "notifications.js"
 GENERATION_STATUS_JS = ROOT_DIR / "static" / "js" / "generation-status.js"
 VOICES_JS = ROOT_DIR / "static" / "js" / "voices.js"
 WEB_SPEECH_JS = ROOT_DIR / "static" / "js" / "web-speech.js"
+READER_CONTROLS_JS = ROOT_DIR / "static" / "js" / "reader-controls.js"
 SW_JS = ROOT_DIR / "static" / "sw.js"
 STYLE_CSS = ROOT_DIR / "static" / "style.css"
 INDEX_HTML = ROOT_DIR / "static" / "index.html"
@@ -206,6 +207,97 @@ const unsupported = context.window.TextAudio.createWebSpeechController({{
 unsupported.speak("본문");
 if (notifications.length !== 1 || notifications[0][1] !== "error") {{
   throw new Error("Web Speech 미지원 상태를 알리지 않았습니다.");
+}}
+"""
+    subprocess.run(["node", "-e", script], check=True)
+
+
+def test_reader_controls_restore_apply_and_cycle_playback_settings():
+    assert READER_CONTROLS_JS.is_file()
+    script = f"""
+const fs = require("fs");
+const vm = require("vm");
+const source = fs.readFileSync({str(READER_CONTROLS_JS)!r}, "utf8");
+function createButton() {{
+  const classes = new Set();
+  return {{
+    listeners: {{}},
+    classList: {{
+      add: (name) => classes.add(name),
+      remove: (name) => classes.delete(name),
+      toggle(name, enabled) {{ enabled ? classes.add(name) : classes.delete(name); }},
+      contains: (name) => classes.has(name),
+    }},
+    addEventListener(name, handler) {{ this.listeners[name] = handler; }},
+    click() {{ return this.listeners.click(); }},
+  }};
+}}
+const skipBackBtn = createButton();
+const skipForwardBtn = createButton();
+const repeatBtn = createButton();
+const speedBtn = createButton();
+const timerBtn = createButton();
+const repeatText = {{ textContent: "" }};
+const speedText = {{ textContent: "" }};
+const timerText = {{ textContent: "" }};
+const audioListeners = {{}};
+const readerAudio = {{
+  currentTime: 5,
+  duration: 100,
+  playbackRate: 1,
+  paused: false,
+  addEventListener(name, handler) {{ audioListeners[name] = handler; }},
+  pause() {{ this.paused = true; }},
+  play: async () => undefined,
+}};
+const values = new Map([
+  ["textAudio_playbackSpeed", "1.25"],
+  ["textAudio_repeatMode", "all"],
+]);
+const storage = {{
+  getItem: (key) => values.get(key) || null,
+  setItem: (key, value) => values.set(key, String(value)),
+}};
+const context = {{ window: {{}} }};
+vm.runInNewContext(source, context);
+const controls = context.window.TextAudio.createReaderControls({{
+  readerAudio,
+  skipBackBtn,
+  skipForwardBtn,
+  repeatBtn,
+  repeatText,
+  speedBtn,
+  speedText,
+  timerBtn,
+  timerText,
+  storage,
+  notify() {{}},
+  setInterval: () => 1,
+  clearInterval() {{}},
+}});
+controls.initialize();
+let settings = controls.getPlaybackSettings();
+if (settings.playbackSpeed !== 1.25 || settings.repeatMode !== "all") {{
+  throw new Error("저장된 리더 설정을 복원하지 않았습니다.");
+}}
+skipBackBtn.click();
+if (readerAudio.currentTime !== 0) throw new Error("10초 뒤로 이동 경계를 지키지 않았습니다.");
+skipForwardBtn.click();
+if (readerAudio.currentTime !== 10) throw new Error("10초 앞으로 이동하지 않았습니다.");
+controls.applyPlaybackSettings({{ playbackSpeed: 1.5, repeatMode: "one" }});
+settings = controls.getPlaybackSettings();
+if (settings.playbackSpeed !== 1.5 || settings.repeatMode !== "one" || readerAudio.playbackRate !== 1.5) {{
+  throw new Error("오디오북별 재생 설정을 적용하지 않았습니다.");
+}}
+speedBtn.click();
+repeatBtn.click();
+settings = controls.getPlaybackSettings();
+if (settings.playbackSpeed !== 2 || settings.repeatMode !== "off") {{
+  throw new Error("재생 속도 또는 반복 모드를 순환하지 않았습니다.");
+}}
+controls.clearSleepTimer();
+if (timerText.textContent !== "타이머" || timerBtn.classList.contains("active")) {{
+  throw new Error("취침 타이머 UI를 초기화하지 않았습니다.");
 }}
 """
     subprocess.run(["node", "-e", script], check=True)
