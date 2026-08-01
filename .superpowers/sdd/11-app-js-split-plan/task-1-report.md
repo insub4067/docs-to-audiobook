@@ -42,3 +42,28 @@ DONE_WITH_CONCERNS
 
 - 실제 OAuth 완료, 파일 업로드/생성, 터치 기반 pull-to-refresh, 백그라운드 복귀 업데이트 감지는 자동 브라우저 검증 범위에서 실행하지 못했다.
 - 분리된 JS 파일은 SW의 네트워크 성공 응답 캐시에 들어가지만 `ASSETS_TO_CACHE` 선캐시 목록에는 포함되지 않았다. brief가 `CACHE_NAME` 증가만 요구해 범위를 넓히지 않았으며, 설치 직후 오프라인 진입 시나리오는 별도 확인이 필요하다.
+
+## Fix round 1
+
+### 수정 내용
+
+- `static/sw.js`의 `ASSETS_TO_CACHE`에 분리 스크립트 5개를 로드 순서대로 추가하고 `CACHE_NAME`을 `2026.08.01.28`로 올렸다.
+- `static/js/pwa.js`의 pull-to-refresh가 브리지 함수의 타입을 확인한 뒤 호출하도록 변경해, `initializeAuth` 지연 중 브리지가 아직 없더라도 오류 없이 정리 상태로 돌아가게 했다.
+- `static/js/auth.js`의 DB 스코프 설명을 현재 전역 `db.js` 구조와 독립 로그아웃 트랜잭션 의도에 맞게 수정했다.
+- `tests/test_frontend_guidelines.py`에 분리 파일 존재/로드 순서, SW 선캐시, 브리지 미준비 pull-to-refresh 동작 회귀 테스트를 추가했다.
+
+### RED/GREEN 증거
+
+- RED: `.venv/bin/python -m pytest tests/test_frontend_guidelines.py -q -k 'split_app_scripts or service_worker_precaches or pull_refresh_is_safe'` → 1 passed, 2 failed. SW 선캐시 누락과 브리지 TypeError를 각각 재현했다.
+- GREEN: 같은 명령 → 3 passed.
+
+### 최종 검증
+
+- `node --check static/js/toast.js && node --check static/js/utils.js && node --check static/js/db.js && node --check static/js/auth.js && node --check static/js/pwa.js && node --check static/app.js` → 통과.
+- `.venv/bin/python -m pytest tests/test_frontend_guidelines.py -q` → 23 passed.
+- `.venv/bin/python -m pytest -q` → 135 passed, 174 warnings.
+- `git diff --check` → 통과.
+
+### 남은 우려사항
+
+- 실제 OAuth 완료, 파일 업로드/생성, 실제 터치 장치의 pull-to-refresh와 백그라운드 복귀는 자동화 검증 범위 밖이다.

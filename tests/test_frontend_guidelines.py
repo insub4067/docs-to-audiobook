@@ -6,6 +6,8 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 APP_JS = ROOT_DIR / "static" / "app.js"
 UTILS_JS = ROOT_DIR / "static" / "js" / "utils.js"
 AUTH_JS = ROOT_DIR / "static" / "js" / "auth.js"
+PWA_JS = ROOT_DIR / "static" / "js" / "pwa.js"
+SW_JS = ROOT_DIR / "static" / "sw.js"
 STYLE_CSS = ROOT_DIR / "static" / "style.css"
 INDEX_HTML = ROOT_DIR / "static" / "index.html"
 ADMIN_HTML = ROOT_DIR / "static" / "admin.html"
@@ -13,6 +15,79 @@ ADMIN_JS = ROOT_DIR / "static" / "admin.js"
 ADMIN_METRIC_HTML = ROOT_DIR / "static" / "admin-metric.html"
 ADMIN_METRIC_JS = ROOT_DIR / "static" / "admin-metric.js"
 MANIFEST = ROOT_DIR / "static" / "manifest.json"
+
+SPLIT_APP_SCRIPTS = [
+    "/static/js/toast.js",
+    "/static/js/utils.js",
+    "/static/js/db.js",
+    "/static/js/auth.js",
+    "/static/js/pwa.js",
+]
+
+
+def test_split_app_scripts_exist_and_load_before_app_in_dependency_order():
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    script_paths = [*SPLIT_APP_SCRIPTS, "/static/app.js"]
+
+    for script_path in SPLIT_APP_SCRIPTS:
+        assert (ROOT_DIR / script_path.removeprefix("/")).is_file()
+
+    positions = [html.index(f'<script src="{script_path}"></script>') for script_path in script_paths]
+    assert positions == sorted(positions)
+
+
+def test_service_worker_precaches_split_app_scripts():
+    source = SW_JS.read_text(encoding="utf-8")
+
+    for script_path in SPLIT_APP_SCRIPTS:
+        assert f'"{script_path}"' in source
+
+
+def test_pull_refresh_is_safe_before_app_bridges_are_ready():
+    script = f"""
+const fs = require("fs");
+const vm = require("vm");
+const source = fs.readFileSync({str(PWA_JS)!r}, "utf8");
+const listeners = {{}};
+const errors = [];
+const classList = {{ add() {{}}, remove() {{}}, toggle() {{}}, contains() {{ return false; }} }};
+const style = {{ setProperty() {{}}, removeProperty() {{}} }};
+const pullElement = {{
+  classList,
+  style,
+  querySelectorAll() {{ return []; }},
+}};
+const document = {{
+  documentElement: {{ classList, style }},
+  visibilityState: "visible",
+  getElementById(id) {{ return id === "pullRefresh" ? pullElement : {{ classList }}; }},
+  querySelector() {{ return null; }},
+  addEventListener() {{}},
+}};
+const window = {{
+  innerWidth: 1024,
+  scrollY: 0,
+  navigator: {{ standalone: false }},
+  location: {{ reload() {{}} }},
+  matchMedia() {{ return {{ matches: false }}; }},
+  addEventListener(name, callback) {{ listeners[name] = callback; }},
+}};
+const context = {{
+  console: {{ error(error) {{ errors.push(error); }}, warn() {{}} }},
+  document,
+  fetch: async () => ({{ ok: true, json: async () => ({{ build_id: "build" }}), text: async () => "" }}),
+  isLoggedIn: () => true,
+  navigator: {{ userAgent: "test", serviceWorker: {{}} }},
+  setTimeout(callback) {{ callback(); }},
+  window,
+}};
+vm.runInNewContext(source, context);
+listeners.touchstart({{ touches: [{{ clientY: 0 }}] }});
+listeners.touchmove({{ touches: [{{ clientY: 200 }}], cancelable: true, preventDefault() {{}} }});
+listeners.touchend();
+if (errors.length > 0) throw errors[0];
+"""
+    subprocess.run(["node", "-e", script], check=True)
 
 
 def test_user_generated_titles_are_escaped_before_html_rendering():

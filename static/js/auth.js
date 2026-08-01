@@ -151,7 +151,7 @@ async function fetchCurrentUser(token) {
 /**
  * 이 기기에 저장된 오디오북을 지운다. 기본 제공 오디오북(isDefault)만 남기고,
  * 그 재생 위치도 초기화한다 — 공용 기기에서 이전 사용자의 흔적이 남지 않게.
- * db 핸들이 DOMContentLoaded 스코프 안에 있어 여기서는 따로 연결한다.
+ * 로그아웃 정리 트랜잭션을 완료한 뒤 연결을 닫기 위해 별도 연결을 연다.
  */
 function clearDeviceAudiobooks() {
     return new Promise((resolve, reject) => {

@@ -1,8 +1,13 @@
-const CACHE_NAME = "2026.08.01.27";
+const CACHE_NAME = "2026.08.01.28";
 
 const ASSETS_TO_CACHE = [
   "/",
   "/static/style.css",
+  "/static/js/toast.js",
+  "/static/js/utils.js",
+  "/static/js/db.js",
+  "/static/js/auth.js",
+  "/static/js/pwa.js",
   "/static/app.js",
   "/static/admin.css",
   "/static/admin.js",

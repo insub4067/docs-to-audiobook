@@ -95,8 +95,12 @@ if (pullEl) {
 
         const startedAt = Date.now();
         try {
-            if (isLoggedIn()) await window.__syncAudiobooksToCloud();
-            await window.__renderLibrary();
+            if (isLoggedIn() && typeof window.__syncAudiobooksToCloud === "function") {
+                await window.__syncAudiobooksToCloud();
+            }
+            if (typeof window.__renderLibrary === "function") {
+                await window.__renderLibrary();
+            }
         } catch (err) {
             console.error("새로고침 실패:", err);
         }
