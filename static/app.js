@@ -807,6 +807,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         fileInput.click();
     };
 
+    function getUploadLimitBytes() {
+        return document.body.dataset.isAdmin === "true"
+            ? 50 * 1024 * 1024
+            : 10 * 1024 * 1024;
+    }
+
     dropzone.addEventListener("click", openFileInput);
     dropzone.addEventListener("touchend", (e) => {
         e.preventDefault();
@@ -848,8 +854,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         const validFiles = [];
         for (let file of files) {
-            if (file.size > 10 * 1024 * 1024) {
-                showToast(`${file.name}: 파일이 너무 큽니다 (최대 10MB)`, "error");
+            const maxUploadBytes = getUploadLimitBytes();
+            if (file.size > maxUploadBytes) {
+                showToast(`${file.name}: 파일이 너무 큽니다 (최대 ${maxUploadBytes / 1024 / 1024}MB)`, "error");
                 continue;
             }
             validFiles.push(file);
@@ -915,8 +922,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     async function handleFileSelect(file) {
-        if (file.size > 10 * 1024 * 1024) {
-            showToast("파일 크기가 너무 큽니다. 최대 10MB까지 지원합니다.", "error");
+        const maxUploadBytes = getUploadLimitBytes();
+        if (file.size > maxUploadBytes) {
+            showToast(`파일 크기가 너무 큽니다. 최대 ${maxUploadBytes / 1024 / 1024}MB까지 지원합니다.`, "error");
             return;
         }
 
@@ -3189,6 +3197,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         const loggedIn = !!(user && token);
         const isAdmin = loggedIn && user.is_admin === true;
+        document.body.dataset.isAdmin = String(isAdmin);
+        const dropzoneHint = document.querySelector(".dropzone-hint");
+        if (dropzoneHint) {
+            dropzoneHint.textContent = `지원 파일: DOCX, PDF, TXT, MD, HWP (최대 ${isAdmin ? 50 : 10}MB, 복수 선택 가능)`;
+        }
         userInfo.style.display = loggedIn ? "flex" : "none";
         if (headerLoginSlot) headerLoginSlot.style.display = loggedIn ? "none" : "flex";
         if (adminDashboardLink) adminDashboardLink.hidden = !isAdmin;

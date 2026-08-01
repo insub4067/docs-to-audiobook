@@ -62,11 +62,16 @@ os.makedirs(JOB_AUDIO_DIR, exist_ok=True)
 # 업로드는 지금까지 클라이언트에서만 검사했다. API를 직접 호출하면 그대로
 # 통과해 파일 전체가 메모리에 올라간다.
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+MAX_ADMIN_UPLOAD_BYTES = 50 * 1024 * 1024
 
 # 합성 문자 수 상한. 오디오는 문자당 약 903바이트이고 합성 피크는 그 2배쯤
 # 되므로, 10MB 텍스트(약 350만 자)를 그대로 받으면 오디오만 2.9GB가 되어
 # 반드시 죽는다. 10만 자면 약 4시간 분량이라 실사용에는 충분하다.
 MAX_SYNTH_CHARS = 100_000
+
+# 1GB 인스턴스에서는 대용량 문서의 텍스트 추출을 병렬로 처리하면 메모리
+# 여유가 빠르게 사라진다. 관리자 대용량 업로드는 한 번에 하나만 처리한다.
+large_admin_upload_lock = asyncio.Lock()
 
 # 공유되는 오디오는 오디오북 전체라 크다. MAX_SYNTH_CHARS(10만 자) 분량이
 # 약 90MB이므로 여유를 둔다. 대신 메모리에 담지 않고 디스크로 흘려보낸다.
@@ -233,6 +238,17 @@ def _admin_emails() -> set[str]:
         for email in os.getenv("ADMIN_EMAILS", "").split(",")
         if email.strip()
     }
+
+
+def upload_limit_for(authorization: str | None) -> int:
+    """관리자로 검증된 요청에만 대용량 파일 상한을 적용한다."""
+    if not authorization:
+        return MAX_UPLOAD_BYTES
+    try:
+        require_admin_user(authorization)
+    except HTTPException:
+        return MAX_UPLOAD_BYTES
+    return MAX_ADMIN_UPLOAD_BYTES
 
 
 def _parse_event_time(value: str | None):
@@ -895,27 +911,41 @@ async def upload_file(request: Request, file: UploadFile = File(...), authorizat
     safe_name = os.path.basename(file.filename)
     file_id = str(uuid.uuid4())
     temp_path = os.path.join(UPLOAD_DIR, f"{file_id}_{safe_name}")
+    max_upload_bytes = upload_limit_for(authorization)
 
-    # Save uploaded file
     try:
-        content = await read_upload_limited(file, MAX_UPLOAD_BYTES)
-        with open(temp_path, "wb") as buffer:
-            buffer.write(content)
-        del content
+        if max_upload_bytes > MAX_UPLOAD_BYTES:
+            if large_admin_upload_lock.locked():
+                raise HTTPException(
+                    status_code=429,
+                    detail="관리자 대용량 업로드는 하나씩 처리할 수 있습니다. 잠시 후 다시 시도해 주세요.",
+                )
+            async with large_admin_upload_lock:
+                await save_upload_limited(file, temp_path, max_upload_bytes)
+                text = extract_text(temp_path, safe_name)
+        else:
+            await save_upload_limited(file, temp_path, max_upload_bytes)
+            text = extract_text(temp_path, safe_name)
     except HTTPException:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
         raise
     except Exception as e:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
         raise HTTPException(status_code=500, detail=f"파일 임시 저장 중 에러가 발생했습니다: {str(e)}")
 
     # Extract text
     try:
-        text = extract_text(temp_path, safe_name)
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
-            
         if not text.strip():
             raise HTTPException(status_code=400, detail="추출된 텍스트가 없습니다. 빈 파일이거나 읽을 수 없는 문서입니다.")
-        
+
+        if len(text) > MAX_SYNTH_CHARS:
+            raise HTTPException(
+                status_code=413,
+                detail=f"추출된 텍스트가 너무 깁니다. 최대 {MAX_SYNTH_CHARS:,}자까지 지원합니다.",
+            )
+
         # Save to memory storage with timestamp
         text_storage[file_id] = {
             "filename": file.filename,
@@ -935,13 +965,12 @@ async def upload_file(request: Request, file: UploadFile = File(...), authorizat
             "text_access_token": text_storage[file_id]["access_token"],
         }
     except HTTPException as he:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
         raise he
     except Exception as e:
+        raise HTTPException(status_code=500, detail=f"텍스트 추출 오류: {str(e)}")
+    finally:
         if os.path.exists(temp_path):
             os.remove(temp_path)
-        raise HTTPException(status_code=500, detail=f"텍스트 추출 오류: {str(e)}")
 
 @app.get("/api/voices")
 async def get_voices(tone: str = None, use_case: str = None):
