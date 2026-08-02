@@ -43,7 +43,6 @@ export function useReaderThemeLogic(state: ReaderThemeState, containerEl: { valu
         state.activeTheme.value = theme;
         localStorage.setItem(STORAGE_KEY, theme);
         applyToContainer();
-        closeSheet();
     }
 
     return { initialize, openSheet, closeSheet, selectTheme };
