@@ -169,13 +169,7 @@ async def test_admin_metrics_are_available_only_through_admin_route():
     assert response.json() == metrics
 
 
-@pytest.mark.asyncio
-async def test_admin_metric_detail_page_is_served():
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.get("/admin/metrics/total_users")
 
-    assert response.status_code == 200
-    assert "metricPageList" in response.text
 
 
 def test_admin_metrics_normalize_naive_database_timestamps_to_utc():

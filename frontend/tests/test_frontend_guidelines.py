@@ -28,8 +28,7 @@ INDEX_HTML = FRONTEND_STATIC / "index.html"
 # 로 대체되어 더 이상 존재하지 않는다.
 ADMIN_VIEW_VUE = ROOT_DIR / "frontend" / "AdminDashboard" / "AdminDashboard_View.vue"
 ADMIN_LOGIC_VUE = ROOT_DIR / "frontend" / "AdminDashboard" / "AdminDashboard_Logic.vue"
-ADMIN_METRIC_HTML = FRONTEND_STATIC / "admin-metric.html"
-ADMIN_METRIC_JS = FRONTEND_STATIC / "admin-metric.js"
+ADMIN_METRIC_VUE = ROOT_DIR / "frontend" / "AdminDashboard" / "AdminMetric_View.vue"
 MANIFEST = FRONTEND_STATIC / "manifest.json"
 
 SPLIT_APP_SCRIPTS = [
@@ -1597,12 +1596,10 @@ def test_admin_dashboard_renders_retention_metrics():
 
 def test_admin_metric_cards_link_to_dedicated_detail_pages():
     html = ADMIN_VIEW_VUE.read_text(encoding="utf-8")
-    detail_html = ADMIN_METRIC_HTML.read_text(encoding="utf-8")
-    detail_source = ADMIN_METRIC_JS.read_text(encoding="utf-8")
+    detail_source = ADMIN_METRIC_VUE.read_text(encoding="utf-8")
 
-    assert 'href="/admin/metrics/weekly_active_users"' in html
-    assert 'id="metricPageList"' in detail_html
-    assert 'function renderPeople(people)' in detail_source
+    assert 'to="/admin/metrics/weekly_active_users"' in html
+    assert 'id="metricPageList"' in detail_source
     assert 'fetch("/api/admin/metrics"' in detail_source
 
 
