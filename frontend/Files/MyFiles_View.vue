@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
+import { computed, onMounted, ref } from "vue";
 import type { AudioListState } from "../components/Library/AudioList_State.vue";
 import type { AudioListLogic } from "../components/Library/AudioList_Logic.vue";
+import type { AudiobookRecord } from "../services/indexedDb";
 import type { MyFilesState } from "./MyFiles_State.vue";
 import type { MyFilesLogic } from "./MyFiles_Logic.vue";
 import { useFolderBrowserState } from "./FolderBrowser_State.vue";
@@ -38,6 +39,65 @@ function onNewFolder(): void {
     if (name) browserLogic.createFolder(name);
 }
 
+// 오디오북 항목을 폴더 위에 길게 눌러 끌어다 놓으면 그 폴더로 이동한다.
+// 롱프레스로 드래그 여부를 확정하기 전까지는 일정 이상 움직이면(스크롤/
+// 탭으로 판단) 곧바로 취소해, AudioListItem_View 자체의 스와이프 삭제
+// 제스처나 리스트 스크롤과 충돌하지 않도록 한다.
+const LONG_PRESS_MS = 450;
+const MOVE_CANCEL_PX = 10;
+const dragAudioId = ref<string | null>(null);
+const dragOverFolderId = ref<string | null>(null);
+let dragCandidate: AudiobookRecord | null = null;
+let dragStartX = 0;
+let dragStartY = 0;
+let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearLongPressTimer(): void {
+    if (longPressTimer) clearTimeout(longPressTimer);
+    longPressTimer = null;
+}
+
+function resetDragState(): void {
+    clearLongPressTimer();
+    dragCandidate = null;
+    dragAudioId.value = null;
+    dragOverFolderId.value = null;
+}
+
+function onDragTouchStart(event: TouchEvent, audio: AudiobookRecord): void {
+    dragCandidate = audio;
+    dragStartX = event.touches[0].clientX;
+    dragStartY = event.touches[0].clientY;
+    clearLongPressTimer();
+    longPressTimer = setTimeout(() => {
+        dragAudioId.value = audio.id;
+        if (navigator.vibrate) navigator.vibrate(30);
+    }, LONG_PRESS_MS);
+}
+
+function onDragTouchMove(event: TouchEvent): void {
+    if (!dragCandidate) return;
+    const touch = event.touches[0];
+    if (!dragAudioId.value) {
+        const dx = Math.abs(touch.clientX - dragStartX);
+        const dy = Math.abs(touch.clientY - dragStartY);
+        if (dx > MOVE_CANCEL_PX || dy > MOVE_CANCEL_PX) resetDragState();
+        return;
+    }
+    if (event.cancelable) event.preventDefault();
+    const target = document.elementFromPoint(touch.clientX, touch.clientY);
+    const folderRow = (target as HTMLElement | null)?.closest<HTMLElement>(".myfiles-row[data-folder-id]");
+    dragOverFolderId.value = folderRow?.dataset.folderId ?? null;
+}
+
+async function onDragTouchEnd(): Promise<void> {
+    const audio = dragCandidate;
+    const folderId = dragOverFolderId.value;
+    resetDragState();
+    if (!audio || !folderId) return;
+    await props.audioListLogic.moveToFolder(audio, folderId);
+}
+
 onMounted(() => browserLogic.loadCurrentFolder());
 </script>
 
@@ -66,7 +126,14 @@ onMounted(() => browserLogic.loadCurrentFolder());
         </div>
 
         <div class="myfiles-list">
-            <div v-for="folder in browserState.subfolders.value" :key="folder.id" class="myfiles-row" @click="browserLogic.openFolder(folder)">
+            <div
+                v-for="folder in browserState.subfolders.value"
+                :key="folder.id"
+                class="myfiles-row"
+                :class="{ 'drag-over': dragOverFolderId === folder.id }"
+                :data-folder-id="folder.id"
+                @click="browserLogic.openFolder(folder)"
+            >
                 <i data-lucide="folder" class="myfiles-row-icon"></i>
                 <span class="myfiles-row-title">{{ folder.name }}</span>
                 <button class="btn-icon-round btn-more" title="더보기" type="button" @click.stop="myFilesLogic.openFolderActionSheet(folder)">
@@ -74,7 +141,17 @@ onMounted(() => browserLogic.loadCurrentFolder());
                 </button>
             </div>
 
-            <AudioListItemView v-for="audio in currentFolderAudiobooks" :key="audio.id" :audio="audio" :logic="audioListLogic" />
+            <AudioListItemView
+                v-for="audio in currentFolderAudiobooks"
+                :key="audio.id"
+                :audio="audio"
+                :logic="audioListLogic"
+                :class="{ 'audio-item-drag-source': dragAudioId === audio.id }"
+                @touchstart.passive="onDragTouchStart($event, audio)"
+                @touchmove="onDragTouchMove"
+                @touchend.passive="onDragTouchEnd"
+                @touchcancel.passive="resetDragState"
+            />
         </div>
 
         <ActionSheetView :state="audioListState" :logic="audioListLogic" :my-files-logic="myFilesLogic" />

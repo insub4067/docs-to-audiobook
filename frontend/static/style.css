@@ -97,6 +97,10 @@
 :root[data-app-theme] .audio-item:active .audio-item-front {
     background-color: #f0f0f0;
 }
+:root[data-app-theme] .myfiles-row:hover,
+:root[data-app-theme] .myfiles-row:active {
+    background-color: #f0f0f0;
+}
 :root[data-app-theme] .action-sheet {
     background: var(--card-bg-solid);
 }
@@ -122,6 +126,10 @@
 }
 :root[data-app-theme="dark"] .audio-item:hover .audio-item-front,
 :root[data-app-theme="dark"] .audio-item:active .audio-item-front {
+    background-color: #3a332f;
+}
+:root[data-app-theme="dark"] .myfiles-row:hover,
+:root[data-app-theme="dark"] .myfiles-row:active {
     background-color: #3a332f;
 }
 :root[data-app-theme="dark"] .action-sheet-handle {
@@ -251,9 +259,40 @@ html {
     display: flex;
     align-items: center;
     gap: 14px;
-    padding: 14px 4px;
+    padding: 16px 20px;
+    background-color: var(--card-bg-solid);
     border-bottom: 1px solid var(--border-color);
     cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.myfiles-row:last-child {
+    border-bottom: none;
+}
+
+@media (hover: hover) {
+    .myfiles-row:hover {
+        background-color: #f5f5f5;
+    }
+}
+.myfiles-row:active {
+    background-color: #f0f0f0;
+}
+
+.myfiles-row.drag-over {
+    background-color: var(--primary-color);
+    opacity: 0.85;
+}
+
+.myfiles-row.drag-over .myfiles-row-icon,
+.myfiles-row.drag-over .myfiles-row-title {
+    color: #fff;
+}
+
+.audio-item-drag-source .audio-item-front {
+    transform: scale(1.03);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+    opacity: 0.85;
 }
 
 .myfiles-row-icon {
@@ -1454,9 +1493,12 @@ input[type="range"]::-webkit-slider-thumb:active {
 @media (max-width: 480px) {
     .app-container {
         padding: 24px 12px; /* Maximize card screen width */
+        /* 위 padding 단축 속성이 앞쪽 규칙의 padding-bottom(하단 탭바 여유
+           공간)까지 24px로 되돌려버린다 — 여기서 다시 얹어준다. */
+        padding-bottom: calc(24px + 76px + env(safe-area-inset-bottom));
         gap: 20px;
     }
-    
+
     .app-header {
         padding: 8px 4px;
     }
@@ -2505,6 +2547,22 @@ input[type="range"]::-webkit-slider-thumb:active {
        이 규칙(모바일/태블릿)과 아래 min-width:768 규칙이다. 앞쪽 76행의
        safe-area 처리가 여기에 덮여 죽어 있어 헤더가 노치와 겹쳤다. */
     padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
+    /* 애플 네이티브 앱처럼 스크롤을 내리면 큰 타이틀이 있던 자리에 배경/
+       경계선이 자연스럽게 나타나도록 sticky + 트랜지션(.scrolled는 JS가
+       토글). */
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background-color: transparent;
+    border-bottom: 1px solid transparent;
+    transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+
+.app-header.scrolled {
+    background-color: var(--card-bg-solid);
+    border-bottom-color: var(--border-color);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
 }
 
 .header-left {
@@ -2552,6 +2610,11 @@ input[type="range"]::-webkit-slider-thumb:active {
     font-weight: 700;
     letter-spacing: -0.02em;
     line-height: 44px;
+    transition: font-size 0.25s ease;
+}
+
+.app-header.scrolled .logo .page-title {
+    font-size: 1.05rem;
 }
 
 .logo .page-title[data-admin="true"] {
@@ -2888,6 +2951,11 @@ input[type="range"]::-webkit-slider-thumb:active {
 
     .audio-item:hover .audio-item-front,
     .audio-item:active .audio-item-front {
+        background-color: #3a332f;
+    }
+
+    .myfiles-row:hover,
+    .myfiles-row:active {
         background-color: #3a332f;
     }
 

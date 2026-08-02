@@ -59,16 +59,29 @@ function requireDb(): IDBDatabase {
     return db;
 }
 
+// entry가 Vue 반응형 상태에서 그대로 온 경우 Proxy라 구조화 복제(structured
+// clone)가 실패해 store.put()이 동기적으로 던진다 — 서버 쪽 저장(PATCH)은
+// 이미 성공했는데도 호출부에는 "실패"로 보이는 원인. toRaw는 최상위 한
+// 겹만 벗겨내므로, `{ ...target, title }`처럼 스프레드로 만든 새 객체는
+// 그 자체는 더 이상 Proxy가 아니어도 sentences/headings 같은 중첩 배열
+// 값은 여전히 Proxy로 남아 있어 구조화 복제가 그 안쪽에서 실패한다.
+// 재귀적으로 모두 벗겨내야 한다.
+function deepToRaw<T>(value: T): T {
+    const raw = toRaw(value as any);
+    if (raw === null || typeof raw !== "object" || raw instanceof ArrayBuffer || raw instanceof Blob) {
+        return raw;
+    }
+    if (Array.isArray(raw)) return raw.map((item) => deepToRaw(item)) as unknown as T;
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(raw)) out[key] = deepToRaw((raw as Record<string, unknown>)[key]);
+    return out as T;
+}
+
 export function saveAudiobookToDB(entry: AudiobookRecord): Promise<void> {
     return new Promise((resolve, reject) => {
         const transaction = requireDb().transaction(["audiobooks"], "readwrite");
         const store = transaction.objectStore("audiobooks");
-        // entry가 Vue 반응형 상태(예: actionSheetTarget.value)에서 그대로 온
-        // 경우 Proxy라 구조화 복제(structured clone)가 실패해 store.put()이
-        // 동기적으로 던진다 — 이 Promise executor 안에서 던지면 자동으로
-        // reject되어, 실제로는 서버 쪽 저장(PATCH)까지 다 끝난 뒤인데도
-        // 호출부에는 "실패"로 보인다. toRaw로 순수 객체로 바꿔 전달한다.
-        const request = store.put(toRaw(entry));
+        const request = store.put(deepToRaw(entry));
 
         request.onsuccess = () => resolve();
         request.onerror = (e) => reject((e.target as IDBRequest).error);

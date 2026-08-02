@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, watch, type ComponentPublicInstance } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch, type ComponentPublicInstance } from "vue";
 import { useAuthStore } from "../../stores/auth";
 import { useAuthLogic } from "../../Auth/Auth_Logic.vue";
 import { useHeaderState } from "./Header_State.vue";
@@ -32,6 +32,14 @@ const pushNotificationLabel = computed(() => {
 const profileName = computed(() => authStore.user?.full_name || authStore.user?.email || "사용자");
 const profileInitial = computed(() => profileName.value.trim().split(/\s+/)[0].slice(0, 2));
 
+// 애플 네이티브 앱처럼 스크롤을 내리면 큰 타이틀이 작아지며 헤더에 배경/
+// 경계선이 자연스럽게 나타나게 한다(.scrolled 클래스는 CSS 트랜지션으로
+// 처리, 여기서는 임계값만 판단).
+const isHeaderScrolled = ref(false);
+function onWindowScroll(): void {
+    isHeaderScrolled.value = window.scrollY > 8;
+}
+
 function registerGoogleSlot(el: Element | ComponentPublicInstance | null) {
     if (!el || !(el instanceof HTMLElement)) return;
     const list = googleButtonSlots.value;
@@ -48,6 +56,7 @@ onMounted(async () => {
     await notificationsLogic.initialize();
     document.addEventListener("click", closeProfileMenu);
     document.addEventListener("keydown", handleEscape);
+    window.addEventListener("scroll", onWindowScroll, { passive: true });
 });
 
 function openThemeSheet(): void {
@@ -62,11 +71,12 @@ function handleEscape(event: KeyboardEvent) {
 onUnmounted(() => {
     document.removeEventListener("click", closeProfileMenu);
     document.removeEventListener("keydown", handleEscape);
+    window.removeEventListener("scroll", onWindowScroll);
 });
 </script>
 
 <template>
-    <header class="app-header">
+    <header class="app-header" :class="{ scrolled: isHeaderScrolled }">
         <div class="header-left">
             <div class="logo">
                 <h1 class="page-title" :data-admin="authStore.isAdmin" @click="handleLogoTap">{{ tabTitle }}</h1>
