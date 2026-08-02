@@ -1,5 +1,7 @@
 // static/js/db.js를 그대로 옮긴다. 화면/기능 단위 View-State-Logic 분할과
 // 달리, 이건 UI 상태가 없는 순수 데이터 접근 계층이라 3분할하지 않는다.
+import { toRaw } from "vue";
+
 export interface AudiobookRecord {
     id: string;
     title: string;
@@ -61,7 +63,12 @@ export function saveAudiobookToDB(entry: AudiobookRecord): Promise<void> {
     return new Promise((resolve, reject) => {
         const transaction = requireDb().transaction(["audiobooks"], "readwrite");
         const store = transaction.objectStore("audiobooks");
-        const request = store.put(entry);
+        // entry가 Vue 반응형 상태(예: actionSheetTarget.value)에서 그대로 온
+        // 경우 Proxy라 구조화 복제(structured clone)가 실패해 store.put()이
+        // 동기적으로 던진다 — 이 Promise executor 안에서 던지면 자동으로
+        // reject되어, 실제로는 서버 쪽 저장(PATCH)까지 다 끝난 뒤인데도
+        // 호출부에는 "실패"로 보인다. toRaw로 순수 객체로 바꿔 전달한다.
+        const request = store.put(toRaw(entry));
 
         request.onsuccess = () => resolve();
         request.onerror = (e) => reject((e.target as IDBRequest).error);

@@ -31,6 +31,8 @@ const isEmpty = computed(() =>
     browserState.subfolders.value.length === 0 && currentFolderAudiobooks.value.length === 0
 );
 
+const isAtRoot = computed(() => browserState.breadcrumb.value.length <= 1);
+
 function onNewFolder(): void {
     const name = window.prompt("새 폴더 이름");
     if (name) browserLogic.createFolder(name);
@@ -40,55 +42,43 @@ onMounted(() => browserLogic.loadCurrentFolder());
 </script>
 
 <template>
-    <section class="glass-card library-section">
-        <div class="card-header">
-            <i data-lucide="folder" class="header-icon"></i>
-            <h2>내 파일</h2>
-            <button
-                class="btn-icon"
-                aria-label="새 폴더"
-                title="새 폴더"
-                style="margin-left: auto; width: 44px; height: 44px; border-radius: 50%; background: var(--glass-bg); border: 1px solid var(--glass-border); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-color); transition: all 0.3s ease;"
-                @click="onNewFolder"
-            >
-                <i data-lucide="folder-plus" style="width: 18px; height: 18px;"></i>
+    <!-- 부모(Home_View)가 v-show로 탭 전환을 제어한다. Vue는 컴포넌트가
+         루트 노드를 여러 개 가지면(fragment) 그 v-show를 어디에도 붙이지
+         못하고 조용히 무시한다 — 그래서 반드시 이 화면 전체를 루트
+         하나로 감싸야 한다(안의 시트들까지 포함해서). -->
+    <div class="myfiles-root">
+        <div class="myfiles-toolbar">
+            <div class="folder-breadcrumb" v-if="!isAtRoot">
+                <template v-for="(crumb, i) in browserState.breadcrumb.value" :key="crumb.id ?? 'root'">
+                    <span v-if="i > 0" class="folder-breadcrumb-sep">/</span>
+                    <button type="button" class="folder-breadcrumb-btn" @click="browserLogic.goToBreadcrumb(i)">{{ crumb.name }}</button>
+                </template>
+            </div>
+            <span v-else></span>
+            <button class="btn-icon-round btn-more" aria-label="새 폴더" title="새 폴더" type="button" @click="onNewFolder">
+                <i data-lucide="folder-plus"></i>
             </button>
         </div>
 
-        <div class="folder-breadcrumb">
-            <template v-for="(crumb, i) in browserState.breadcrumb.value" :key="crumb.id ?? 'root'">
-                <span v-if="i > 0" class="folder-breadcrumb-sep">/</span>
-                <button type="button" class="folder-breadcrumb-btn" @click="browserLogic.goToBreadcrumb(i)">{{ crumb.name }}</button>
-            </template>
+        <div class="library-empty" v-show="isEmpty">
+            <i data-lucide="folder-open"></i>
+            <p>이 폴더는 비어 있습니다.</p>
         </div>
 
-        <div class="library-container">
-            <div class="library-empty" v-show="isEmpty">
-                <i data-lucide="folder-open"></i>
-                <p>이 폴더는 비어 있습니다.</p>
+        <div class="myfiles-list">
+            <div v-for="folder in browserState.subfolders.value" :key="folder.id" class="myfiles-row" @click="browserLogic.openFolder(folder)">
+                <i data-lucide="folder" class="myfiles-row-icon"></i>
+                <span class="myfiles-row-title">{{ folder.name }}</span>
+                <button class="btn-icon-round btn-more" title="더보기" type="button" @click.stop="myFilesLogic.openFolderActionSheet(folder)">
+                    <i data-lucide="more-horizontal"></i>
+                </button>
             </div>
 
-            <div class="audio-list">
-                <div v-for="folder in browserState.subfolders.value" :key="folder.id" class="audio-item" @click="browserLogic.openFolder(folder)">
-                    <div class="audio-item-front">
-                        <div class="audio-title-group">
-                            <i data-lucide="folder"></i>
-                            <span class="audio-title">{{ folder.name }}</span>
-                        </div>
-                        <div class="audio-actions">
-                            <button class="btn-icon-round btn-more" title="더보기" @click.stop="myFilesLogic.openFolderActionSheet(folder)">
-                                <i data-lucide="more-horizontal"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <AudioListItemView v-for="audio in currentFolderAudiobooks" :key="audio.id" :audio="audio" :logic="audioListLogic" />
-            </div>
+            <AudioListItemView v-for="audio in currentFolderAudiobooks" :key="audio.id" :audio="audio" :logic="audioListLogic" />
         </div>
-    </section>
 
-    <ActionSheetView :state="audioListState" :logic="audioListLogic" :my-files-logic="myFilesLogic" />
-    <FolderActionSheetView :state="myFilesState" :logic="myFilesLogic" :folder-browser-logic="browserLogic" />
-    <MoveToFolderSheetView :state="myFilesState" :logic="myFilesLogic" :audio-list-logic="audioListLogic" />
+        <ActionSheetView :state="audioListState" :logic="audioListLogic" :my-files-logic="myFilesLogic" />
+        <FolderActionSheetView :state="myFilesState" :logic="myFilesLogic" :folder-browser-logic="browserLogic" />
+        <MoveToFolderSheetView :state="myFilesState" :logic="myFilesLogic" :audio-list-logic="audioListLogic" />
+    </div>
 </template>

@@ -45,18 +45,23 @@ const readerLogic = useReaderLogic(readerState, readerControlsLogic, audioListLo
 
 const activeTab = ref<"home" | "files">("home");
 
-// 홈 화면 "내 오디오북"은 최대 5개만 — 북마크된 항목을 먼저 채우고,
-// 나머지는 추가되거나 재생된 시각 중 더 최근인 순으로 채운다.
+// 홈 화면은 "최근 추가"와 "즐겨찾기" 두 섹션만 최대 5개씩 — 전체 목록은
+// 내 파일 탭에서 본다. 추가되거나 재생된 시각 중 더 최근인 순으로 정렬.
 const HOME_SUMMARY_LIMIT = 5;
 function recencyScore(audio: AudiobookRecord): number {
     return Math.max(audio.timestamp || 0, audio.playbackUpdatedAt || 0);
 }
-const homeSummaryItems = computed(() => {
-    const items = audioListState.savedAudiobooks.value;
-    const bookmarked = items.filter((a) => a.isBookmarked).sort((a, b) => recencyScore(b) - recencyScore(a));
-    const rest = items.filter((a) => !a.isBookmarked).sort((a, b) => recencyScore(b) - recencyScore(a));
-    return [...bookmarked, ...rest].slice(0, HOME_SUMMARY_LIMIT);
-});
+const recentItems = computed(() =>
+    [...audioListState.savedAudiobooks.value]
+        .sort((a, b) => recencyScore(b) - recencyScore(a))
+        .slice(0, HOME_SUMMARY_LIMIT)
+);
+const bookmarkedItems = computed(() =>
+    audioListState.savedAudiobooks.value
+        .filter((a) => a.isBookmarked)
+        .sort((a, b) => recencyScore(b) - recencyScore(a))
+        .slice(0, HOME_SUMMARY_LIMIT)
+);
 
 function onEscape(event: KeyboardEvent): void {
     if (event.key !== "Escape") return;
@@ -86,9 +91,24 @@ onMounted(async () => {
             :state="audioListState"
             :logic="audioListLogic"
             :my-files-logic="myFilesLogic"
-            :items="homeSummaryItems"
+            :items="recentItems"
+            title="최근 추가"
             :generating-items="generationState.generatingItems.value"
             :on-import-link="onImportLink"
+        />
+        <AudioListView
+            v-if="bookmarkedItems.length > 0"
+            :state="audioListState"
+            :logic="audioListLogic"
+            :my-files-logic="myFilesLogic"
+            :items="bookmarkedItems"
+            title="즐겨찾기"
+            icon="star"
+            :show-import-button="false"
+            :show-generating-items="false"
+            :auto-load="false"
+            :hide-action-sheet="true"
+            :generating-items="[]"
         />
     </main>
     <footer class="app-version-footer" v-show="activeTab === 'home'">

@@ -227,6 +227,54 @@ html {
     color: var(--primary-color);
 }
 
+/* 내 파일 화면 — iOS 섹션(카드박스) 대신 평평한 목록으로 보여준다.
+   타이틀은 헤더의 큰 타이틀 하나로 충분해 여기선 반복하지 않는다. */
+.myfiles-root {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.myfiles-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 44px;
+}
+
+.myfiles-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.myfiles-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 4px;
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+}
+
+.myfiles-row-icon {
+    width: 24px;
+    height: 24px;
+    color: var(--primary-color);
+    flex-shrink: 0;
+}
+
+.myfiles-row-title {
+    flex: 1;
+    min-width: 0;
+    font-family: var(--font-serif);
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--text-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 /* 내 파일 화면의 경로 표시(빵부스러기) */
 .folder-breadcrumb {
     display: flex;
@@ -2710,7 +2758,8 @@ input[type="range"]::-webkit-slider-thumb:active {
 .pull-active .app-header,
 .pull-active .app-main,
 .pull-active .auth-container,
-.pull-active .app-version-footer {
+.pull-active .app-version-footer,
+.pull-active .myfiles-root {
     transform: translateY(var(--pull-y, 0px));
 }
 
@@ -2719,7 +2768,8 @@ input[type="range"]::-webkit-slider-thumb:active {
 .pull-settling .app-header,
 .pull-settling .app-main,
 .pull-settling .auth-container,
-.pull-settling .app-version-footer {
+.pull-settling .app-version-footer,
+.pull-settling .myfiles-root {
     transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
