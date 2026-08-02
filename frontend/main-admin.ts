@@ -1,4 +1,4 @@
 import { createApp } from "vue";
-import AdminDashboardView from "./AdminDashboard/AdminDashboard_View.vue";
+import AdminView from "./Admin/Admin_View.vue";
 
-createApp(AdminDashboardView).mount("#app");
+createApp(AdminView).mount("#app");

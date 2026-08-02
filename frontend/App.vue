@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted } from "vue";
-import BaseToast from "./components/BaseToast.vue";
+import BaseToast from "./components/Toast/Toast_View.vue";
 import PullRefreshIndicatorView from "./components/Pwa/PullRefreshIndicator_View.vue";
 import IosInstallPromptView from "./components/Pwa/IosInstallPrompt_View.vue";
-import { usePwaState } from "./composables/Pwa/Pwa_State.vue";
-import { usePwaLogic } from "./composables/Pwa/Pwa_Logic.vue";
+import { usePwaState } from "./components/Pwa/Pwa_State.vue";
+import { usePwaLogic } from "./components/Pwa/Pwa_Logic.vue";
 
 // lucide는 <i data-lucide="..."> 를 실제 svg로 바꿔치기하는 방식이라, DOM이
 // 바뀔 때마다(메뉴 열림, 목록 렌더 등) 다시 호출해야 새로 생긴 아이콘도

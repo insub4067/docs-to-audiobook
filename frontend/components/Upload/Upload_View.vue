@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import type { GenerationState } from "../../composables/Generation/Generation_State.vue";
-import type { GenerationLogic } from "../../composables/Generation/Generation_Logic.vue";
+import type { GenerationState } from "../../Generation/Generation_State.vue";
+import type { GenerationLogic } from "../../Generation/Generation_Logic.vue";
 
 const props = defineProps<{
     state: GenerationState;

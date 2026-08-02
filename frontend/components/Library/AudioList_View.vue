@@ -2,9 +2,9 @@
 import { computed, onMounted } from "vue";
 import type { AudioListState } from "./AudioList_State.vue";
 import type { AudioListLogic } from "./AudioList_Logic.vue";
-import type { GeneratingItem } from "../../composables/Generation/Generation_State.vue";
+import type { GeneratingItem } from "../../Generation/Generation_State.vue";
 import AudioListItemView from "./AudioListItem_View.vue";
-import ActionSheetView from "./ActionSheet_View.vue";
+import ActionSheetView from "../../Sheet/ActionSheet_View.vue";
 
 const props = defineProps<{
     state: AudioListState;

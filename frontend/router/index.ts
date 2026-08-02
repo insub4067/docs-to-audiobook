@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router";
-import HomeView from "../views/Home_View.vue";
+import HomeView from "../Home/Home_View.vue";
 
 // 백엔드가 실제로 이 SPA(app.html)를 서빙하는 경로는 "/"와 "/share/:id"
 // 뿐이다(backend/routes/system.py, share.py). 그 외 경로는 admin.html

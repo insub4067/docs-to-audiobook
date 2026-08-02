@@ -26,8 +26,8 @@ INDEX_HTML = FRONTEND_STATIC / "index.html"
 # admin 대시보드는 Vue SFC(View/State/Logic 분리)로 포팅되어 소스가
 # frontend/에 있다. static/admin.html·admin.js는 빌드 산출물(static/dist/admin)
 # 로 대체되어 더 이상 존재하지 않는다.
-ADMIN_VIEW_VUE = ROOT_DIR / "frontend" / "AdminDashboard" / "AdminDashboard_View.vue"
-ADMIN_LOGIC_VUE = ROOT_DIR / "frontend" / "AdminDashboard" / "AdminDashboard_Logic.vue"
+ADMIN_VIEW_VUE = ROOT_DIR / "frontend" / "Admin" / "Admin_View.vue"
+ADMIN_LOGIC_VUE = ROOT_DIR / "frontend" / "Admin" / "Admin_Logic.vue"
 ADMIN_METRIC_HTML = FRONTEND_STATIC / "admin-metric.html"
 ADMIN_METRIC_JS = FRONTEND_STATIC / "admin-metric.js"
 MANIFEST = FRONTEND_STATIC / "manifest.json"

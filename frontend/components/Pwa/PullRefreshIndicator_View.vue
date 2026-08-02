@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { PwaState } from "../../composables/Pwa/Pwa_State.vue";
+import type { PwaState } from "./Pwa_State.vue";
 
 const props = defineProps<{ state: PwaState }>();
 

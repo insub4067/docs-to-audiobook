@@ -7,9 +7,9 @@ import {
     type AudiobookRecord,
 } from "../../services/indexedDb";
 import { getAudiobookDisplayTitle } from "../../utils/format";
-import { useAuthLogic } from "../../composables/Auth/Auth_Logic.vue";
-import { useToastLogic } from "../../composables/Toast/Toast_Logic.vue";
-import { useToastState } from "../../composables/Toast/Toast_State.vue";
+import { useAuthLogic } from "../../Auth/Auth_Logic.vue";
+import { useToastLogic } from "../Toast/Toast_Logic.vue";
+import { useToastState } from "../Toast/Toast_State.vue";
 import type { AudioListState, BackgroundJobItem } from "./AudioList_State.vue";
 
 export interface SyncResult {

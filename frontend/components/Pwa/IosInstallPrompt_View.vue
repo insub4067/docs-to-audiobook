@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { PwaState } from "../../composables/Pwa/Pwa_State.vue";
-import type { PwaLogic } from "../../composables/Pwa/Pwa_Logic.vue";
+import type { PwaState } from "./Pwa_State.vue";
+import type { PwaLogic } from "./Pwa_Logic.vue";
 
 defineProps<{ state: PwaState; logic: PwaLogic }>();
 </script>
