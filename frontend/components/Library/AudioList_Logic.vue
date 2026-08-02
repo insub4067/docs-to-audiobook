@@ -10,7 +10,7 @@ import { getAudiobookDisplayTitle } from "../../utils/format";
 import { useAuthLogic } from "../../composables/Auth/Auth_Logic.vue";
 import { useToastLogic } from "../../composables/Toast/Toast_Logic.vue";
 import { useToastState } from "../../composables/Toast/Toast_State.vue";
-import type { AudioListState } from "./AudioList_State.vue";
+import type { AudioListState, BackgroundJobItem } from "./AudioList_State.vue";
 
 export interface SyncResult {
     uploaded: number;
@@ -32,6 +32,8 @@ export interface AudioListLogic {
     deleteAudiobook(id: string): Promise<void>;
     sync(options?: { silent?: boolean }): Promise<SyncResult>;
     savePlaybackState(entry: AudiobookRecord, position: number, playbackSettings: { playbackSpeed: number; repeatMode: string }): Promise<void>;
+    showBackgroundJob(jobId: string, title?: string): void;
+    removeBackgroundJob(jobId: string): void;
 }
 
 const DEFAULT_BOOK_ID = "default-sherlock-holmes";
@@ -40,9 +42,7 @@ let syncing = false;
 // static/js/library.js를 옮긴 것. 스와이프/터치 제스처는 각 항목을 맡는
 // AudioListItem_View.vue가 담당하고, 이 파일은 데이터 조작(조회/공유/
 // 다운로드/제목수정/삭제/클라우드 동기화/기본 제공 도서 시딩)을 맡는다.
-// 리더(Reader) 기능은 아직 포팅 전이라, 항목을 열 때는
-// window.__openReaderMode 훅이 등록돼 있으면 호출하고 없으면 아무 것도
-// 하지 않는다 — Reader 포팅 단계에서 그 훅을 채운다.
+// 항목을 열 때는 window.__openReaderMode 훅(Reader_Logic이 등록)을 호출한다.
 export function useAudioListLogic(state: AudioListState): AudioListLogic {
     const authLogic = useAuthLogic();
     const { showToast } = useToastLogic(useToastState());
@@ -432,13 +432,26 @@ export function useAudioListLogic(state: AudioListState): AudioListLogic {
         if (authLogic.isLoggedIn()) await sync();
     }
 
+    // notifications.js가 백그라운드(대용량) 생성 작업을 페이지 재방문 시
+    // 이어서 보여줄 때 쓰는 훅 — generation-status.js의 show/remove에 대응.
+    function showBackgroundJob(jobId: string, title = "오디오북"): void {
+        if (state.backgroundJobItems.value.some((item) => item.jobId === jobId)) return;
+        state.backgroundJobItems.value = [...state.backgroundJobItems.value, { jobId, title }];
+    }
+
+    function removeBackgroundJob(jobId: string): void {
+        state.backgroundJobItems.value = state.backgroundJobItems.value.filter((item) => item.jobId !== jobId);
+    }
+
     (window as any).__renderLibrary = refresh;
     (window as any).__syncAudiobooksToCloud = sync;
+    (window as any).__showBackgroundJobLoading = showBackgroundJob;
+    (window as any).__removeBackgroundJobLoading = removeBackgroundJob;
 
     return {
         refresh, load, openItem, openActionSheet, closeActionSheet,
         performShare, downloadAudiobook, editAudiobookTitle, deleteAudiobook, sync,
-        savePlaybackState,
+        savePlaybackState, showBackgroundJob, removeBackgroundJob,
     };
 }
 

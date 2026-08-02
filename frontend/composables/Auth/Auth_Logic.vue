@@ -22,6 +22,15 @@ export interface AuthLogic {
 // 사용자가 있어 바꾸면 전부 로그아웃되므로 동일하게 유지한다.
 const AUTH_TOKEN_KEY = "authToken";
 
+// 다른 탭에서 로그인/로그아웃해 authToken이 바뀌면 이 탭도 새로고침해
+// 세션을 맞춘다. 모듈이 처음 로드될 때 한 번만 등록하면 된다(원본도
+// auth.js 스크립트가 로드될 때 한 번만 등록됐다).
+window.addEventListener("storage", (event) => {
+    if (event.key !== AUTH_TOKEN_KEY || event.oldValue === event.newValue) return;
+    (window as any).__refreshBackgroundNotificationNamespace?.();
+    location.reload();
+});
+
 /** 이 기기에 저장된 오디오북을 지운다. 기본 제공(isDefault)만 남기고
  * 재생 위치도 초기화한다. 정리 트랜잭션 완료 후 바로 닫기 위해
  * services/indexedDb.ts의 공용 연결과 별도로 자체 연결을 연다. */

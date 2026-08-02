@@ -13,7 +13,11 @@ const props = defineProps<{
     onImportLink: () => void;
 }>();
 
-const isEmpty = computed(() => props.generatingItems.length === 0 && props.state.savedAudiobooks.value.length === 0);
+const isEmpty = computed(() =>
+    props.generatingItems.length === 0
+    && props.state.backgroundJobItems.value.length === 0
+    && props.state.savedAudiobooks.value.length === 0
+);
 
 onMounted(() => props.logic.load());
 </script>
@@ -51,6 +55,16 @@ onMounted(() => props.logic.load());
                                 <div class="generating-progress-fill" :style="{ width: item.progressPercent + '%' }"></div>
                             </div>
                             <span class="generating-status">{{ item.statusText }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-for="item in state.backgroundJobItems.value" :key="item.jobId" class="audio-item audio-item-generating">
+                    <div class="audio-title-group">
+                        <div class="generating-spinner"></div>
+                        <div class="generating-info">
+                            <span class="audio-title">{{ item.title }}</span>
+                            <span class="generating-status">서버에서 생성 중...</span>
                         </div>
                     </div>
                 </div>

@@ -4,12 +4,22 @@ import { useAuthStore } from "../../stores/auth";
 import { useAuthLogic } from "../../composables/Auth/Auth_Logic.vue";
 import { useHeaderState } from "./Header_State.vue";
 import { useHeaderLogic } from "./Header_Logic.vue";
+import { useNotificationsState } from "../../composables/Notifications/Notifications_State.vue";
+import { useNotificationsLogic } from "../../composables/Notifications/Notifications_Logic.vue";
 
 const authStore = useAuthStore();
 const authLogic = useAuthLogic();
 const { isProfileMenuOpen, authError, googleButtonSlots } = useHeaderState();
 const { toggleProfileMenu, closeProfileMenu, handleLogout, handleLogoTap, setupSocialLogin } =
     useHeaderLogic({ isProfileMenuOpen, authError, googleButtonSlots });
+const notificationsState = useNotificationsState();
+const notificationsLogic = useNotificationsLogic(notificationsState);
+
+const pushNotificationLabel = computed(() => {
+    if (notificationsState.pushState.value === "on") return "완료 알림 켜짐";
+    if (notificationsState.pushState.value === "blocked") return "알림 차단됨";
+    return "완료 알림 꺼짐";
+});
 
 const profileName = computed(() => authStore.user?.full_name || authStore.user?.email || "사용자");
 const profileInitial = computed(() => profileName.value.trim().split(/\s+/)[0].slice(0, 2));
@@ -27,6 +37,7 @@ watch(() => authStore.isLoggedIn, (loggedIn) => {
 onMounted(async () => {
     await authLogic.initializeAuth();
     if (!authStore.isLoggedIn) await setupSocialLogin();
+    await notificationsLogic.initialize();
     document.addEventListener("click", closeProfileMenu);
     document.addEventListener("keydown", handleEscape);
 });
@@ -74,6 +85,18 @@ onUnmounted(() => {
                     <i data-lucide="layout-dashboard"></i>
                     관리자 페이지
                 </a>
+                <button
+                    class="profile-menu-link"
+                    type="button"
+                    role="menuitem"
+                    :hidden="!notificationsState.isPushVisible.value"
+                    :disabled="notificationsState.pushState.value === 'blocked'"
+                    :aria-pressed="notificationsState.pushState.value === 'on'"
+                    @click="notificationsLogic.togglePush"
+                >
+                    <i data-lucide="bell"></i>
+                    <span>{{ pushNotificationLabel }}</span>
+                </button>
                 <button class="btn-logout" id="logoutBtn" type="button" role="menuitem" aria-label="로그아웃" @click="handleLogout">
                     <i data-lucide="log-out"></i>
                     로그아웃

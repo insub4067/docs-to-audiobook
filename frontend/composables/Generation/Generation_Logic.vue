@@ -269,10 +269,12 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
             const responseData = await response.json();
             const jobId = responseData.job_id;
             if (responseData.background_started) {
-                // 백그라운드 대용량 작업 완료 알림/재접속 시 이어보기는
-                // 푸시 알림 기능(notifications.js 포팅) 단계에서 붙인다.
-                // 지금은 시작 사실만 알린다.
-                item.statusText = "서버에서 생성 중...";
+                // 이 세션 전용 목록(generatingItems)에서 빼고, 재접속해도
+                // 이어 보이는 알림 기능 쪽 목록(showBackgroundJobLoading)으로
+                // 넘긴다 — 완료 시 그쪽에서 지운다.
+                removeItem();
+                (window as any).__rememberBackgroundJob?.(jobId, args.filename);
+                (window as any).__showBackgroundJobLoading?.(jobId, args.filename);
                 showToast("서버에서 백그라운드 생성이 시작되었습니다. 완료되면 보관함에 저장됩니다.", "info");
                 return true;
             }
