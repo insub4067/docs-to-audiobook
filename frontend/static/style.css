@@ -98,7 +98,7 @@
     background-color: #f0f0f0;
 }
 :root[data-app-theme] .action-sheet {
-    background: #fff;
+    background: var(--card-bg-solid);
 }
 :root[data-app-theme] .action-sheet-handle {
     background: rgba(0, 0, 0, 0.15);
@@ -123,9 +123,6 @@
 :root[data-app-theme="dark"] .audio-item:hover .audio-item-front,
 :root[data-app-theme="dark"] .audio-item:active .audio-item-front {
     background-color: #3a332f;
-}
-:root[data-app-theme="dark"] .action-sheet {
-    background: #2f2926;
 }
 :root[data-app-theme="dark"] .action-sheet-handle {
     background: rgba(247, 240, 233, 0.26);
@@ -1306,10 +1303,13 @@ input[type="range"]::-webkit-slider-thumb:active {
     pointer-events: auto;
 }
 
-.reader-container {
+.reader-container,
+.theme-preview {
     /* 리더 전용 색상 테마. 앱 전체(홈/보관함/관리자)와 같은 4가지
        라이트/다크/웜/그레이를 공유하지만, 읽는 화면은 장시간 독서에
-       맞춘 별도 톤(대비/테두리 등)을 쓴다. 기본값은 웜(warm)이다. */
+       맞춘 별도 톤(대비/테두리 등)을 쓴다. 기본값은 웜(warm)이다.
+       .theme-preview(테마 시트 안의 짧은 미리보기 문구)도 같은 변수를
+       써서 실제 리더 화면과 똑같은 색으로 보인다. */
     --reader-bg: #FAF5E6;
     --reader-surface: rgba(250, 245, 230, 0.88);
     --reader-text: #2C1F1A;
@@ -1319,7 +1319,9 @@ input[type="range"]::-webkit-slider-thumb:active {
     --reader-highlight-bg: rgba(198, 154, 88, 0.22);
     --reader-highlight-text: #5C3317;
     --reader-highlight-shadow: rgba(198, 154, 88, 0.5);
+}
 
+.reader-container {
     width: 100%;
     max-width: 760px;
     position: absolute;
@@ -1329,7 +1331,8 @@ input[type="range"]::-webkit-slider-thumb:active {
     overflow: hidden;
 }
 
-:root[data-app-theme="light"] .reader-container {
+:root[data-app-theme="light"] .reader-container,
+:root[data-app-theme="light"] .theme-preview {
     --reader-bg: #ffffff;
     --reader-surface: rgba(255, 255, 255, 0.88);
     --reader-text: #1a1a1a;
@@ -1341,7 +1344,8 @@ input[type="range"]::-webkit-slider-thumb:active {
     --reader-highlight-shadow: rgba(138, 109, 59, 0.4);
 }
 
-:root[data-app-theme="dark"] .reader-container {
+:root[data-app-theme="dark"] .reader-container,
+:root[data-app-theme="dark"] .theme-preview {
     --reader-bg: #121212;
     --reader-surface: rgba(24, 24, 24, 0.88);
     --reader-text: #e8e4de;
@@ -1353,7 +1357,8 @@ input[type="range"]::-webkit-slider-thumb:active {
     --reader-highlight-shadow: rgba(217, 166, 111, 0.5);
 }
 
-:root[data-app-theme="gray"] .reader-container {
+:root[data-app-theme="gray"] .reader-container,
+:root[data-app-theme="gray"] .theme-preview {
     --reader-bg: #e7e7e5;
     --reader-surface: rgba(231, 231, 229, 0.88);
     --reader-text: #2b2b2b;
@@ -1528,6 +1533,30 @@ input[type="range"]::-webkit-slider-thumb:active {
 }
 
 /* 리더 테마 선택 시트 (Aa 버튼) */
+.theme-preview {
+    margin: 4px 24px 16px;
+    padding: 18px 20px;
+    border-radius: 16px;
+    border: 1px solid var(--reader-border);
+    background-color: var(--reader-bg);
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.theme-preview-heading {
+    font-family: var(--font-serif);
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--reader-accent);
+    margin-bottom: 6px;
+}
+
+.theme-preview-text {
+    font-family: var(--font-serif);
+    font-size: 0.92rem;
+    line-height: 1.6;
+    color: var(--reader-text);
+}
+
 .reader-theme-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -1983,7 +2012,7 @@ input[type="range"]::-webkit-slider-thumb:active {
 .action-sheet {
     width: 100%;
     max-width: 500px;
-    background: #fff;
+    background: var(--card-bg-solid);
     border-radius: 20px 20px 0 0;
     padding: 8px 0 max(12px, env(safe-area-inset-bottom));
     transform: translateY(100%);
@@ -2166,7 +2195,7 @@ input[type="range"]::-webkit-slider-thumb:active {
     padding: 8px;
     border: 1px solid var(--glass-border);
     border-radius: 14px;
-    background: var(--card-bg);
+    background: var(--card-bg-solid);
     box-shadow: 0 14px 34px rgba(0, 0, 0, 0.18);
 }
 

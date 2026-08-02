@@ -36,6 +36,10 @@ function onBackdropClick(event: MouseEvent): void {
             <div class="index-sheet-header">
                 <h3>화면 테마</h3>
             </div>
+            <div class="theme-preview">
+                <p class="theme-preview-heading">1장</p>
+                <p class="theme-preview-text">낯선 문장이 익숙한 목소리로 다가올 때, 우리는 비로소 이야기 속에 있다.</p>
+            </div>
             <div class="reader-theme-grid">
                 <button
                     v-for="option in APP_THEME_OPTIONS"
