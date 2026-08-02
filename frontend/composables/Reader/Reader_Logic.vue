@@ -23,12 +23,12 @@ export interface ReaderLogic {
     closeIndexSheetIfOpen(): boolean;
     importSharedLink(url: string): Promise<void>;
     saveSharedAudiobook(): Promise<void>;
+    attachUiCollapseHandlers(): () => void;
 }
 
-// static/js/reader.js를 옮긴 것. 스크롤에 따라 헤더/컨트롤이 접히는 연출
-// (readerUiProgress, measureReaderBars 등)은 이번 포팅 범위에서 뺐다 —
-// 재생/하이라이트/목차/공유 같은 핵심 기능과 무관한 순수 장식이라, 항상
-// 펼쳐진 상태로 둔다. 필요해지면 이 파일에 이어 붙인다.
+const READER_COLLAPSE_DISTANCE = 90;
+
+// static/js/reader.js를 옮긴 것.
 export function useReaderLogic(state: ReaderState, readerControls: ReaderControlsLogic, audioListLogic: AudioListLogic): ReaderLogic {
     const { showToast } = useToastLogic(useToastState());
     const webSpeech = useWebSpeech(showToast);
@@ -41,6 +41,45 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
     let lastPositionSaveSecond = -1;
     let lastPlaybackSyncTime = 0;
     let lastToggleTime = 0;
+    let readerUiTimeout: ReturnType<typeof setTimeout> | null = null;
+    let readerSnapTimeout: ReturnType<typeof setTimeout> | null = null;
+    let readerUiProgress = 0;
+    let lastScrollTop = 0;
+    let isAutoScrolling = false;
+
+    function setReaderUiProgress(progress: number, animated: boolean): void {
+        const container = state.containerEl.value;
+        if (!container) return;
+        readerUiProgress = Math.min(1, Math.max(0, progress));
+        container.classList.toggle("ui-snapping", animated === true);
+        container.style.setProperty("--reader-ui-p", readerUiProgress.toFixed(3));
+    }
+
+    function measureReaderBars(): void {
+        const container = state.containerEl.value;
+        if (!container) return;
+        const header = container.querySelector<HTMLElement>(".reader-header");
+        const controls = container.querySelector<HTMLElement>(".reader-controls");
+        const secondary = container.querySelector<HTMLElement>(".reader-secondary-controls");
+        if (secondary) container.style.setProperty("--reader-secondary-h", secondary.scrollHeight + "px");
+        if (header) container.style.setProperty("--reader-header-h", header.offsetHeight + "px");
+        if (controls) container.style.setProperty("--reader-controls-h", controls.offsetHeight + "px");
+    }
+
+    function showReaderUi(): void {
+        setReaderUiProgress(0, true);
+        if (readerUiTimeout) clearTimeout(readerUiTimeout);
+        readerUiTimeout = setTimeout(() => {
+            if (!state.audioEl.value?.paused) setReaderUiProgress(1, true);
+        }, 4000);
+    }
+
+    function resetReaderUiTimeout(): void {
+        lastScrollTop = 0;
+        setReaderUiProgress(0, false);
+        requestAnimationFrame(measureReaderBars);
+        showReaderUi();
+    }
 
     function resetAudioHandlers(): void {
         const el = state.audioEl.value;
@@ -57,11 +96,14 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         if (activeIndex !== state.activeIndex.value) {
             state.activeIndex.value = activeIndex;
             requestAnimationFrame(() => {
-                const el = state.audioEl.value;
                 const content = state.contentEl.value;
                 if (!content) return;
                 const activeSpan = document.getElementById(`sent-${activeIndex}`);
-                if (activeSpan) content.scrollTo({ top: getReaderScrollTarget(content, activeSpan), behavior: "smooth" });
+                if (activeSpan) {
+                    isAutoScrolling = true;
+                    content.scrollTo({ top: getReaderScrollTarget(content, activeSpan), behavior: "smooth" });
+                    setTimeout(() => { isAutoScrolling = false; }, 800);
+                }
             });
         }
     }
@@ -142,6 +184,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         el.play().catch(() => {});
 
         state.isOpen.value = true;
+        resetReaderUiTimeout();
     }
 
     function openSharedReaderMode(title: string, sharedSentences: ReaderSentence[], audioUrl: string, shareId: string | null = null): void {
@@ -190,6 +233,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         el.load();
 
         state.isOpen.value = true;
+        resetReaderUiTimeout();
     }
 
     function togglePlayPause(): void {
@@ -279,6 +323,48 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         state.isPlaying.value = false;
         state.activeIndex.value = -1;
         state.showSaveSharedBtn.value = false;
+        if (readerUiTimeout) clearTimeout(readerUiTimeout);
+        if (readerSnapTimeout) clearTimeout(readerSnapTimeout);
+        setReaderUiProgress(0, false);
+        lastScrollTop = 0;
+    }
+
+    // 스크롤에 따라 헤더/컨트롤을 접었다 펼치는 연출(static/js/reader.js의
+    // initialize() 안 리스너들). View의 onMounted에서 한 번 호출하고,
+    // 반환값을 onUnmounted에서 호출해 리스너를 정리한다.
+    function attachUiCollapseHandlers(): () => void {
+        const content = state.contentEl.value;
+
+        function onScroll(): void {
+            if (!content) return;
+            const scrollTop = content.scrollTop;
+            if (isAutoScrolling) { lastScrollTop = Math.max(0, scrollTop); return; }
+            const delta = scrollTop - lastScrollTop;
+            lastScrollTop = Math.max(0, scrollTop);
+            if (scrollTop <= 0) setReaderUiProgress(0, true);
+            else {
+                setReaderUiProgress(readerUiProgress + delta / READER_COLLAPSE_DISTANCE, false);
+                if (readerUiTimeout) clearTimeout(readerUiTimeout);
+            }
+            if (readerSnapTimeout) clearTimeout(readerSnapTimeout);
+            readerSnapTimeout = setTimeout(() => setReaderUiProgress(readerUiProgress > 0.5 ? 1 : 0, true), 140);
+        }
+
+        function onResize(): void {
+            if (state.isOpen.value) measureReaderBars();
+        }
+
+        content?.addEventListener("scroll", onScroll, { passive: true });
+        content?.addEventListener("click", showReaderUi);
+        content?.addEventListener("touchstart", showReaderUi, { passive: true });
+        window.addEventListener("resize", onResize);
+
+        return () => {
+            content?.removeEventListener("scroll", onScroll);
+            content?.removeEventListener("click", showReaderUi);
+            content?.removeEventListener("touchstart", showReaderUi);
+            window.removeEventListener("resize", onResize);
+        };
     }
 
     async function checkSharedLink(): Promise<void> {
@@ -345,7 +431,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         open, openSharedReaderMode, closeReader, checkSharedLink,
         togglePlayPause, seekTo, onSentenceClick, onHeadingClick,
         openIndexSheet, closeIndexSheet, closeIndexSheetIfOpen,
-        importSharedLink, saveSharedAudiobook,
+        importSharedLink, saveSharedAudiobook, attachUiCollapseHandlers,
     };
 }
 

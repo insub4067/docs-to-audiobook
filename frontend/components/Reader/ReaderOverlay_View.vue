@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { onMounted, onUnmounted, type ComponentPublicInstance } from "vue";
 import type { ReaderState } from "../../composables/Reader/Reader_State.vue";
 import type { ReaderLogic } from "../../composables/Reader/Reader_Logic.vue";
 import type { ReaderControlsState } from "../../composables/Reader/ReaderControls_State.vue";
@@ -25,11 +26,30 @@ function onProgressBarClick(event: MouseEvent): void {
     const rect = bar.getBoundingClientRect();
     if (rect.width > 0) props.logic.seekTo((event.clientX - rect.left) / rect.width);
 }
+
+// 인라인 화살표를 :ref에 바로 쓰면 이 컴포넌트가 리렌더될 때마다(재생 중
+// activeIndex가 바뀔 때마다) 매번 새 함수로 취급돼 Vue가 null로 껐다가
+// 다시 채운다 — measureReaderBars처럼 한 번만 실행되는 rAF 콜백이 그
+// 찰나의 null 구간과 겹치면 아무것도 측정하지 못한다. 이름 있는 함수로
+// 참조를 고정해 매 렌더마다 재실행되지 않게 한다.
+function setContainerEl(el: Element | ComponentPublicInstance | null): void {
+    props.state.containerEl.value = el instanceof HTMLElement ? el : null;
+}
+function setContentEl(el: Element | ComponentPublicInstance | null): void {
+    props.state.contentEl.value = el instanceof HTMLElement ? el : null;
+}
+function setAudioEl(el: Element | ComponentPublicInstance | null): void {
+    props.state.audioEl.value = el instanceof HTMLAudioElement ? el : null;
+}
+
+let detachUiCollapseHandlers: (() => void) | null = null;
+onMounted(() => { detachUiCollapseHandlers = props.logic.attachUiCollapseHandlers(); });
+onUnmounted(() => detachUiCollapseHandlers?.());
 </script>
 
 <template>
     <div class="reader-overlay" :class="{ show: state.isOpen.value }" role="dialog" aria-modal="true" aria-label="오디오북 듣기">
-        <div class="reader-container">
+        <div class="reader-container" :ref="setContainerEl">
             <header class="reader-header">
                 <h3 class="reader-book-title">{{ state.title.value }}</h3>
                 <div class="reader-header-actions" style="display: flex; gap: 8px;">
@@ -68,7 +88,7 @@ function onProgressBarClick(event: MouseEvent): void {
                 </div>
             </header>
 
-            <div class="reader-content" :ref="(el) => { state.contentEl.value = (el as HTMLElement) ?? null }">
+            <div class="reader-content" :ref="setContentEl">
                 <template v-for="(item, itemIdx) in state.displayItems.value" :key="itemIdx">
                     <component v-if="item.kind === 'heading'" :is="'h' + item.level" class="reader-heading" :class="`h${item.level}`">
                         <span
@@ -109,7 +129,7 @@ function onProgressBarClick(event: MouseEvent): void {
             </div>
 
             <footer class="reader-controls">
-                <audio :ref="(el) => { state.audioEl.value = (el as HTMLAudioElement) ?? null }"></audio>
+                <audio :ref="setAudioEl"></audio>
                 <div class="reader-player-ui">
                     <button class="btn-player-skip" aria-label="10초 뒤로" title="10초 뒤로" type="button" @click="controlsLogic.skipBack">
                         <i data-lucide="skip-back"></i>

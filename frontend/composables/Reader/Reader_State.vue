@@ -19,6 +19,7 @@ export interface ReaderState {
     currentAudioObject: Ref<AudiobookRecord | null>;
     audioEl: Ref<HTMLAudioElement | null>;
     contentEl: Ref<HTMLElement | null>;
+    containerEl: Ref<HTMLElement | null>;
 }
 
 export function useReaderState(): ReaderState {
@@ -38,6 +39,7 @@ export function useReaderState(): ReaderState {
         currentAudioObject: ref(null),
         audioEl: ref(null),
         contentEl: ref(null),
+        containerEl: ref(null),
     };
 }
 
