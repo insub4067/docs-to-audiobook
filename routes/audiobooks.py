@@ -129,7 +129,9 @@ async def get_playback_state(audiobook_id: str, authorization: str = Header(None
     try:
         response = supabase.table("playback_history").select("*") \
             .eq("audiobook_id", audiobook_id).eq("user_id", user_id).maybe_single().execute()
-        if response.data:
+        # postgrest-py는 일치하는 행이 0개면 .execute()가 None을 돌려준다
+        # (버전에 따른 동작). response.data로 바로 접근하면 AttributeError.
+        if response and response.data:
             return response.data
         return {
             "audiobook_id": audiobook_id,

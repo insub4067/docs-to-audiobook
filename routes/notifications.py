@@ -82,9 +82,12 @@ async def delete_push_subscription(payload: PushSubscriptionDeletion, authorizat
 @router.get("/api/background-jobs/{job_id}")
 async def get_background_job_status(job_id: str, authorization: str = Header(None)):
     user_id = state.require_user_id(authorization)
-    job = state._supabase_or_503().table("background_synthesis_jobs").select(
+    response = state._supabase_or_503().table("background_synthesis_jobs").select(
         "status,error,audiobook_id,completed_at"
-    ).eq("id", job_id).eq("user_id", user_id).maybe_single().execute().data
+    ).eq("id", job_id).eq("user_id", user_id).maybe_single().execute()
+    # postgrest-py는 일치하는 행이 0개면 .execute()가 None을 돌려준다
+    # (버전에 따른 동작). .data로 바로 접근하면 AttributeError.
+    job = response.data if response else None
     if not job:
         raise HTTPException(status_code=404, detail="해당 작업을 찾을 수 없습니다.")
     return job

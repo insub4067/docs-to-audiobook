@@ -68,6 +68,24 @@ async def test_background_job_status_hides_other_users_job(mock_supabase):
 
 
 @pytest.mark.asyncio
+async def test_background_job_status_returns_404_when_execute_returns_none(mock_supabase):
+    # postgrest-py는 maybe_single()에 일치하는 행이 0개면 .execute() 자체가
+    # None을 돌려준다(버전에 따른 동작, MagicMock(data=None)과는 다르다).
+    # .data로 바로 접근하면 AttributeError가 나서 500으로 이어졌던 회귀를 재현한다.
+    mock_supabase.table().select().eq().eq().maybe_single().execute.return_value = None
+
+    with patch("state.require_user_id", return_value="user-2"):
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=main.app), base_url="http://test"
+        ) as client:
+            response = await client.get(
+                "/api/background-jobs/job-1", headers={"Authorization": "Bearer token"}
+            )
+
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_push_subscription_upserts_for_authenticated_user(mock_supabase):
     mock_supabase.table().select().eq().limit().execute.return_value = MagicMock(data=[])
 

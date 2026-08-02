@@ -131,6 +131,28 @@ async def test_get_playback_state_returns_saved_state(mock_supabase, mock_auth):
 
 
 @pytest.mark.asyncio
+async def test_get_playback_state_returns_default_when_no_history_row_exists(mock_supabase, mock_auth):
+    # postgrest-py는 maybe_single()에 일치하는 행이 0개면 .execute() 자체가
+    # None을 돌려준다(버전에 따른 동작). response.data로 바로 접근하면
+    # AttributeError가 나서 500으로 이어졌던 회귀를 재현한다.
+    mock_supabase.table().select().eq().eq().maybe_single().execute.return_value = None
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(
+            "/api/audiobooks/book1/playback",
+            headers={"Authorization": "Bearer fake_token"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "audiobook_id": "book1",
+        "current_time_seconds": 0,
+        "playback_speed": 1.0,
+        "repeat_mode": "off",
+    }
+
+
+@pytest.mark.asyncio
 async def test_admin_metrics_are_available_only_through_admin_route():
     metrics = {
         "total_users": 12,
