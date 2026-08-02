@@ -8,6 +8,9 @@ import type { AudioListLogic } from "../components/Library/AudioList_Logic.vue";
 import ReaderControlsView from "./ReaderControls/ReaderControls_View.vue";
 import IndexSheetView from "../Sheet/IndexSheet_View.vue";
 import ReaderOptionsSheetView from "../Sheet/ReaderOptionsSheet_View.vue";
+import ReaderThemeSheetView from "../Sheet/ReaderThemeSheet_View.vue";
+import { useReaderThemeState } from "./ReaderTheme_State.vue";
+import { useReaderThemeLogic } from "./ReaderTheme_Logic.vue";
 
 const props = defineProps<{
     state: ReaderState;
@@ -16,6 +19,9 @@ const props = defineProps<{
     controlsLogic: ReaderControlsLogic;
     audioListLogic: AudioListLogic;
 }>();
+
+const themeState = useReaderThemeState();
+const themeLogic = useReaderThemeLogic(themeState, props.state.containerEl);
 
 function onShareClick(): void {
     const audio = props.state.currentAudioObject.value;
@@ -44,7 +50,10 @@ function setAudioEl(el: Element | ComponentPublicInstance | null): void {
 }
 
 let detachUiCollapseHandlers: (() => void) | null = null;
-onMounted(() => { detachUiCollapseHandlers = props.logic.attachUiCollapseHandlers(); });
+onMounted(() => {
+    detachUiCollapseHandlers = props.logic.attachUiCollapseHandlers();
+    themeLogic.initialize();
+});
 onUnmounted(() => detachUiCollapseHandlers?.());
 </script>
 
@@ -54,6 +63,15 @@ onUnmounted(() => detachUiCollapseHandlers?.());
             <header class="reader-header">
                 <h3 class="reader-book-title">{{ state.title.value }}</h3>
                 <div class="reader-header-actions" style="display: flex; gap: 8px;">
+                    <button
+                        class="btn-reader-close"
+                        aria-label="읽기 화면 테마"
+                        title="읽기 화면 테마"
+                        type="button"
+                        @click="themeLogic.openSheet"
+                    >
+                        <i data-lucide="type"></i>
+                    </button>
                     <button
                         class="btn-reader-close"
                         aria-label="목차 보기"
@@ -159,4 +177,5 @@ onUnmounted(() => detachUiCollapseHandlers?.());
 
     <IndexSheetView :state="state" :logic="logic" />
     <ReaderOptionsSheetView :state="controlsState" :logic="controlsLogic" />
+    <ReaderThemeSheetView :state="themeState" :logic="themeLogic" />
 </template>
