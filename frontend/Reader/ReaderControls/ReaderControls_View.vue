@@ -6,8 +6,6 @@ const props = defineProps<{
     state: ReaderControlsState;
     logic: ReaderControlsLogic;
 }>();
-
-const REPEAT_LABELS: Record<string, string> = { off: "반복 안 함", all: "전체 반복", one: "한 곡 반복" };
 </script>
 
 <template>
@@ -18,9 +16,9 @@ const REPEAT_LABELS: Record<string, string> = { off: "반복 안 함", all: "전
             aria-label="반복 모드"
             title="반복 모드"
             type="button"
-            @click="logic.toggleRepeat"
+            @click="logic.openSheet('repeat')"
         >
-            <i data-lucide="repeat"></i> <span>{{ REPEAT_LABELS[state.repeatMode.value] }}</span>
+            <i data-lucide="repeat"></i>
         </button>
         <button
             class="btn-reader-secondary"
@@ -28,9 +26,9 @@ const REPEAT_LABELS: Record<string, string> = { off: "반복 안 함", all: "전
             aria-label="재생 속도"
             title="재생 속도"
             type="button"
-            @click="logic.cycleSpeed"
+            @click="logic.openSheet('speed')"
         >
-            <i data-lucide="gauge"></i> <span>{{ state.playbackSpeed.value.toFixed(2).replace(/\.00$/, ".0") }}x</span>
+            <i data-lucide="gauge"></i>
         </button>
         <button
             class="btn-reader-secondary"
@@ -38,9 +36,9 @@ const REPEAT_LABELS: Record<string, string> = { off: "반복 안 함", all: "전
             aria-label="취침 타이머"
             title="취침 타이머"
             type="button"
-            @click="logic.cycleTimer"
+            @click="logic.openSheet('timer')"
         >
-            <i data-lucide="moon"></i> <span>{{ state.timerLabel.value }}</span>
+            <i data-lucide="moon"></i>
         </button>
     </div>
 </template>

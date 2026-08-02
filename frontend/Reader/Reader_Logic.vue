@@ -60,8 +60,6 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         if (!container) return;
         const header = container.querySelector<HTMLElement>(".reader-header");
         const controls = container.querySelector<HTMLElement>(".reader-controls");
-        const secondary = container.querySelector<HTMLElement>(".reader-secondary-controls");
-        if (secondary) container.style.setProperty("--reader-secondary-h", secondary.scrollHeight + "px");
         if (header) container.style.setProperty("--reader-header-h", header.offsetHeight + "px");
         if (controls) container.style.setProperty("--reader-controls-h", controls.offsetHeight + "px");
     }

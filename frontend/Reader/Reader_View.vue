@@ -7,6 +7,7 @@ import type { ReaderControlsLogic } from "./ReaderControls/ReaderControls_Logic.
 import type { AudioListLogic } from "../components/Library/AudioList_Logic.vue";
 import ReaderControlsView from "./ReaderControls/ReaderControls_View.vue";
 import IndexSheetView from "../Sheet/IndexSheet_View.vue";
+import ReaderOptionsSheetView from "../Sheet/ReaderOptionsSheet_View.vue";
 
 const props = defineProps<{
     state: ReaderState;
@@ -130,29 +131,32 @@ onUnmounted(() => detachUiCollapseHandlers?.());
 
             <footer class="reader-controls">
                 <audio :ref="setAudioEl"></audio>
-                <div class="reader-player-ui">
-                    <button class="btn-player-skip" aria-label="10초 뒤로" title="10초 뒤로" type="button" @click="controlsLogic.skipBack">
-                        <i data-lucide="skip-back"></i>
-                    </button>
-                    <button class="btn-player-play" aria-label="재생 또는 일시정지" title="재생 또는 일시정지" type="button" @click="logic.togglePlayPause">
-                        <svg v-show="!state.isPlaying.value" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-                        <svg v-show="state.isPlaying.value" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
-                    </button>
-                    <button class="btn-player-skip" aria-label="10초 앞으로" title="10초 앞으로" type="button" @click="controlsLogic.skipForward">
-                        <i data-lucide="skip-forward"></i>
-                    </button>
-                    <div class="reader-progress-wrapper">
-                        <span class="player-time">{{ state.currentTimeLabel.value }}</span>
-                        <div class="player-progress-bar" @click="onProgressBarClick">
-                            <div class="player-progress-fill" :style="{ width: state.progressPercent.value + '%' }"></div>
-                        </div>
-                        <span class="player-time">{{ state.durationLabel.value }}</span>
-                    </div>
+                <div class="player-progress-bar" @click="onProgressBarClick">
+                    <div class="player-progress-fill" :style="{ width: state.progressPercent.value + '%' }"></div>
                 </div>
-                <ReaderControlsView :state="controlsState" :logic="controlsLogic" />
+                <div class="reader-time-row">
+                    <span class="player-time">{{ state.currentTimeLabel.value }}</span>
+                    <span class="player-time">{{ state.durationLabel.value }}</span>
+                </div>
+                <div class="reader-player-ui">
+                    <div class="reader-player-buttons">
+                        <button class="btn-player-skip" aria-label="10초 뒤로" title="10초 뒤로" type="button" @click="controlsLogic.skipBack">
+                            <i data-lucide="skip-back"></i>
+                        </button>
+                        <button class="btn-player-play" aria-label="재생 또는 일시정지" title="재생 또는 일시정지" type="button" @click="logic.togglePlayPause">
+                            <svg v-show="!state.isPlaying.value" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                            <svg v-show="state.isPlaying.value" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+                        </button>
+                        <button class="btn-player-skip" aria-label="10초 앞으로" title="10초 앞으로" type="button" @click="controlsLogic.skipForward">
+                            <i data-lucide="skip-forward"></i>
+                        </button>
+                    </div>
+                    <ReaderControlsView :state="controlsState" :logic="controlsLogic" />
+                </div>
             </footer>
         </div>
     </div>
 
     <IndexSheetView :state="state" :logic="logic" />
+    <ReaderOptionsSheetView :state="controlsState" :logic="controlsLogic" />
 </template>

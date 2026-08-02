@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { Ref } from "vue";
-import type { ReaderControlsState, RepeatMode } from "./ReaderControls_State.vue";
+import type { ReaderControlsState, RepeatMode, ReaderOptionSheetKind } from "./ReaderControls_State.vue";
 import { useToastLogic } from "../../components/Toast/Toast_Logic.vue";
 import { useToastState } from "../../components/Toast/Toast_State.vue";
 
@@ -13,26 +13,30 @@ export interface ReaderControlsLogic {
     getPlaybackSettings(): PlaybackSettings;
     applyPlaybackSettings(settings: { playbackSpeed?: number; repeatMode?: string }): void;
     clearSleepTimer(): void;
-    toggleRepeat(): void;
-    cycleSpeed(): void;
-    cycleTimer(): void;
+    openSheet(kind: ReaderOptionSheetKind): void;
+    closeSheet(): void;
+    selectRepeatMode(mode: RepeatMode): void;
+    selectSpeed(value: number): void;
+    selectTimerMinutes(minutes: number): void;
     skipBack(): void;
     skipForward(): void;
     onEnded(): void;
 }
 
-const REPEAT_MODES: RepeatMode[] = ["off", "all", "one"];
-const REPEAT_LABELS: Record<RepeatMode, string> = { off: "반복 안 함", all: "전체 반복", one: "한 곡 반복" };
-const SPEED_OPTIONS = [0.75, 1.0, 1.25, 1.5, 2.0];
-const TIMER_OPTIONS_MIN = [0, 15, 30, 60];
+export const REPEAT_MODES: RepeatMode[] = ["off", "all", "one"];
+export const REPEAT_LABELS: Record<RepeatMode, string> = { off: "반복 안 함", all: "전체 반복", one: "한 곡 반복" };
+export const SPEED_OPTIONS = [0.75, 1.0, 1.25, 1.5, 2.0];
+export const TIMER_OPTIONS_MIN = [0, 15, 30, 60];
+export const TIMER_LABELS: Record<number, string> = { 0: "해제", 15: "15분", 30: "30분", 60: "60분" };
 
-// static/js/reader-controls.js를 옮긴 것. localStorage에 저장하는 키
-// 이름("textAudio_repeatMode", "textAudio_playbackSpeed")은 기존 사용자의
+// static/js/reader-controls.js를 옮긴 것. 원본은 아이콘을 탭할 때마다
+// 다음 값으로 순환했는데, 이번에 시트를 열어 옵션을 직접 선택하는
+// 방식으로 바꿨다(사용자 요청 — Speechify 참고). localStorage 키 이름
+// ("textAudio_repeatMode", "textAudio_playbackSpeed")은 기존 사용자의
 // 설정을 그대로 이어받아야 하므로 동일하게 유지한다.
 export function useReaderControlsLogic(state: ReaderControlsState, audioEl: Ref<HTMLAudioElement | null>): ReaderControlsLogic {
     const { showToast } = useToastLogic(useToastState());
     let timerInterval: ReturnType<typeof setInterval> | null = null;
-    let timerIndex = 0;
     let timeRemaining = 0;
 
     const savedRepeat = localStorage.getItem("textAudio_repeatMode") as RepeatMode | null;
@@ -55,7 +59,6 @@ export function useReaderControlsLogic(state: ReaderControlsState, audioEl: Ref<
         timerInterval = null;
         state.isTimerActive.value = false;
         state.timerLabel.value = "타이머";
-        timerIndex = 0;
     }
 
     function updateTimerDisplay(): void {
@@ -65,29 +68,36 @@ export function useReaderControlsLogic(state: ReaderControlsState, audioEl: Ref<
         state.timerLabel.value = `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
     }
 
-    function toggleRepeat(): void {
-        const index = (REPEAT_MODES.indexOf(state.repeatMode.value) + 1) % REPEAT_MODES.length;
-        state.repeatMode.value = REPEAT_MODES[index];
-        localStorage.setItem("textAudio_repeatMode", state.repeatMode.value);
-        showToast(`반복 모드: ${REPEAT_LABELS[state.repeatMode.value]}`, "info");
+    function openSheet(kind: ReaderOptionSheetKind): void {
+        state.activeSheet.value = kind;
     }
 
-    function cycleSpeed(): void {
-        const index = (SPEED_OPTIONS.indexOf(state.playbackSpeed.value) + 1) % SPEED_OPTIONS.length;
-        state.playbackSpeed.value = SPEED_OPTIONS[index];
-        if (audioEl.value) audioEl.value.playbackRate = state.playbackSpeed.value;
-        localStorage.setItem("textAudio_playbackSpeed", String(state.playbackSpeed.value));
-        showToast(`재생 속도 ${state.playbackSpeed.value}x`, "info");
+    function closeSheet(): void {
+        state.activeSheet.value = null;
     }
 
-    function cycleTimer(): void {
-        timerIndex = (timerIndex + 1) % TIMER_OPTIONS_MIN.length;
-        const minutes = TIMER_OPTIONS_MIN[timerIndex];
+    function selectRepeatMode(mode: RepeatMode): void {
+        state.repeatMode.value = mode;
+        localStorage.setItem("textAudio_repeatMode", mode);
+        showToast(`반복 모드: ${REPEAT_LABELS[mode]}`, "info");
+        closeSheet();
+    }
+
+    function selectSpeed(value: number): void {
+        state.playbackSpeed.value = value;
+        if (audioEl.value) audioEl.value.playbackRate = value;
+        localStorage.setItem("textAudio_playbackSpeed", String(value));
+        showToast(`재생 속도 ${value}x`, "info");
+        closeSheet();
+    }
+
+    function selectTimerMinutes(minutes: number): void {
         if (timerInterval) clearInterval(timerInterval);
 
         if (minutes === 0) {
             clearSleepTimer();
             showToast("취침 타이머가 해제되었습니다.", "info");
+            closeSheet();
             return;
         }
 
@@ -105,6 +115,7 @@ export function useReaderControlsLogic(state: ReaderControlsState, audioEl: Ref<
             }
         }, 1000);
         showToast(`${minutes}분 뒤에 재생이 자동 종료됩니다.`, "info");
+        closeSheet();
     }
 
     function skipBack(): void {
@@ -130,7 +141,8 @@ export function useReaderControlsLogic(state: ReaderControlsState, audioEl: Ref<
 
     return {
         getPlaybackSettings, applyPlaybackSettings, clearSleepTimer,
-        toggleRepeat, cycleSpeed, cycleTimer, skipBack, skipForward, onEnded,
+        openSheet, closeSheet, selectRepeatMode, selectSpeed, selectTimerMinutes,
+        skipBack, skipForward, onEnded,
     };
 }
 

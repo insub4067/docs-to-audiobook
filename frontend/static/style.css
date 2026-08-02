@@ -1439,8 +1439,7 @@ input[type="range"]::-webkit-slider-thumb:active {
 
 /* 스크롤 중에는 트랜지션 없이 손가락을 그대로 따라가고, 손을 뗀 뒤
    가까운 쪽으로 스냅할 때만 트랜지션을 켠다. */
-.reader-container.ui-snapping .reader-header,
-.reader-container.ui-snapping .reader-secondary-controls {
+.reader-container.ui-snapping .reader-header {
     transition: transform 0.28s ease, max-height 0.28s ease,
                 margin-top 0.28s ease, opacity 0.28s ease;
 }
@@ -1449,8 +1448,14 @@ input[type="range"]::-webkit-slider-thumb:active {
 .reader-player-ui {
     display: flex;
     align-items: center;
-    gap: 16px;
+    justify-content: space-between;
     width: 100%;
+}
+
+.reader-player-buttons {
+    display: flex;
+    align-items: center;
+    gap: 16px;
 }
 
 .btn-player-play {
@@ -1523,35 +1528,26 @@ input[type="range"]::-webkit-slider-thumb:active {
 .reader-secondary-controls {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 12px;
-    /* 접힘 진행도에 따라 이 줄만 사라진다. 바가 하단 고정 오버레이라
-       높이가 변해도 본문 스크롤에는 영향이 없다. */
-    max-height: calc((1 - var(--reader-ui-p, 0)) * var(--reader-secondary-h, 40px));
-    margin-top: calc((1 - var(--reader-ui-p, 0)) * 6px);
-    opacity: calc(1 - var(--reader-ui-p, 0));
-    overflow: hidden;
+    gap: 6px;
 }
 
 .btn-reader-secondary {
     display: flex;
     align-items: center;
-    gap: 6px;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
     background: transparent;
     border: none;
     color: var(--text-muted);
-    font-size: 0.85rem;
-    font-family: var(--font-sans);
-    font-weight: 500;
     cursor: pointer;
-    padding: 5px 12px;
-    border-radius: 20px;
+    border-radius: 50%;
     transition: all 0.2s ease;
 }
 
 .btn-reader-secondary i {
-    width: 16px;
-    height: 16px;
+    width: 20px;
+    height: 20px;
 }
 
 .btn-reader-secondary:hover {
@@ -1564,11 +1560,10 @@ input[type="range"]::-webkit-slider-thumb:active {
     background: rgba(93, 75, 64, 0.1);
 }
 
-.reader-progress-wrapper {
+.reader-time-row {
     display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-grow: 1;
+    justify-content: space-between;
+    margin-bottom: 10px;
 }
 
 .player-time {
@@ -1579,20 +1574,21 @@ input[type="range"]::-webkit-slider-thumb:active {
     text-align: center;
 }
 
+/* 하단바 맨 위에 얇게 걸치는 전체 폭 진행바. .reader-controls의
+   padding(8px 20px)을 음수 마진으로 상쇄해 가장자리까지 채운다. */
 .player-progress-bar {
-    flex-grow: 1;
-    height: 6px;
+    height: 4px;
     background-color: var(--border-color);
-    border-radius: 3px;
+    border-radius: 0;
     position: relative;
     cursor: pointer;
+    margin: -8px -20px 10px;
 }
 
 .player-progress-fill {
     width: 0%;
     height: 100%;
     background-color: var(--accent-color);
-    border-radius: 3px;
     position: absolute;
     top: 0;
     left: 0;
@@ -1796,6 +1792,19 @@ input[type="range"]::-webkit-slider-thumb:active {
 .action-sheet-btn svg {
     flex-shrink: 0;
     color: var(--primary-color);
+}
+
+.action-sheet-btn.is-selected {
+    color: var(--primary-color);
+    font-weight: 700;
+}
+
+.option-check-slot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    flex-shrink: 0;
 }
 
 .action-sheet-btn-danger {
