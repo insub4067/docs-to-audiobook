@@ -3,7 +3,8 @@ import { computed, onMounted } from "vue";
 import type { AudioListState } from "./AudioList_State.vue";
 import type { AudioListLogic } from "./AudioList_Logic.vue";
 import type { GeneratingItem } from "../../composables/Generation/Generation_State.vue";
-import { getAudiobookDisplayTitle, formatBytes } from "../../utils/format";
+import AudioListItemView from "./AudioListItem_View.vue";
+import ActionSheetView from "./ActionSheet_View.vue";
 
 const props = defineProps<{
     state: AudioListState;
@@ -13,7 +14,7 @@ const props = defineProps<{
 
 const isEmpty = computed(() => props.generatingItems.length === 0 && props.state.savedAudiobooks.value.length === 0);
 
-onMounted(() => props.logic.refresh());
+onMounted(() => props.logic.load());
 </script>
 
 <template>
@@ -44,19 +45,10 @@ onMounted(() => props.logic.refresh());
                     </div>
                 </div>
 
-                <div v-for="audio in state.savedAudiobooks.value" :key="audio.id" class="audio-item">
-                    <div class="audio-item-front">
-                        <div class="audio-title-group">
-                            <i data-lucide="play-circle"></i>
-                            <span class="audio-title" :title="getAudiobookDisplayTitle(audio.title)">{{ getAudiobookDisplayTitle(audio.title) }}</span>
-                            <span v-if="audio.isDefault" class="default-badge" title="기본 제공 오디오북">기본 제공</span>
-                        </div>
-                        <div class="audio-actions">
-                            <span class="audio-meta">{{ formatBytes(audio.sizeBytes || 0) }}</span>
-                        </div>
-                    </div>
-                </div>
+                <AudioListItemView v-for="audio in state.savedAudiobooks.value" :key="audio.id" :audio="audio" :logic="logic" />
             </div>
         </div>
     </section>
+
+    <ActionSheetView :state="state" :logic="logic" />
 </template>
