@@ -289,10 +289,40 @@ html {
     color: #fff;
 }
 
-.audio-item-drag-source .audio-item-front {
-    transform: scale(1.03);
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
-    opacity: 0.85;
+/* "따라오는" 미리보기는 .drag-ghost(테두리 밖으로도 잘리지 않게 body에
+   teleport)가 담당한다. 원래 자리의 .audio-item-front는 opacity를 쓰면
+   안 된다 — 아래 깔린 .audio-item-bg(스와이프 삭제용 빨간 배경)가
+   그대로 비쳐 보인다. */
+.drag-ghost {
+    position: fixed;
+    transform: translate(-50%, -50%) scale(0.9);
+    left: 0;
+    top: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 70vw;
+    padding: 12px 18px;
+    border-radius: 16px;
+    background-color: var(--card-bg-solid);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
+    color: var(--text-color);
+    font-family: var(--font-serif);
+    font-size: 0.95rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 0.75;
+    pointer-events: none;
+}
+
+.drag-ghost i {
+    width: 18px;
+    height: 18px;
+    color: var(--primary-color);
+    flex-shrink: 0;
 }
 
 .myfiles-row-icon {

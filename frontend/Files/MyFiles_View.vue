@@ -7,6 +7,7 @@ import type { MyFilesState } from "./MyFiles_State.vue";
 import type { MyFilesLogic } from "./MyFiles_Logic.vue";
 import { useFolderBrowserState } from "./FolderBrowser_State.vue";
 import { useFolderBrowserLogic } from "./FolderBrowser_Logic.vue";
+import { getAudiobookDisplayTitle } from "../utils/format";
 import AudioListItemView from "../components/Library/AudioListItem_View.vue";
 import ActionSheetView from "../Sheet/ActionSheet_View.vue";
 import FolderActionSheetView from "../Sheet/FolderActionSheet_View.vue";
@@ -47,6 +48,11 @@ const LONG_PRESS_MS = 450;
 const MOVE_CANCEL_PX = 10;
 const dragAudioId = ref<string | null>(null);
 const dragOverFolderId = ref<string | null>(null);
+// 드래그 중 손가락을 따라다니는 고스트(iOS 스타일 축소+반투명 미리보기)의
+// 화면 좌표. .myfiles-list의 overflow:hidden에 잘리지 않도록 body에
+// teleport해서 그린다.
+const dragGhostTitle = ref("");
+const dragGhostPos = ref<{ x: number; y: number } | null>(null);
 let dragCandidate: AudiobookRecord | null = null;
 let dragStartX = 0;
 let dragStartY = 0;
@@ -62,6 +68,7 @@ function resetDragState(): void {
     dragCandidate = null;
     dragAudioId.value = null;
     dragOverFolderId.value = null;
+    dragGhostPos.value = null;
 }
 
 function onDragTouchStart(event: TouchEvent, audio: AudiobookRecord): void {
@@ -71,6 +78,8 @@ function onDragTouchStart(event: TouchEvent, audio: AudiobookRecord): void {
     clearLongPressTimer();
     longPressTimer = setTimeout(() => {
         dragAudioId.value = audio.id;
+        dragGhostTitle.value = getAudiobookDisplayTitle(audio.title);
+        dragGhostPos.value = { x: dragStartX, y: dragStartY };
         if (navigator.vibrate) navigator.vibrate(30);
     }, LONG_PRESS_MS);
 }
@@ -85,6 +94,7 @@ function onDragTouchMove(event: TouchEvent): void {
         return;
     }
     if (event.cancelable) event.preventDefault();
+    dragGhostPos.value = { x: touch.clientX, y: touch.clientY };
     const target = document.elementFromPoint(touch.clientX, touch.clientY);
     const folderRow = (target as HTMLElement | null)?.closest<HTMLElement>(".myfiles-row[data-folder-id]");
     dragOverFolderId.value = folderRow?.dataset.folderId ?? null;
@@ -146,7 +156,6 @@ onMounted(() => browserLogic.loadCurrentFolder());
                 :key="audio.id"
                 :audio="audio"
                 :logic="audioListLogic"
-                :class="{ 'audio-item-drag-source': dragAudioId === audio.id }"
                 @touchstart.passive="onDragTouchStart($event, audio)"
                 @touchmove="onDragTouchMove"
                 @touchend.passive="onDragTouchEnd"
@@ -157,5 +166,20 @@ onMounted(() => browserLogic.loadCurrentFolder());
         <ActionSheetView :state="audioListState" :logic="audioListLogic" :my-files-logic="myFilesLogic" />
         <FolderActionSheetView :state="myFilesState" :logic="myFilesLogic" :folder-browser-logic="browserLogic" />
         <MoveToFolderSheetView :state="myFilesState" :logic="myFilesLogic" :audio-list-logic="audioListLogic" />
+
+        <!-- 리스트 행의 overflow:hidden에 잘리지 않도록 body에 그린다.
+             주의: 이 컴포넌트는 Home_View가 v-show로 탭을 제어하므로 루트가
+             하나여야 한다 — Teleport를 .myfiles-root 밖 형제로 빼면 다시
+             다중 루트가 되어 v-show가 조용히 무시된다(과거에 겪은 버그). -->
+        <Teleport to="body">
+            <div
+                v-if="dragGhostPos"
+                class="drag-ghost"
+                :style="{ left: dragGhostPos.x + 'px', top: dragGhostPos.y + 'px' }"
+            >
+                <i data-lucide="play-circle"></i>
+                <span>{{ dragGhostTitle }}</span>
+            </div>
+        </Teleport>
     </div>
 </template>
