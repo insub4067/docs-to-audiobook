@@ -10,7 +10,7 @@ pinned: false
 
 # Docs to Audiobook (문서를 오디오북으로)
 
-Edge TTS를 활용하여 다양한 문서를 스마트하게 변환해주는 FastAPI + Vanilla JS 기반의 오디오북 생성기입니다. 지능형 텍스트 청킹, 음성 필터링, 클라이언트 브라우저 로컬 저장소(IndexedDB) 캐싱 및 Supabase 클라우드 동기화 기능을 지원합니다.
+Edge TTS를 활용하여 다양한 문서를 스마트하게 변환해주는 FastAPI + Vue 3 SPA 기반의 오디오북 생성기입니다. 지능형 텍스트 청킹, 음성 필터링, 브라우저 로컬 저장소 캐싱 및 Supabase 클라우드 동기화 기능을 지원합니다.
 
 ## 🚀 주요 기능
 
@@ -41,7 +41,7 @@ Edge TTS를 활용하여 다양한 문서를 스마트하게 변환해주는 Fas
 
 ## 🏗️ 시스템 아키텍처
 
-- **프론트엔드 (Frontend)**: Vanilla JS + IndexedDB (로컬 캐싱) + PWA 기반
+- **프론트엔드 (Frontend)**: Vue 3 (Composition API) + Pinia + Vite 기반의 완벽한 SPA (Single Page Application)
 - **백엔드 (Backend)**: FastAPI + Edge TTS + asyncio 기반 비동기 병렬 처리
 - **클라우드 / DB**: Supabase (PostgreSQL, 인증 토큰 관리, 메타데이터 저장)
 - **호스팅 및 배포**: Fly.io (Docker 컨테이너 배포)
