@@ -31,6 +31,7 @@ export interface AudioListLogic {
     editAudiobookTitle(target: AudiobookRecord): Promise<void>;
     deleteAudiobook(id: string): Promise<void>;
     sync(options?: { silent?: boolean }): Promise<SyncResult>;
+    savePlaybackState(entry: AudiobookRecord, position: number, playbackSettings: { playbackSpeed: number; repeatMode: string }): Promise<void>;
 }
 
 const DEFAULT_BOOK_ID = "default-sherlock-holmes";
@@ -176,6 +177,23 @@ export function useAudioListLogic(state: AudioListState): AudioListLogic {
             console.error("재생 상태 동기화 실패:", error);
             return entry;
         }
+    }
+
+    async function savePlaybackState(entry: AudiobookRecord, position: number, playbackSettings: { playbackSpeed: number; repeatMode: string }): Promise<void> {
+        if (!entry.cloudId || !authLogic.isLoggedIn()) return;
+        const res = await fetch(`/api/audiobooks/${entry.cloudId}/playback`, {
+            method: "PUT",
+            headers: { ...authLogic.authHeaders(), "Content-Type": "application/json" },
+            body: JSON.stringify({
+                current_time_seconds: position,
+                playback_speed: entry.playbackSpeed || playbackSettings.playbackSpeed,
+                repeat_mode: entry.repeatMode || playbackSettings.repeatMode,
+            }),
+        });
+        if (!res.ok) throw new Error("재생 상태 저장 실패");
+        const playbackState = await res.json();
+        entry.playbackUpdatedAt = Date.parse(playbackState.updated_at || playbackState.last_played_at || "") || Date.now();
+        await saveAudiobookToDB(entry);
     }
 
     async function sync({ silent = false }: { silent?: boolean } = {}): Promise<SyncResult> {
@@ -420,6 +438,7 @@ export function useAudioListLogic(state: AudioListState): AudioListLogic {
     return {
         refresh, load, openItem, openActionSheet, closeActionSheet,
         performShare, downloadAudiobook, editAudiobookTitle, deleteAudiobook, sync,
+        savePlaybackState,
     };
 }
 

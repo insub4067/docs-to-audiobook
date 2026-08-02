@@ -10,6 +10,7 @@ const props = defineProps<{
     state: AudioListState;
     logic: AudioListLogic;
     generatingItems: GeneratingItem[];
+    onImportLink: () => void;
 }>();
 
 const isEmpty = computed(() => props.generatingItems.length === 0 && props.state.savedAudiobooks.value.length === 0);
@@ -22,6 +23,15 @@ onMounted(() => props.logic.load());
         <div class="card-header">
             <i data-lucide="folder-heart" class="header-icon"></i>
             <h2>내 오디오북</h2>
+            <button
+                class="btn-icon"
+                aria-label="공유 링크 불러오기"
+                title="공유 링크 불러오기"
+                style="margin-left: auto; width: 44px; height: 44px; border-radius: 50%; background: var(--glass-bg); border: 1px solid var(--glass-border); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-color); transition: all 0.3s ease;"
+                @click="onImportLink"
+            >
+                <i data-lucide="link" style="width: 18px; height: 18px;"></i>
+            </button>
         </div>
 
         <div class="library-container">
