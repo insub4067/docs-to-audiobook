@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, ref } from "vue";
 import type { GenerationState } from "../../Generation/Generation_State.vue";
 import type { GenerationLogic } from "../../Generation/Generation_Logic.vue";
+import AddSourceSheetView from "../../Sheet/AddSourceSheet_View.vue";
 
 const props = defineProps<{
     state: GenerationState;
@@ -9,7 +10,6 @@ const props = defineProps<{
 }>();
 
 const fileInput = ref<HTMLInputElement | null>(null);
-const urlInput = ref<HTMLInputElement | null>(null);
 
 const isMobileDevice = computed(() =>
     /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768
@@ -30,26 +30,6 @@ function onDrop(event: DragEvent): void {
     const files = event.dataTransfer?.files;
     if (files && files.length > 0) props.logic.handleBatchFileSelect(files);
 }
-
-function onUrlKeydown(event: KeyboardEvent): void {
-    if (event.key === "Enter") {
-        event.preventDefault();
-        props.logic.fetchTextFromUrl();
-    }
-}
-
-function clearUrlInput(): void {
-    props.state.urlInputValue.value = "";
-    urlInput.value?.focus();
-}
-
-onMounted(() => {
-    document.addEventListener("pointerdown", (event) => {
-        if (document.activeElement === urlInput.value && !(event.target as HTMLElement).closest(".url-input-row")) {
-            urlInput.value?.blur();
-        }
-    });
-});
 </script>
 
 <template>
@@ -62,8 +42,8 @@ onMounted(() => {
         <div
             class="upload-dropzone"
             :class="{ dragover: state.isDragOver.value }"
-            @click="openFileInput"
-            @touchend.prevent="openFileInput"
+            @click="logic.openAddSourceMenu"
+            @touchend.prevent="logic.openAddSourceMenu"
             @dragenter.prevent.stop="state.isDragOver.value = true"
             @dragover.prevent.stop="state.isDragOver.value = true"
             @dragleave.prevent.stop="state.isDragOver.value = false"
@@ -80,8 +60,8 @@ onMounted(() => {
             >
             <div v-show="!state.isDropzoneLoading.value">
                 <i data-lucide="upload-cloud" class="dropzone-icon"></i>
-                <p class="dropzone-text">{{ isMobileDevice ? "이곳을 터치하여 문서를 업로드하세요" : "파일을 이곳에 끌어다 놓거나 터치하세요" }}</p>
-                <p class="dropzone-hint">{{ isMobileDevice ? "지원: DOCX, PDF, TXT, MD, HWP" : "지원 파일: DOCX, PDF, TXT, MD, HWP (최대 10MB, 복수 선택 가능)" }}</p>
+                <p class="dropzone-text">{{ isMobileDevice ? "이곳을 터치하여 문서를 추가하세요" : "파일을 끌어다 놓거나 터치하여 추가 방법을 선택하세요" }}</p>
+                <p class="dropzone-hint">파일 업로드 · 링크 · 텍스트 붙여넣기 지원</p>
             </div>
 
             <div v-show="state.isDropzoneLoading.value" style="text-align: center; color: var(--text-muted);">
@@ -92,37 +72,7 @@ onMounted(() => {
                 <p style="font-size: 15px; font-weight: 500;">문서를 분석하고 있습니다...</p>
             </div>
         </div>
-
-        <div class="url-divider"><span>또는</span></div>
-
-        <div class="url-input-row">
-            <div class="url-input-wrapper">
-                <input
-                    ref="urlInput"
-                    type="url"
-                    placeholder="뉴스 기사나 커뮤니티 게시글 링크를 붙여넣으세요"
-                    inputmode="url"
-                    v-model="state.urlInputValue.value"
-                    @keydown="onUrlKeydown"
-                >
-                <button
-                    type="button"
-                    class="btn-url-clear"
-                    aria-label="링크 입력 지우기"
-                    :hidden="state.urlInputValue.value.length === 0"
-                    @click="clearUrlInput"
-                >&times;</button>
-            </div>
-            <button
-                type="button"
-                class="btn-url-fetch"
-                :class="{ 'is-loading': state.isUrlFetchBusy.value }"
-                :disabled="state.isUrlFetchBusy.value"
-                @click="logic.fetchTextFromUrl"
-            >
-                <i data-lucide="link"></i>
-                <span>{{ state.isUrlFetchBusy.value ? "가져오는 중..." : "가져오기" }}</span>
-            </button>
-        </div>
     </section>
+
+    <AddSourceSheetView :state="state" :logic="logic" :on-select-file="openFileInput" />
 </template>

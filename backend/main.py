@@ -32,6 +32,7 @@ app.add_middleware(
 
 from routes import extract_url as extract_url_routes
 from routes import upload as upload_routes
+from routes import paste_text as paste_text_routes
 from routes import tts as tts_routes
 from routes import default_book as default_book_routes
 from routes import share as share_routes
@@ -41,6 +42,7 @@ from routes import system as system_routes
 from routes import notifications as notifications_routes
 app.include_router(extract_url_routes.router)
 app.include_router(upload_routes.router)
+app.include_router(paste_text_routes.router)
 app.include_router(tts_routes.router)
 app.include_router(default_book_routes.router)
 app.include_router(share_routes.router)

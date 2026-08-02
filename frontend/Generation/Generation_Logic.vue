@@ -22,6 +22,11 @@ export interface GenerationLogic {
     handleBatchFileSelect(files: FileList | File[]): Promise<void>;
     resetSelection(): void;
     fetchTextFromUrl(): Promise<void>;
+    pasteText(): Promise<void>;
+    openAddSourceMenu(): void;
+    selectLinkMode(): void;
+    selectPasteMode(): void;
+    closeAddSourceSheet(): void;
     onGenerateClick(): Promise<void>;
     onLoginPromptConfirm(): void;
     closeModal(): void;
@@ -91,6 +96,17 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || "링크에서 텍스트를 가져오지 못했습니다.");
+        return data;
+    }
+
+    async function extractPastedText(text: string) {
+        const response = await fetch("/api/paste-text", {
+            method: "POST",
+            headers: { ...authLogic.authHeaders(), "Content-Type": "application/json" },
+            body: JSON.stringify({ text }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "붙여넣은 텍스트를 처리하지 못했습니다.");
         return data;
     }
 
@@ -203,12 +219,45 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
         try {
             applyExtractedText(await extractTextFromUrl(url));
             state.urlInputValue.value = "";
+            state.addSourceMode.value = null;
         } catch (error) {
             console.error(error);
             showToast((error as Error).message, "error");
         } finally {
             state.isUrlFetchBusy.value = false;
         }
+    }
+
+    async function pasteText(): Promise<void> {
+        const text = state.pasteTextValue.value.trim();
+        if (!text) return;
+        state.isPasteBusy.value = true;
+        try {
+            applyExtractedText(await extractPastedText(text));
+            state.pasteTextValue.value = "";
+            state.addSourceMode.value = null;
+        } catch (error) {
+            console.error(error);
+            showToast((error as Error).message, "error");
+        } finally {
+            state.isPasteBusy.value = false;
+        }
+    }
+
+    function openAddSourceMenu(): void {
+        state.addSourceMode.value = "menu";
+    }
+
+    function selectLinkMode(): void {
+        state.addSourceMode.value = "url";
+    }
+
+    function selectPasteMode(): void {
+        state.addSourceMode.value = "paste";
+    }
+
+    function closeAddSourceSheet(): void {
+        state.addSourceMode.value = null;
     }
 
     function generationArguments(): GenerationArguments {
@@ -382,6 +431,11 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
         handleBatchFileSelect,
         resetSelection,
         fetchTextFromUrl,
+        pasteText,
+        openAddSourceMenu,
+        selectLinkMode,
+        selectPasteMode,
+        closeAddSourceSheet,
         onGenerateClick,
         onLoginPromptConfirm,
         closeModal,

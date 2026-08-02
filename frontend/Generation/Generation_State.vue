@@ -9,6 +9,8 @@ export interface GeneratingItem {
     backgroundJobId?: string;
 }
 
+export type AddSourceMode = "menu" | "url" | "paste" | null;
+
 export interface GenerationState {
     currentTextId: Ref<string | null>;
     currentTextAccessToken: Ref<string | null>;
@@ -26,6 +28,9 @@ export interface GenerationState {
     isLoginPromptOpen: Ref<boolean>;
     urlInputValue: Ref<string>;
     isUrlFetchBusy: Ref<boolean>;
+    pasteTextValue: Ref<string>;
+    isPasteBusy: Ref<boolean>;
+    addSourceMode: Ref<AddSourceMode>;
     speed: Ref<number>;
     pitch: Ref<number>;
     generatingItems: Ref<GeneratingItem[]>;
@@ -49,6 +54,9 @@ export function useGenerationState(): GenerationState {
         isLoginPromptOpen: ref(false),
         urlInputValue: ref(""),
         isUrlFetchBusy: ref(false),
+        pasteTextValue: ref(""),
+        isPasteBusy: ref(false),
+        addSourceMode: ref(null),
         speed: ref(5),
         pitch: ref(0),
         generatingItems: ref([]),
