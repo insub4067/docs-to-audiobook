@@ -199,7 +199,7 @@ async def get_serviceworker():
 
 @router.get("/")
 async def read_index():
-    index_path = os.path.join(STATIC_DIR, "index.html")
+    index_path = os.path.join(STATIC_DIR, "dist", "spa", "index.html")
     if os.path.exists(index_path):
         return FileResponse(index_path)
     return JSONResponse(status_code=404, content={"message": "Frontend static file index.html not found. Build the frontend first."})
@@ -207,10 +207,7 @@ async def read_index():
 
 @router.get("/admin")
 async def read_admin_dashboard():
-    # Vite로 빌드된 결과물(frontend/AdminDashboard). 자산 경로가 절대경로로
-    # 박혀 있어(base: "/static/dist/admin/") 이 라우트가 파일을 어디서
-    # 읽어오든 상관없이 그대로 서빙할 수 있다.
-    admin_path = os.path.join(STATIC_DIR, "dist", "admin", "admin.html")
+    admin_path = os.path.join(STATIC_DIR, "dist", "spa", "index.html")
     if os.path.exists(admin_path):
         return FileResponse(admin_path)
     return JSONResponse(status_code=404, content={"message": "관리자 대시보드를 찾을 수 없습니다."})
@@ -218,8 +215,7 @@ async def read_admin_dashboard():
 
 @router.get("/admin/metrics/{metric_name}")
 async def read_admin_metric_page(metric_name: str):
-    # SPA 환경이므로 대시보드와 동일한 admin.html을 서빙하여 프론트엔드 라우터에 위임
-    admin_path = os.path.join(STATIC_DIR, "dist", "admin", "admin.html")
+    admin_path = os.path.join(STATIC_DIR, "dist", "spa", "index.html")
     if os.path.exists(admin_path):
         return FileResponse(admin_path)
     return JSONResponse(status_code=404, content={"message": "관리자 지표 화면을 찾을 수 없습니다."})

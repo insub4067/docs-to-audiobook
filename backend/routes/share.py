@@ -117,7 +117,7 @@ async def get_share_audio(share_id: str):
 @router.get("/share/{share_id}")
 async def serve_shared_page(share_id: str):
     """공유 링크로 접속 시 동일한 index.html 서빙 (JS가 URL을 파싱하여 Reader 모드 자동 진입)"""
-    index_path = os.path.join(STATIC_DIR, "index.html")
+    index_path = os.path.join(STATIC_DIR, "dist", "spa", "index.html")
     if os.path.exists(index_path):
         return FileResponse(index_path)
     raise HTTPException(status_code=404, detail="Page not found")
