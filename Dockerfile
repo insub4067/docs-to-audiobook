@@ -7,7 +7,7 @@ WORKDIR /frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
-RUN npm run build
+RUN npm run build && npm run build:app
 
 # Use official light-weight Python image
 FROM python:3.11-slim
@@ -34,10 +34,11 @@ WORKDIR $HOME/app
 # Copy application files (preserving structure)
 COPY --chown=user:user . $HOME/app
 
-# 프론트엔드 빌드 스테이지의 결과물을 가져온다(vite.config.ts의
-# outDir="static/dist/admin" 기준, frontend-build 스테이지의 WORKDIR이
-# /frontend라 실제 경로는 /frontend/static/dist/admin)
+# 프론트엔드 빌드 스테이지의 결과물을 가져온다(vite.config.ts/
+# vite.app.config.ts의 outDir 기준, frontend-build 스테이지의 WORKDIR이
+# /frontend라 실제 경로는 /frontend/static/dist/{admin,app})
 COPY --from=frontend-build --chown=user:user /frontend/static/dist/admin $HOME/app/frontend/static/dist/admin
+COPY --from=frontend-build --chown=user:user /frontend/static/dist/app $HOME/app/frontend/static/dist/app
 
 # Ensure uploads directory is present and writable
 RUN mkdir -p $HOME/app/backend/uploads && chmod -R 777 $HOME/app/backend/uploads

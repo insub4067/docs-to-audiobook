@@ -199,10 +199,12 @@ async def get_serviceworker():
 
 @router.get("/")
 async def read_index():
-    index_path = os.path.join(STATIC_DIR, "index.html")
-    if os.path.exists(index_path):
-        return FileResponse(index_path)
-    return JSONResponse(status_code=404, content={"message": "Frontend static file index.html not found. Build the frontend first."})
+    # Vite로 빌드된 메인 SPA(frontend/app.html). admin.html과 마찬가지로
+    # base: "/static/dist/app/"라 자산 경로는 이 라우트 위치와 무관하다.
+    app_path = os.path.join(STATIC_DIR, "dist", "app", "app.html")
+    if os.path.exists(app_path):
+        return FileResponse(app_path)
+    return JSONResponse(status_code=404, content={"message": "Frontend build not found. Build the frontend first."})
 
 
 @router.get("/admin")
