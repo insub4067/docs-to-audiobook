@@ -4,7 +4,8 @@
   "version": "0.0.1",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc --noEmit && vite build"
+    "build": "vue-tsc --noEmit && vite build",
+    "build:app-preview": "vue-tsc --noEmit && vite build --config vite.app.config.ts"
   },
   "dependencies": {
     "pinia": "^4.0.2",
