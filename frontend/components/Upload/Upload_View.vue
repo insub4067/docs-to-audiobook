@@ -30,6 +30,34 @@ function onDrop(event: DragEvent): void {
     const files = event.dataTransfer?.files;
     if (files && files.length > 0) props.logic.handleBatchFileSelect(files);
 }
+
+// touchend는 터치가 시작된 요소에서 그대로 발생한다 — 드롭존을 짚고
+// 아래로 스크롤하다 손을 떼도 여기서 끝난다. 움직인 거리를 재서, 스크롤
+// 등 드래그였다면(임계값 이상 이동) 시트를 열지 않고 탭일 때만 연다.
+const DROPZONE_TAP_THRESHOLD_PX = 10;
+let dropzoneTouchStartX = 0;
+let dropzoneTouchStartY = 0;
+let dropzoneTouchMoved = false;
+
+function onDropzoneTouchStart(event: TouchEvent): void {
+    dropzoneTouchStartX = event.touches[0].clientX;
+    dropzoneTouchStartY = event.touches[0].clientY;
+    dropzoneTouchMoved = false;
+}
+
+function onDropzoneTouchMove(event: TouchEvent): void {
+    const dx = event.touches[0].clientX - dropzoneTouchStartX;
+    const dy = event.touches[0].clientY - dropzoneTouchStartY;
+    if (Math.abs(dx) > DROPZONE_TAP_THRESHOLD_PX || Math.abs(dy) > DROPZONE_TAP_THRESHOLD_PX) {
+        dropzoneTouchMoved = true;
+    }
+}
+
+function onDropzoneTouchEnd(event: TouchEvent): void {
+    if (dropzoneTouchMoved) return;
+    event.preventDefault();
+    props.logic.openAddSourceMenu();
+}
 </script>
 
 <template>
@@ -43,7 +71,9 @@ function onDrop(event: DragEvent): void {
             class="upload-dropzone"
             :class="{ dragover: state.isDragOver.value }"
             @click="logic.openAddSourceMenu"
-            @touchend.prevent="logic.openAddSourceMenu"
+            @touchstart="onDropzoneTouchStart"
+            @touchmove="onDropzoneTouchMove"
+            @touchend="onDropzoneTouchEnd"
             @dragenter.prevent.stop="state.isDragOver.value = true"
             @dragover.prevent.stop="state.isDragOver.value = true"
             @dragleave.prevent.stop="state.isDragOver.value = false"
