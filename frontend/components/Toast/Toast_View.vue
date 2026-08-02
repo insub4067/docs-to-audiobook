@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, watch } from "vue";
 import { useToastState } from "./Toast_State.vue";
+import { useToastLogic } from "./Toast_Logic.vue";
 
 // static/js/toast.js의 마크업(#toast/#toastIcon/#toastMessage)과 style.css의
 // .toast/.toast-{type}/.toast-top 규칙을 그대로 재사용한다.
 const { message, type, visible, isTop } = useToastState();
+const { dismissToast } = useToastLogic(useToastState());
 
 const iconName = computed(() => {
     if (type.value === "success") return "check-circle";
@@ -26,7 +28,7 @@ watch(iconName, () => {
 </script>
 
 <template>
-    <div id="toast" :class="toastClass" role="status" aria-live="polite">
+    <div id="toast" :class="toastClass" role="status" aria-live="polite" @click="dismissToast">
         <i id="toastIcon" :data-lucide="iconName"></i>
         <span id="toastMessage">{{ message }}</span>
     </div>

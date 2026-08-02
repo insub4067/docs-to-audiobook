@@ -6,7 +6,7 @@ import { useWebSpeech } from "./webSpeech";
 import { buildDisplayItems, findActiveSentenceIndex, type ReaderSentence } from "./sentenceDisplay";
 import { saveAudiobookToDB, updateAudiobookPosition, type AudiobookRecord } from "../services/indexedDb";
 import { getAudiobookDisplayTitle, formatTime, getReaderScrollTarget } from "../utils/format";
-import { useToastLogic } from "../components/Toast/Toast_Logic.vue";
+import { useToastLogic, setReaderOpenForToast } from "../components/Toast/Toast_Logic.vue";
 import { useToastState } from "../components/Toast/Toast_State.vue";
 
 export interface ReaderLogic {
@@ -182,6 +182,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         el.play().catch(() => {});
 
         state.isOpen.value = true;
+        setReaderOpenForToast(true);
         resetReaderUiTimeout();
     }
 
@@ -231,6 +232,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         el.load();
 
         state.isOpen.value = true;
+        setReaderOpenForToast(true);
         resetReaderUiTimeout();
     }
 
@@ -318,6 +320,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         readerControls.clearSleepTimer();
         resetAudioHandlers();
         state.isOpen.value = false;
+        setReaderOpenForToast(false);
         state.isPlaying.value = false;
         state.activeIndex.value = -1;
         state.showSaveSharedBtn.value = false;
