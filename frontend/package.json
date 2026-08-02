@@ -7,10 +7,7 @@
     "build": "vue-tsc --noEmit && vite build"
   },
   "dependencies": {
-    "lucide": "^1.28.0",
-    "pinia": "^4.0.2",
-    "vue": "^3.5.0",
-    "vue-router": "^4.6.4"
+    "vue": "^3.5.0"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.1.0",

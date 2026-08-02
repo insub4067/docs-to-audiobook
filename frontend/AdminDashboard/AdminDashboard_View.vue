@@ -32,21 +32,21 @@ onMounted(loadMetrics);
                     <h2 id="retentionHeading">다시 듣는가</h2>
                 </div>
                 <div class="metric-grid">
-                    <router-link class="metric-card metric-card-primary" to="/admin/metrics/weekly_active_users">
+                    <a class="metric-card metric-card-primary" href="/admin/metrics/weekly_active_users">
                         <p>주간 활성 사용자</p>
                         <strong data-metric="weekly_active_users">{{ formatMetric('weekly_active_users', metrics.weekly_active_users) }}</strong>
                         <span>최근 7일 이벤트 기준</span>
-                    </router-link>
-                    <router-link class="metric-card" to="/admin/metrics/daily_active_users">
+                    </a>
+                    <a class="metric-card" href="/admin/metrics/daily_active_users">
                         <p>일간 활성 사용자</p>
                         <strong data-metric="daily_active_users">{{ formatMetric('daily_active_users', metrics.daily_active_users) }}</strong>
                         <span>최근 24시간 이벤트 기준</span>
-                    </router-link>
-                    <router-link class="metric-card" to="/admin/metrics/week_one_retention_rate">
+                    </a>
+                    <a class="metric-card" href="/admin/metrics/week_one_retention_rate">
                         <p>1주 재방문율</p>
                         <strong data-metric="week_one_retention_rate">{{ formatMetric('week_one_retention_rate', metrics.week_one_retention_rate) }}</strong>
                         <span>{{ metrics.retention_cohort_size ? `${metrics.retention_cohort_size}명 코호트 기준` : "측정 코호트 없음" }}</span>
-                    </router-link>
+                    </a>
                 </div>
             </section>
 
@@ -56,26 +56,26 @@ onMounted(loadMetrics);
                     <h2 id="funnelHeading">만들고 듣는가</h2>
                 </div>
                 <div class="metric-grid metric-grid-wide">
-                    <router-link class="metric-card" to="/admin/metrics/total_users">
+                    <a class="metric-card" href="/admin/metrics/total_users">
                         <p>전체 사용자</p>
                         <strong data-metric="total_users">{{ formatMetric('total_users', metrics.total_users) }}</strong>
                         <span><b>{{ formatMetric('new_users_7d', metrics.new_users_7d) }}</b>명 · 최근 7일 가입</span>
-                    </router-link>
-                    <router-link class="metric-card" to="/admin/metrics/generation_success_rate">
+                    </a>
+                    <a class="metric-card" href="/admin/metrics/generation_success_rate">
                         <p>생성 성공률</p>
                         <strong data-metric="generation_success_rate">{{ formatMetric('generation_success_rate', metrics.generation_success_rate) }}</strong>
                         <span><b>{{ formatMetric('generation_completed_30d', metrics.generation_completed_30d) }}</b>건 완료 · 최근 30일</span>
-                    </router-link>
-                    <router-link class="metric-card" to="/admin/metrics/playback_started_30d">
+                    </a>
+                    <a class="metric-card" href="/admin/metrics/playback_started_30d">
                         <p>첫 재생</p>
                         <strong data-metric="playback_started_30d">{{ formatMetric('playback_started_30d', metrics.playback_started_30d) }}</strong>
                         <span>최근 30일 시작 횟수</span>
-                    </router-link>
-                    <router-link class="metric-card" to="/admin/metrics/total_audiobooks">
+                    </a>
+                    <a class="metric-card" href="/admin/metrics/total_audiobooks">
                         <p>보관함 오디오북</p>
                         <strong data-metric="total_audiobooks">{{ formatMetric('total_audiobooks', metrics.total_audiobooks) }}</strong>
                         <span><b>{{ formatMetric('generation_failed_30d', metrics.generation_failed_30d) }}</b>건 · 최근 30일 실패</span>
-                    </router-link>
+                    </a>
                 </div>
             </section>
         </section>
