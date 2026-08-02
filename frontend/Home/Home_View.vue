@@ -17,8 +17,13 @@ import { useReaderLogic } from "../Reader/Reader_Logic.vue";
 import { useReaderControlsState } from "../Reader/ReaderControls/ReaderControls_State.vue";
 import { useReaderControlsLogic } from "../Reader/ReaderControls/ReaderControls_Logic.vue";
 import { usePwaState } from "../components/Pwa/Pwa_State.vue";
+import ThemeSheetView from "../Sheet/ThemeSheet_View.vue";
+import { useThemeState } from "../Theme/Theme_State.vue";
+import { useThemeLogic } from "../Theme/Theme_Logic.vue";
 
 const pwaState = usePwaState();
+const themeState = useThemeState();
+const themeLogic = useThemeLogic(themeState);
 const voiceState = useVoiceState();
 const voiceLogic = useVoiceLogic(voiceState);
 const generationState = useGenerationState();
@@ -52,7 +57,7 @@ onMounted(async () => {
 </script>
 
 <template>
-    <HeaderView />
+    <HeaderView :theme-logic="themeLogic" />
     <main class="app-main" id="appMain">
         <UploadView :state="generationState" :logic="generationLogic" />
         <AudioListView
@@ -74,5 +79,7 @@ onMounted(async () => {
         :controls-state="readerControlsState"
         :controls-logic="readerControlsLogic"
         :audio-list-logic="audioListLogic"
+        :theme-logic="themeLogic"
     />
+    <ThemeSheetView :state="themeState" :logic="themeLogic" />
 </template>

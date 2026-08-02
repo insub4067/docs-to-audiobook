@@ -2,9 +2,14 @@
 import { onMounted } from "vue";
 import { useAdminState } from "./Admin_State.vue";
 import { useAdminLogic } from "./Admin_Logic.vue";
+import ThemeSheetView from "../Sheet/ThemeSheet_View.vue";
+import { useThemeState } from "../Theme/Theme_State.vue";
+import { useThemeLogic } from "../Theme/Theme_Logic.vue";
 
 const { status, contentVisible, metrics } = useAdminState();
 const { formatMetric, loadMetrics } = useAdminLogic({ status, contentVisible, metrics });
+const themeState = useThemeState();
+const themeLogic = useThemeLogic(themeState);
 
 onMounted(loadMetrics);
 </script>
@@ -19,6 +24,7 @@ onMounted(loadMetrics);
             </div>
             <div class="header-actions">
                 <a href="/" class="back-link">서비스로</a>
+                <button type="button" @click="themeLogic.openSheet">화면 테마</button>
                 <button type="button" @click="loadMetrics">새로고침</button>
             </div>
         </header>
@@ -80,4 +86,6 @@ onMounted(loadMetrics);
             </section>
         </section>
     </main>
+
+    <ThemeSheetView :state="themeState" :logic="themeLogic" />
 </template>

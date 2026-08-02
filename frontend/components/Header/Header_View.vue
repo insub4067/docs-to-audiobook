@@ -6,6 +6,11 @@ import { useHeaderState } from "./Header_State.vue";
 import { useHeaderLogic } from "./Header_Logic.vue";
 import { useNotificationsState } from "../../Notifications/Notifications_State.vue";
 import { useNotificationsLogic } from "../../Notifications/Notifications_Logic.vue";
+import type { ThemeLogic } from "../../Theme/Theme_Logic.vue";
+
+const props = defineProps<{
+    themeLogic: ThemeLogic;
+}>();
 
 const authStore = useAuthStore();
 const authLogic = useAuthLogic();
@@ -41,6 +46,11 @@ onMounted(async () => {
     document.addEventListener("click", closeProfileMenu);
     document.addEventListener("keydown", handleEscape);
 });
+
+function openThemeSheet(): void {
+    isProfileMenuOpen.value = false;
+    props.themeLogic.openSheet();
+}
 
 function handleEscape(event: KeyboardEvent) {
     if (event.key === "Escape") isProfileMenuOpen.value = false;
@@ -85,6 +95,10 @@ onUnmounted(() => {
                     <i data-lucide="layout-dashboard"></i>
                     관리자 페이지
                 </a>
+                <button class="profile-menu-link" type="button" role="menuitem" @click="openThemeSheet">
+                    <i data-lucide="palette"></i>
+                    화면 테마
+                </button>
                 <button
                     class="profile-menu-link"
                     type="button"

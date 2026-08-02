@@ -8,9 +8,7 @@ import type { AudioListLogic } from "../components/Library/AudioList_Logic.vue";
 import ReaderControlsView from "./ReaderControls/ReaderControls_View.vue";
 import IndexSheetView from "../Sheet/IndexSheet_View.vue";
 import ReaderOptionsSheetView from "../Sheet/ReaderOptionsSheet_View.vue";
-import ReaderThemeSheetView from "../Sheet/ReaderThemeSheet_View.vue";
-import { useReaderThemeState } from "./ReaderTheme_State.vue";
-import { useReaderThemeLogic } from "./ReaderTheme_Logic.vue";
+import type { ThemeLogic } from "../Theme/Theme_Logic.vue";
 
 const props = defineProps<{
     state: ReaderState;
@@ -18,10 +16,8 @@ const props = defineProps<{
     controlsState: ReaderControlsState;
     controlsLogic: ReaderControlsLogic;
     audioListLogic: AudioListLogic;
+    themeLogic: ThemeLogic;
 }>();
-
-const themeState = useReaderThemeState();
-const themeLogic = useReaderThemeLogic(themeState, props.state.containerEl);
 
 function onShareClick(): void {
     const audio = props.state.currentAudioObject.value;
@@ -52,7 +48,6 @@ function setAudioEl(el: Element | ComponentPublicInstance | null): void {
 let detachUiCollapseHandlers: (() => void) | null = null;
 onMounted(() => {
     detachUiCollapseHandlers = props.logic.attachUiCollapseHandlers();
-    themeLogic.initialize();
 });
 onUnmounted(() => detachUiCollapseHandlers?.());
 </script>
@@ -177,5 +172,4 @@ onUnmounted(() => detachUiCollapseHandlers?.());
 
     <IndexSheetView :state="state" :logic="logic" />
     <ReaderOptionsSheetView :state="controlsState" :logic="controlsLogic" />
-    <ReaderThemeSheetView :state="themeState" :logic="themeLogic" />
 </template>

@@ -1,27 +1,27 @@
 <script lang="ts">
 import { ref, type Ref } from "vue";
 
-export type ReaderTheme = "light" | "dark" | "warm" | "gray";
+export type AppTheme = "light" | "dark" | "warm" | "gray";
 
-export interface ReaderThemeOption {
-    value: ReaderTheme;
+export interface AppThemeOption {
+    value: AppTheme;
     label: string;
     swatchBg: string;
 }
 
-export const READER_THEME_OPTIONS: ReaderThemeOption[] = [
+export const APP_THEME_OPTIONS: AppThemeOption[] = [
     { value: "light", label: "라이트", swatchBg: "#ffffff" },
     { value: "dark", label: "다크", swatchBg: "#121212" },
     { value: "warm", label: "웜", swatchBg: "#FAF5E6" },
     { value: "gray", label: "그레이", swatchBg: "#e7e7e5" },
 ];
 
-export interface ReaderThemeState {
-    activeTheme: Ref<ReaderTheme>;
+export interface ThemeState {
+    activeTheme: Ref<AppTheme>;
     isSheetOpen: Ref<boolean>;
 }
 
-export function useReaderThemeState(): ReaderThemeState {
+export function useThemeState(): ThemeState {
     return {
         activeTheme: ref("warm"),
         isSheetOpen: ref(false),
