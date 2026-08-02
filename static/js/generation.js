@@ -113,7 +113,6 @@
             uploadedFile = null;
             fileInput.value = "";
             if (fileDetails) fileDetails.style.display = "none";
-            dropzone.style.display = "flex";
             previewText.textContent = "";
             previewText.style.display = "none";
             if (previewPlaceholder) previewPlaceholder.style.display = "flex";
