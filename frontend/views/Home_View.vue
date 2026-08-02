@@ -16,7 +16,9 @@ import { useReaderState } from "../composables/Reader/Reader_State.vue";
 import { useReaderLogic } from "../composables/Reader/Reader_Logic.vue";
 import { useReaderControlsState } from "../composables/Reader/ReaderControls_State.vue";
 import { useReaderControlsLogic } from "../composables/Reader/ReaderControls_Logic.vue";
+import { usePwaState } from "../composables/Pwa/Pwa_State.vue";
 
+const pwaState = usePwaState();
 const voiceState = useVoiceState();
 const voiceLogic = useVoiceLogic(voiceState);
 const generationState = useGenerationState();
@@ -61,7 +63,7 @@ onMounted(async () => {
         />
     </main>
     <footer class="app-version-footer">
-        <span>v --</span>
+        <span>{{ pwaState.versionLabel.value }}</span>
     </footer>
 
     <GenerationModalView :state="generationState" :logic="generationLogic" :voice-state="voiceState" :voice-logic="voiceLogic" />
