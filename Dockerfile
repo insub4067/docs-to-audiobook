@@ -16,7 +16,7 @@ FROM python:3.11-slim
 WORKDIR /code
 
 # Copy requirements file first for caching
-COPY ./requirements.txt /code/requirements.txt
+COPY backend/requirements.txt /code/requirements.txt
 
 # Install dependencies
 RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
@@ -35,14 +35,16 @@ WORKDIR $HOME/app
 COPY --chown=user:user . $HOME/app
 
 # 프론트엔드 빌드 스테이지의 결과물을 가져온다(vite.config.ts의
-# outDir="../static/dist/admin" 기준)
-COPY --from=frontend-build --chown=user:user /static/dist/admin $HOME/app/static/dist/admin
+# outDir="../backend/static/dist/admin" 기준)
+COPY --from=frontend-build --chown=user:user /backend/static/dist/admin $HOME/app/backend/static/dist/admin
 
 # Ensure uploads directory is present and writable
-RUN mkdir -p $HOME/app/uploads && chmod -R 777 $HOME/app/uploads
+RUN mkdir -p $HOME/app/backend/uploads && chmod -R 777 $HOME/app/backend/uploads
 
 # Expose Hugging Face Space default port
 EXPOSE 7860
 
-# Run FastAPI app with Uvicorn on port 7860
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
+# Run FastAPI app with Uvicorn on port 7860. main.py는 backend/ 아래로
+# 옮겨졌고 내부 import(from routes import tts 등)는 그대로라, --app-dir로
+# backend/를 파이썬 모듈 검색 루트로 잡아준다(코드 변경 없이 해결).
+CMD ["uvicorn", "main:app", "--app-dir", "backend", "--host", "0.0.0.0", "--port", "7860"]
