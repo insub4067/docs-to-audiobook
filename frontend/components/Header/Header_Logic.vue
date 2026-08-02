@@ -1,5 +1,4 @@
 <script lang="ts">
-import { useRouter } from "vue-router";
 import type { HeaderState } from "./Header_State.vue";
 import { useAuthStore } from "../../stores/auth";
 import { useAuthLogic } from "../../Auth/Auth_Logic.vue";
@@ -21,7 +20,6 @@ const LOGO_TAP_COUNT_TO_ADMIN = 3;
 export function useHeaderLogic({ isProfileMenuOpen, authError, googleButtonSlots }: HeaderState): HeaderLogic {
     const authStore = useAuthStore();
     const authLogic = useAuthLogic();
-    const router = useRouter();
 
     let logoTapCount = 0;
     let logoTapTimer: ReturnType<typeof setTimeout> | undefined;
@@ -49,7 +47,11 @@ export function useHeaderLogic({ isProfileMenuOpen, authError, googleButtonSlots
         logoTapTimer = setTimeout(() => { logoTapCount = 0; }, LOGO_TAP_WINDOW_MS);
         if (logoTapCount === LOGO_TAP_COUNT_TO_ADMIN) {
             logoTapCount = 0;
-            router.push("/admin");
+            // /admin은 이 SPA의 라우트가 아니라 완전히 별도의 정적 빌드
+            // (admin.html)라, router.push가 아니라 실제 브라우저 이동이
+            // 필요하다. router.push는 URL만 바뀔 뿐 관리자 화면이 로드되지
+            // 않는 버그였다.
+            window.location.href = "/admin";
         }
     }
 
