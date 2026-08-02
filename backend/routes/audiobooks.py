@@ -17,6 +17,29 @@ from state import (
 router = APIRouter()
 
 
+def audiobook_items_with_urls(supabase, user_id: str, rows: list) -> list:
+    """오디오북 행마다 재생/문장 데이터용 서명 URL을 붙인다.
+    /api/audiobooks와 /api/folders(폴더 내용 조회)가 같이 쓴다."""
+    storage = supabase.storage.from_(AUDIOBOOK_BUCKET)
+    items = []
+    for row in rows:
+        audio_path, sentences_path = _object_paths(user_id, row["id"])
+        item = dict(row)
+        # 오디오가 없으면 재생이 불가능하므로 그 항목만 목록에서 제외한다
+        # (업로드가 중간에 끊긴 행). 목록 전체를 실패시키지는 않는다.
+        try:
+            item["audio_url"] = storage.create_signed_url(audio_path, SIGNED_URL_TTL)["signedURL"]
+        except Exception:
+            continue
+        # 문장 데이터는 없어도 오디오 재생은 되므로 선택 사항으로 둔다
+        try:
+            item["sentences_url"] = storage.create_signed_url(sentences_path, SIGNED_URL_TTL)["signedURL"]
+        except Exception:
+            item["sentences_url"] = None
+        items.append(item)
+    return items
+
+
 @router.post("/api/audiobooks")
 async def create_audiobook(request: Request, payload: dict, authorization: str = Header(None)):
     """메타데이터 행을 만들고 업로드용 서명 URL을 돌려준다."""
@@ -62,25 +85,7 @@ async def list_audiobooks(authorization: str = Header(None)):
     try:
         rows = supabase.table("audiobooks").select("*").eq("user_id", user_id) \
             .order("created_at", desc=True).execute().data or []
-        storage = supabase.storage.from_(AUDIOBOOK_BUCKET)
-
-        items = []
-        for row in rows:
-            audio_path, sentences_path = _object_paths(user_id, row["id"])
-            item = dict(row)
-            # 오디오가 없으면 재생이 불가능하므로 그 항목만 목록에서 제외한다
-            # (업로드가 중간에 끊긴 행). 목록 전체를 실패시키지는 않는다.
-            try:
-                item["audio_url"] = storage.create_signed_url(audio_path, SIGNED_URL_TTL)["signedURL"]
-            except Exception:
-                continue
-            # 문장 데이터는 없어도 오디오 재생은 되므로 선택 사항으로 둔다
-            try:
-                item["sentences_url"] = storage.create_signed_url(sentences_path, SIGNED_URL_TTL)["signedURL"]
-            except Exception:
-                item["sentences_url"] = None
-            items.append(item)
-        return {"audiobooks": items}
+        return {"audiobooks": audiobook_items_with_urls(supabase, user_id, rows)}
     except HTTPException:
         raise
     except Exception as e:
@@ -89,23 +94,40 @@ async def list_audiobooks(authorization: str = Header(None)):
 
 @router.patch("/api/audiobooks/{audiobook_id}")
 async def update_audiobook(audiobook_id: str, payload: dict, authorization: str = Header(None)):
-    """내 오디오북 제목을 수정한다."""
+    """내 오디오북 제목·소속 폴더·북마크 여부를 수정한다."""
     user_id = require_user_id(authorization)
-    title = (payload.get("title") or "").strip()
-    if not title:
-        raise HTTPException(status_code=400, detail="제목이 필요합니다.")
-
     supabase = _supabase_or_503()
+
+    updates = {}
+    if "title" in payload:
+        title = (payload.get("title") or "").strip()
+        if not title:
+            raise HTTPException(status_code=400, detail="제목이 필요합니다.")
+        updates["title"] = title[:255]
+    if "folder_id" in payload:
+        folder_id = payload.get("folder_id")
+        if folder_id:
+            found = supabase.table("folders").select("id") \
+                .eq("id", folder_id).eq("user_id", user_id).execute().data
+            if not found:
+                raise HTTPException(status_code=404, detail="폴더를 찾을 수 없습니다.")
+        updates["folder_id"] = folder_id
+    if "is_bookmarked" in payload:
+        updates["is_bookmarked"] = bool(payload.get("is_bookmarked"))
+
+    if not updates:
+        raise HTTPException(status_code=400, detail="수정할 내용이 없습니다.")
+
     try:
-        response = supabase.table("audiobooks").update({"title": title[:255]}) \
+        response = supabase.table("audiobooks").update(updates) \
             .eq("id", audiobook_id).eq("user_id", user_id).execute()
         if not response.data:
             raise HTTPException(status_code=404, detail="해당 오디오북을 찾을 수 없습니다.")
-        return {"id": audiobook_id, "title": title[:255]}
+        return response.data[0]
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"제목 수정에 실패했습니다: {e}")
+        raise HTTPException(status_code=500, detail=f"수정에 실패했습니다: {e}")
 
 
 def _validate_playback_state(payload: dict) -> tuple[float, float, str]:

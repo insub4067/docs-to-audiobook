@@ -84,6 +84,47 @@ async def test_update_audiobook_title_for_owner(mock_supabase, mock_auth):
 
 
 @pytest.mark.asyncio
+async def test_update_audiobook_bookmark(mock_supabase, mock_auth):
+    mock_supabase.table().update().eq().eq().execute.return_value = MagicMock(
+        data=[{"id": "book1", "is_bookmarked": True}]
+    )
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.patch(
+            "/api/audiobooks/book1",
+            json={"is_bookmarked": True},
+            headers={"Authorization": "Bearer fake_token"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"id": "book1", "is_bookmarked": True}
+
+
+@pytest.mark.asyncio
+async def test_update_audiobook_folder_move_rejects_missing_folder(mock_supabase, mock_auth):
+    mock_supabase.table().select().eq().eq().execute.return_value = MagicMock(data=[])
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.patch(
+            "/api/audiobooks/book1",
+            json={"folder_id": "does-not-exist"},
+            headers={"Authorization": "Bearer fake_token"},
+        )
+
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_update_audiobook_rejects_empty_payload(mock_supabase, mock_auth):
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.patch(
+            "/api/audiobooks/book1", json={}, headers={"Authorization": "Bearer fake_token"}
+        )
+
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
 async def test_save_playback_state_for_owner(mock_supabase, mock_auth):
     mock_supabase.table().upsert().execute.return_value = MagicMock(
         data=[{

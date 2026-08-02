@@ -37,6 +37,7 @@ from routes import tts as tts_routes
 from routes import default_book as default_book_routes
 from routes import share as share_routes
 from routes import audiobooks as audiobooks_routes
+from routes import folders as folders_routes
 from routes import auth_social as auth_social_routes
 from routes import system as system_routes
 from routes import notifications as notifications_routes
@@ -47,6 +48,7 @@ app.include_router(tts_routes.router)
 app.include_router(default_book_routes.router)
 app.include_router(share_routes.router)
 app.include_router(audiobooks_routes.router)
+app.include_router(folders_routes.router)
 app.include_router(auth_social_routes.router)
 app.include_router(system_routes.router)
 app.include_router(notifications_routes.router)
