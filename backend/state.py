@@ -13,7 +13,10 @@ from fastapi import HTTPException, Request, UploadFile
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
-STATIC_DIR = os.path.join(BASE_DIR, "static")
+# static/은 프론트엔드 코드(vanilla JS/HTML/CSS + Vite 빌드 산출물)라
+# frontend/ 아래 둔다. FastAPI는 서빙만 할 뿐이라 backend에서 상대 경로로
+# 넘어가서 참조한다.
+STATIC_DIR = os.path.normpath(os.path.join(BASE_DIR, "..", "frontend", "static"))
 SHARED_DIR = os.path.join(BASE_DIR, "shared")
 # 합성이 끝난 오디오를 클라이언트가 받아갈 때까지 잠시 두는 곳
 JOB_AUDIO_DIR = os.path.join(BASE_DIR, "job_audio")
