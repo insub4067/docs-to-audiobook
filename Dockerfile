@@ -1,3 +1,14 @@
+# ---- 프론트엔드 빌드 스테이지 (Vue + Vite + TS) ----
+# 서버는 항상 켜져 있어야 해서(콜드 스타트 방지, fly.toml 참고) 컨테이너
+# 시작 시점에 빌드하면 안 된다. 이미지 빌드 시점에 끝내고, 최종 이미지에는
+# Node.js가 남지 않는다.
+FROM node:20-slim AS frontend-build
+WORKDIR /frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
 # Use official light-weight Python image
 FROM python:3.11-slim
 
@@ -22,6 +33,10 @@ WORKDIR $HOME/app
 
 # Copy application files (preserving structure)
 COPY --chown=user:user . $HOME/app
+
+# 프론트엔드 빌드 스테이지의 결과물을 가져온다(vite.config.ts의
+# outDir="../static/dist/admin" 기준)
+COPY --from=frontend-build --chown=user:user /static/dist/admin $HOME/app/static/dist/admin
 
 # Ensure uploads directory is present and writable
 RUN mkdir -p $HOME/app/uploads && chmod -R 777 $HOME/app/uploads

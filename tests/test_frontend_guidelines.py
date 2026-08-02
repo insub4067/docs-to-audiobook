@@ -21,8 +21,11 @@ READER_JS = ROOT_DIR / "static" / "js" / "reader.js"
 SW_JS = ROOT_DIR / "static" / "sw.js"
 STYLE_CSS = ROOT_DIR / "static" / "style.css"
 INDEX_HTML = ROOT_DIR / "static" / "index.html"
-ADMIN_HTML = ROOT_DIR / "static" / "admin.html"
-ADMIN_JS = ROOT_DIR / "static" / "admin.js"
+# admin 대시보드는 Vue SFC(View/State/Logic 분리)로 포팅되어 소스가
+# frontend/에 있다. static/admin.html·admin.js는 빌드 산출물(static/dist/admin)
+# 로 대체되어 더 이상 존재하지 않는다.
+ADMIN_VIEW_VUE = ROOT_DIR / "frontend" / "AdminDashboard" / "AdminDashboard_View.vue"
+ADMIN_LOGIC_VUE = ROOT_DIR / "frontend" / "AdminDashboard" / "AdminDashboard_Logic.vue"
 ADMIN_METRIC_HTML = ROOT_DIR / "static" / "admin-metric.html"
 ADMIN_METRIC_JS = ROOT_DIR / "static" / "admin-metric.js"
 MANIFEST = ROOT_DIR / "static" / "manifest.json"
@@ -1581,8 +1584,8 @@ def test_library_syncs_playback_and_can_edit_titles():
 
 
 def test_admin_dashboard_renders_retention_metrics():
-    html = ADMIN_HTML.read_text(encoding="utf-8")
-    source = ADMIN_JS.read_text(encoding="utf-8")
+    html = ADMIN_VIEW_VUE.read_text(encoding="utf-8")
+    source = ADMIN_LOGIC_VUE.read_text(encoding="utf-8")
 
     assert 'data-metric="weekly_active_users"' in html
     assert 'data-metric="week_one_retention_rate"' in html
@@ -1591,7 +1594,7 @@ def test_admin_dashboard_renders_retention_metrics():
 
 
 def test_admin_metric_cards_link_to_dedicated_detail_pages():
-    html = ADMIN_HTML.read_text(encoding="utf-8")
+    html = ADMIN_VIEW_VUE.read_text(encoding="utf-8")
     detail_html = ADMIN_METRIC_HTML.read_text(encoding="utf-8")
     detail_source = ADMIN_METRIC_JS.read_text(encoding="utf-8")
 

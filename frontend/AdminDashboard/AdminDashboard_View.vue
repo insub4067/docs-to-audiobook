@@ -1,15 +1,16 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex, nofollow">
-    <title>TextAudio 관리자</title>
-    <link rel="stylesheet" href="/static/admin.css">
-    <script src="https://unpkg.com/vue@3"></script>
-</head>
-<body>
-    <main class="dashboard-shell" id="dashboardApp">
+<script setup lang="ts">
+import { onMounted } from "vue";
+import { useAdminDashboardState } from "./AdminDashboard_State.vue";
+import { useAdminDashboardLogic } from "./AdminDashboard_Logic.vue";
+
+const { status, contentVisible, metrics } = useAdminDashboardState();
+const { formatMetric, loadMetrics } = useAdminDashboardLogic({ status, contentVisible, metrics });
+
+onMounted(loadMetrics);
+</script>
+
+<template>
+    <main class="dashboard-shell">
         <header class="dashboard-header">
             <div>
                 <p class="eyebrow">TEXTAUDIO · PRODUCT PULSE</p>
@@ -79,6 +80,4 @@
             </section>
         </section>
     </main>
-    <script src="/static/admin.js"></script>
-</body>
-</html>
+</template>
