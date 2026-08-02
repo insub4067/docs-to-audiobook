@@ -11,13 +11,11 @@ def test_clean_tts_text():
     # Blockquotes
     assert clean_tts_text("> A quote") == "A quote"
     
-    # Parentheses cleanup (e.g. "한글 (English)")
+    # 괄호 안 내용은 언어와 무관하게 낭독하지 않는다
     assert clean_tts_text("사과 (Apple)") == "사과"
     assert clean_tts_text("홍길동 (Hong Gil Dong)") == "홍길동"
     assert clean_tts_text("1 (One)") == "1"
-    
-    # Keep normal parentheses
-    assert clean_tts_text("이것은 (테스트) 입니다") == "이것은 (테스트) 입니다"
+    assert clean_tts_text("이것은 (테스트) 입니다") == "이것은 입니다"
     
     # Multiple spaces
     assert clean_tts_text("  Too   many    spaces  ") == "Too many spaces"
@@ -71,12 +69,12 @@ def test_clean_tts_text_edge_cases():
     assert clean_tts_text("Hello 😊 world! 🚀") == "Hello 😊 world! 🚀"
     assert clean_tts_text("테스트 🍎 123 ㅋㅋㅋ") == "테스트 🍎 123 ㅋㅋㅋ"
     
-    # Markdown links and images (Wait, [ and ] and () are kept if they don't match foreign text)
-    assert clean_tts_text("Click [here](http://example.com) for info.") == "Click [here](http://example.com) for info."
-    assert clean_tts_text("Image ![alt](img.jpg)") == "Image ![alt](img.jpg)"
-    
-    # Complex parentheses
-    assert clean_tts_text("이것은 (테스트(중첩)) 입니다") == "이것은 (테스트(중첩)) 입니다" # Should keep if it's not detected as purely foreign/unnecessary
+    # Markdown links and images: 괄호 안(URL)은 제거되고 대괄호 표기만 남는다
+    assert clean_tts_text("Click [here](http://example.com) for info.") == "Click [here] for info."
+    assert clean_tts_text("Image ![alt](img.jpg)") == "Image ![alt]"
+
+    # 중첩된 괄호도 안쪽부터 전부 제거된다
+    assert clean_tts_text("이것은 (테스트(중첩)) 입니다") == "이것은 입니다"
     assert clean_tts_text("안녕 (Hello) 세상 (World)") == "안녕 세상"
     
     # Markdown tables (should ideally be stripped or handled gracefully)

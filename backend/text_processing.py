@@ -368,11 +368,14 @@ def clean_tts_text(text: str) -> str:
     t = re.sub(r'#+\s*', '', text)
     t = re.sub(r'[*_~`\\]', '', t)
     t = re.sub(r'>\s*', '', t)
-    
-    # 2. 한글 뒤 괄호 안의 영문(원문 표기) 제거: 예) 스캔들(A Scandal in Bohemia) -> 스캔들
-    # 한글 문자나 숫자 바로 뒤에 오는 (영어/공백/문장부호) 괄호 패턴 제거
-    t = re.sub(r'([가-힣0-9])\s*\([A-Za-z0-9\s.,\-\'\"]+\)', r'\1', t)
-    
+
+    # 2. 괄호 안의 내용은 낭독하지 않는다(원문 표기, 부연 설명 등). 중첩된
+    # 괄호도 안쪽부터 없어질 때까지 반복 적용해 전부 제거한다.
+    previous = None
+    while previous != t:
+        previous = t
+        t = re.sub(r'\([^()]*\)', '', t)
+
     # 3. 연속 공백 정리
     t = re.sub(r'\s+', ' ', t).strip()
     return t
