@@ -35,8 +35,9 @@ WORKDIR $HOME/app
 COPY --chown=user:user . $HOME/app
 
 # 프론트엔드 빌드 스테이지의 결과물을 가져온다(vite.config.ts의
-# outDir="../backend/static/dist/admin" 기준)
-COPY --from=frontend-build --chown=user:user /backend/static/dist/admin $HOME/app/backend/static/dist/admin
+# outDir="static/dist/admin" 기준, frontend-build 스테이지의 WORKDIR이
+# /frontend라 실제 경로는 /frontend/static/dist/admin)
+COPY --from=frontend-build --chown=user:user /frontend/static/dist/admin $HOME/app/frontend/static/dist/admin
 
 # Ensure uploads directory is present and writable
 RUN mkdir -p $HOME/app/backend/uploads && chmod -R 777 $HOME/app/backend/uploads

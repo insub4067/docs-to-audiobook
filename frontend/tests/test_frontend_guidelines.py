@@ -7,30 +7,30 @@ import pytest
 
 # 저장소 루트: frontend/tests/이 파일 기준 두 단계 위.
 ROOT_DIR = Path(__file__).resolve().parents[2]
-BACKEND_STATIC = ROOT_DIR / "backend" / "static"
-APP_JS = BACKEND_STATIC / "app.js"
-UTILS_JS = BACKEND_STATIC / "js" / "utils.js"
-AUTH_JS = BACKEND_STATIC / "js" / "auth.js"
-PWA_JS = BACKEND_STATIC / "js" / "pwa.js"
-NOTIFICATIONS_JS = BACKEND_STATIC / "js" / "notifications.js"
-GENERATION_STATUS_JS = BACKEND_STATIC / "js" / "generation-status.js"
-GENERATION_JS = BACKEND_STATIC / "js" / "generation.js"
-VOICES_JS = BACKEND_STATIC / "js" / "voices.js"
-WEB_SPEECH_JS = BACKEND_STATIC / "js" / "web-speech.js"
-READER_CONTROLS_JS = BACKEND_STATIC / "js" / "reader-controls.js"
-LIBRARY_JS = BACKEND_STATIC / "js" / "library.js"
-READER_JS = BACKEND_STATIC / "js" / "reader.js"
-SW_JS = BACKEND_STATIC / "sw.js"
-STYLE_CSS = BACKEND_STATIC / "style.css"
-INDEX_HTML = BACKEND_STATIC / "index.html"
+FRONTEND_STATIC = ROOT_DIR / "frontend" / "static"
+APP_JS = FRONTEND_STATIC / "app.js"
+UTILS_JS = FRONTEND_STATIC / "js" / "utils.js"
+AUTH_JS = FRONTEND_STATIC / "js" / "auth.js"
+PWA_JS = FRONTEND_STATIC / "js" / "pwa.js"
+NOTIFICATIONS_JS = FRONTEND_STATIC / "js" / "notifications.js"
+GENERATION_STATUS_JS = FRONTEND_STATIC / "js" / "generation-status.js"
+GENERATION_JS = FRONTEND_STATIC / "js" / "generation.js"
+VOICES_JS = FRONTEND_STATIC / "js" / "voices.js"
+WEB_SPEECH_JS = FRONTEND_STATIC / "js" / "web-speech.js"
+READER_CONTROLS_JS = FRONTEND_STATIC / "js" / "reader-controls.js"
+LIBRARY_JS = FRONTEND_STATIC / "js" / "library.js"
+READER_JS = FRONTEND_STATIC / "js" / "reader.js"
+SW_JS = FRONTEND_STATIC / "sw.js"
+STYLE_CSS = FRONTEND_STATIC / "style.css"
+INDEX_HTML = FRONTEND_STATIC / "index.html"
 # admin 대시보드는 Vue SFC(View/State/Logic 분리)로 포팅되어 소스가
 # frontend/에 있다. static/admin.html·admin.js는 빌드 산출물(static/dist/admin)
 # 로 대체되어 더 이상 존재하지 않는다.
 ADMIN_VIEW_VUE = ROOT_DIR / "frontend" / "AdminDashboard" / "AdminDashboard_View.vue"
 ADMIN_LOGIC_VUE = ROOT_DIR / "frontend" / "AdminDashboard" / "AdminDashboard_Logic.vue"
-ADMIN_METRIC_HTML = BACKEND_STATIC / "admin-metric.html"
-ADMIN_METRIC_JS = BACKEND_STATIC / "admin-metric.js"
-MANIFEST = BACKEND_STATIC / "manifest.json"
+ADMIN_METRIC_HTML = FRONTEND_STATIC / "admin-metric.html"
+ADMIN_METRIC_JS = FRONTEND_STATIC / "admin-metric.js"
+MANIFEST = FRONTEND_STATIC / "manifest.json"
 
 SPLIT_APP_SCRIPTS = [
     "/static/js/toast.js",
@@ -1272,7 +1272,7 @@ def test_split_app_scripts_exist_and_load_before_app_in_dependency_order():
     script_paths = [*SPLIT_APP_SCRIPTS, "/static/app.js"]
 
     for script_path in SPLIT_APP_SCRIPTS:
-        assert (BACKEND_STATIC.parent / script_path.removeprefix("/")).is_file()
+        assert (FRONTEND_STATIC.parent / script_path.removeprefix("/")).is_file()
 
     positions = [html.index(f'<script src="{script_path}"></script>') for script_path in script_paths]
     assert positions == sorted(positions)

@@ -20,4 +20,4 @@ venv/
 
 # 프론트엔드 빌드 (Vite). 결과물은 Docker 이미지 빌드 시점에 생성한다.
 frontend/node_modules/
-backend/static/dist/
+frontend/static/dist/
