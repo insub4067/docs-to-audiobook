@@ -29,6 +29,8 @@ export interface AudioListLogic {
     performShare(target: AudiobookRecord): Promise<void>;
     downloadAudiobook(target: AudiobookRecord): Promise<void>;
     editAudiobookTitle(target: AudiobookRecord): Promise<void>;
+    toggleBookmark(target: AudiobookRecord): Promise<void>;
+    moveToFolder(target: AudiobookRecord, folderId: string | null): Promise<boolean>;
     deleteAudiobook(id: string): Promise<void>;
     sync(options?: { silent?: boolean }): Promise<SyncResult>;
     savePlaybackState(entry: AudiobookRecord, position: number, playbackSettings: { playbackSpeed: number; repeatMode: string }): Promise<void>;
@@ -232,6 +234,8 @@ export function useAudioListLogic(state: AudioListState): AudioListLogic {
                         title: cloudEntry.title || cloudEntry.file_name || existing.title,
                         audioUrl: cloudEntry.audio_url,
                         sentencesUrl: cloudEntry.sentences_url,
+                        folderId: cloudEntry.folder_id ?? null,
+                        isBookmarked: !!cloudEntry.is_bookmarked,
                     });
                     await saveAudiobookToDB(refreshed);
                     continue;
@@ -244,6 +248,8 @@ export function useAudioListLogic(state: AudioListState): AudioListLogic {
                     cloudOnly: true, timestamp,
                     dateString: new Date(timestamp).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }),
                     sizeBytes: 0, charCount: 0,
+                    folderId: cloudEntry.folder_id ?? null,
+                    isBookmarked: !!cloudEntry.is_bookmarked,
                 };
                 await saveAudiobookToDB(await fetchPlaybackState(added));
                 result.added++;
@@ -407,6 +413,49 @@ export function useAudioListLogic(state: AudioListState): AudioListLogic {
         }
     }
 
+    async function toggleBookmark(target: AudiobookRecord): Promise<void> {
+        if (!target.cloudId || !authLogic.isLoggedIn()) {
+            showToast("즐겨찾기는 로그인 후 이용할 수 있습니다.", "info");
+            return;
+        }
+        const nextValue = !target.isBookmarked;
+        try {
+            const res = await fetch(`/api/audiobooks/${target.cloudId}`, {
+                method: "PATCH",
+                headers: { ...authLogic.authHeaders(), "Content-Type": "application/json" },
+                body: JSON.stringify({ is_bookmarked: nextValue }),
+            });
+            if (!res.ok) throw new Error("즐겨찾기 변경 실패");
+            await saveAudiobookToDB({ ...target, isBookmarked: nextValue });
+            await refresh();
+        } catch (error) {
+            console.error(error);
+            showToast("즐겨찾기 변경에 실패했습니다.", "error");
+        }
+    }
+
+    async function moveToFolder(target: AudiobookRecord, folderId: string | null): Promise<boolean> {
+        if (!target.cloudId || !authLogic.isLoggedIn()) {
+            showToast("폴더 이동은 로그인 후 이용할 수 있습니다.", "info");
+            return false;
+        }
+        try {
+            const res = await fetch(`/api/audiobooks/${target.cloudId}`, {
+                method: "PATCH",
+                headers: { ...authLogic.authHeaders(), "Content-Type": "application/json" },
+                body: JSON.stringify({ folder_id: folderId }),
+            });
+            if (!res.ok) throw new Error("폴더 이동 실패");
+            await saveAudiobookToDB({ ...target, folderId });
+            await refresh();
+            return true;
+        } catch (error) {
+            console.error(error);
+            showToast("폴더 이동에 실패했습니다.", "error");
+            return false;
+        }
+    }
+
     async function deleteAudiobook(id: string): Promise<void> {
         try {
             const entry = await getAudiobookFromDB(id);
@@ -450,7 +499,7 @@ export function useAudioListLogic(state: AudioListState): AudioListLogic {
 
     return {
         refresh, load, openItem, openActionSheet, closeActionSheet,
-        performShare, downloadAudiobook, editAudiobookTitle, deleteAudiobook, sync,
+        performShare, downloadAudiobook, editAudiobookTitle, toggleBookmark, moveToFolder, deleteAudiobook, sync,
         savePlaybackState, showBackgroundJob, removeBackgroundJob,
     };
 }

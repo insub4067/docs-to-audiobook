@@ -178,10 +178,101 @@ html {
     max-width: 1100px;
     margin: 0 auto;
     padding: 48px 24px;
-    padding-bottom: calc(48px + env(safe-area-inset-bottom)); /* Dynamic margin safe area on iOS Notch */
+    /* 하단 탭바(홈/내 파일) 높이만큼 여유를 둬서 콘텐츠 마지막 줄이
+       탭바에 가리지 않게 한다. */
+    padding-bottom: calc(48px + 76px + env(safe-area-inset-bottom));
     display: flex;
     flex-direction: column;
     gap: 36px;
+}
+
+/* 홈/내 파일 두 화면 전환용 하단 탭바. 읽기 모드에서는 숨긴다
+   (Home_View.vue가 v-show로 제어). */
+.tab-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 15;
+    display: flex;
+    padding-bottom: env(safe-area-inset-bottom);
+    background-color: var(--card-bg-solid);
+    border-top: 1px solid var(--border-color);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+}
+
+.tab-bar-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 10px 0 8px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-family: var(--font-sans);
+    font-size: 0.72rem;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.tab-bar-btn i {
+    width: 22px;
+    height: 22px;
+}
+
+.tab-bar-btn.active {
+    color: var(--primary-color);
+}
+
+/* 내 파일 화면의 경로 표시(빵부스러기) */
+.folder-breadcrumb {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 0 4px 4px;
+    font-size: 0.85rem;
+}
+
+.folder-breadcrumb-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    cursor: pointer;
+    padding: 4px;
+}
+
+.folder-breadcrumb-btn:last-child {
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+.folder-breadcrumb-sep {
+    color: var(--text-muted);
+    opacity: 0.5;
+}
+
+/* 폴더로 이동 시트의 하위 폴더 목록/빈 상태 */
+.folder-picker-list {
+    max-height: 40vh;
+    overflow-y: auto;
+}
+
+.folder-picker-empty {
+    padding: 16px 24px;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    text-align: center;
+}
+
+.action-sheet-btn-primary {
+    color: var(--primary-color);
+    font-weight: 700;
 }
 
 /* App Header Styling (Literary Bookshop vibe) */
@@ -1088,6 +1179,11 @@ input[type="range"]::-webkit-slider-thumb:active {
     border-radius: 999px;
     flex-shrink: 0;
     white-space: nowrap;
+}
+
+.bookmark-star {
+    color: var(--primary-color);
+    flex-shrink: 0;
 }
 
 .btn-icon-round.btn-delete {
@@ -2396,6 +2492,24 @@ input[type="range"]::-webkit-slider-thumb:active {
     cursor: pointer;
 }
 
+/* Vue 앱 전용: 애플 네이티브 설정 앱처럼 좌측 상단에 현재 화면 이름
+   (홈/내 파일)을 큰 타이틀로 보여준다(예전 "TEXTAUDIO" 워드마크 대신).
+   바닐라 정적 앱(static/index.html)은 여전히 .brand-wordmark를 그대로
+   쓰므로 위 규칙은 그대로 둔다. 관리자 3연속 탭 진입점(handleLogoTap)도
+   그대로 유지된다. */
+.logo .page-title {
+    color: var(--text-color);
+    font-family: var(--font-serif);
+    font-size: 1.7rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 44px;
+}
+
+.logo .page-title[data-admin="true"] {
+    cursor: pointer;
+}
+
 .logo-icon {
     width: 24px;
     height: 24px;
@@ -2426,6 +2540,10 @@ input[type="range"]::-webkit-slider-thumb:active {
 
     .logo .brand-wordmark {
         font-size: 0.82rem;
+    }
+
+    .logo .page-title {
+        font-size: 2rem;
     }
 
     .logo-icon {

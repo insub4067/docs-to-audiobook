@@ -10,7 +10,10 @@ import type { ThemeLogic } from "../../Theme/Theme_Logic.vue";
 
 const props = defineProps<{
     themeLogic: ThemeLogic;
+    activeTab: "home" | "files";
 }>();
+
+const tabTitle = computed(() => (props.activeTab === "home" ? "홈" : "내 파일"));
 
 const authStore = useAuthStore();
 const authLogic = useAuthLogic();
@@ -66,7 +69,7 @@ onUnmounted(() => {
     <header class="app-header">
         <div class="header-left">
             <div class="logo">
-                <h1 class="brand-wordmark" :data-admin="authStore.isAdmin" @click="handleLogoTap">TEXTAUDIO</h1>
+                <h1 class="page-title" :data-admin="authStore.isAdmin" @click="handleLogoTap">{{ tabTitle }}</h1>
             </div>
         </div>
 

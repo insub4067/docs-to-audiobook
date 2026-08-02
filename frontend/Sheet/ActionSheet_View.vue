@@ -2,6 +2,7 @@
 import { ref, watch } from "vue";
 import type { AudioListState } from "../components/Library/AudioList_State.vue";
 import type { AudioListLogic } from "../components/Library/AudioList_Logic.vue";
+import type { MyFilesLogic } from "../Files/MyFiles_Logic.vue";
 import { useSwipeToDismiss } from "../utils/swipeToDismiss";
 import { useToastLogic } from "../components/Toast/Toast_Logic.vue";
 import { useToastState } from "../components/Toast/Toast_State.vue";
@@ -9,6 +10,7 @@ import { useToastState } from "../components/Toast/Toast_State.vue";
 const props = defineProps<{
     state: AudioListState;
     logic: AudioListLogic;
+    myFilesLogic: MyFilesLogic;
 }>();
 
 const { showToast } = useToastLogic(useToastState());
@@ -47,6 +49,18 @@ async function onEditTitle(): Promise<void> {
     await props.logic.editAudiobookTitle(target);
 }
 
+async function onToggleBookmark(): Promise<void> {
+    const target = props.state.actionSheetTarget.value;
+    close();
+    if (target) await props.logic.toggleBookmark(target);
+}
+
+function onMoveToFolder(): void {
+    const target = props.state.actionSheetTarget.value;
+    close();
+    if (target) props.myFilesLogic.openMovePicker(target);
+}
+
 async function onDelete(): Promise<void> {
     const target = props.state.actionSheetTarget.value;
     if (!target) return;
@@ -83,6 +97,14 @@ async function onDelete(): Promise<void> {
             <button v-if="!state.actionSheetTarget.value?.isDefault" class="action-sheet-btn" @click="onEditTitle">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
                 제목 수정
+            </button>
+            <button v-if="!state.actionSheetTarget.value?.isDefault" class="action-sheet-btn" @click="onToggleBookmark">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" :fill="state.actionSheetTarget.value?.isBookmarked ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                {{ state.actionSheetTarget.value?.isBookmarked ? "즐겨찾기 해제" : "즐겨찾기 추가" }}
+            </button>
+            <button v-if="!state.actionSheetTarget.value?.isDefault" class="action-sheet-btn" @click="onMoveToFolder">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                폴더로 이동
             </button>
             <button v-if="!state.actionSheetTarget.value?.isDefault" class="action-sheet-btn action-sheet-btn-danger" @click="onDelete">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>

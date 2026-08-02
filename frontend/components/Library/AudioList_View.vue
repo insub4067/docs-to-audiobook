@@ -3,20 +3,26 @@ import { computed, onMounted } from "vue";
 import type { AudioListState } from "./AudioList_State.vue";
 import type { AudioListLogic } from "./AudioList_Logic.vue";
 import type { GeneratingItem } from "../../Generation/Generation_State.vue";
+import type { AudiobookRecord } from "../../services/indexedDb";
+import type { MyFilesLogic } from "../../Files/MyFiles_Logic.vue";
 import AudioListItemView from "./AudioListItem_View.vue";
 import ActionSheetView from "../../Sheet/ActionSheet_View.vue";
 
 const props = defineProps<{
     state: AudioListState;
     logic: AudioListLogic;
+    myFilesLogic: MyFilesLogic;
     generatingItems: GeneratingItem[];
     onImportLink: () => void;
+    items?: AudiobookRecord[];
 }>();
+
+const displayedItems = computed(() => props.items ?? props.state.savedAudiobooks.value);
 
 const isEmpty = computed(() =>
     props.generatingItems.length === 0
     && props.state.backgroundJobItems.value.length === 0
-    && props.state.savedAudiobooks.value.length === 0
+    && displayedItems.value.length === 0
 );
 
 onMounted(() => props.logic.load());
@@ -69,10 +75,10 @@ onMounted(() => props.logic.load());
                     </div>
                 </div>
 
-                <AudioListItemView v-for="audio in state.savedAudiobooks.value" :key="audio.id" :audio="audio" :logic="logic" />
+                <AudioListItemView v-for="audio in displayedItems" :key="audio.id" :audio="audio" :logic="logic" />
             </div>
         </div>
     </section>
 
-    <ActionSheetView :state="state" :logic="logic" />
+    <ActionSheetView :state="state" :logic="logic" :my-files-logic="myFilesLogic" />
 </template>

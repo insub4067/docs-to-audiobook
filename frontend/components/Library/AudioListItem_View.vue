@@ -118,6 +118,7 @@ onUnmounted(() => document.removeEventListener("touchstart", onDocumentTouchStar
                 <i data-lucide="play-circle"></i>
                 <span class="audio-title" :title="getAudiobookDisplayTitle(audio.title)">{{ getAudiobookDisplayTitle(audio.title) }}</span>
                 <span v-if="audio.isDefault" class="default-badge" title="기본 제공 오디오북">기본 제공</span>
+                <svg v-if="audio.isBookmarked" class="bookmark-star" width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none" title="즐겨찾기"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
             </div>
             <div class="audio-actions">
                 <button class="btn-icon-round btn-more" title="더보기" @click.stop="logic.openActionSheet(audio)">

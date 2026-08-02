@@ -22,6 +22,8 @@ export interface AudiobookRecord {
     playbackSpeed?: number;
     repeatMode?: string;
     playbackUpdatedAt?: number;
+    folderId?: string | null;
+    isBookmarked?: boolean;
     [key: string]: unknown;
 }
 
