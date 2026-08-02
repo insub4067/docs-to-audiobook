@@ -218,7 +218,8 @@ async def read_admin_dashboard():
 
 @router.get("/admin/metrics/{metric_name}")
 async def read_admin_metric_page(metric_name: str):
-    metric_path = os.path.join(STATIC_DIR, "admin-metric.html")
-    if os.path.exists(metric_path):
-        return FileResponse(metric_path)
+    # SPA 환경이므로 대시보드와 동일한 admin.html을 서빙하여 프론트엔드 라우터에 위임
+    admin_path = os.path.join(STATIC_DIR, "dist", "admin", "admin.html")
+    if os.path.exists(admin_path):
+        return FileResponse(admin_path)
     return JSONResponse(status_code=404, content={"message": "관리자 지표 화면을 찾을 수 없습니다."})
