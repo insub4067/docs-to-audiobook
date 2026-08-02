@@ -153,7 +153,10 @@ export function useAuthLogic(): AuthLogic {
         }
     }
 
-    /** 제공자가 발급한 토큰을 서버에 넘겨 우리 세션을 만든다. 제공자 공통 경로. */
+    /** 제공자가 발급한 토큰을 서버에 넘겨 우리 세션을 만든다. 제공자 공통 경로.
+     * 로그인 직후 새로고침하는 것은 원본과 동일하다 — 보관함 동기화 등
+     * 로그인에 반응해야 하는 다른 기능들이 전부 처음부터 다시 초기화되어
+     * 맞물리게 하는 가장 확실한 방법이라 SPA라도 그대로 유지한다. */
     async function completeSocialLogin(provider: string, token: string): Promise<void> {
         const res = await fetch(`/api/auth/social/${provider}`, {
             method: "POST",
@@ -164,7 +167,7 @@ export function useAuthLogic(): AuthLogic {
         if (!res.ok) throw new Error(data.detail || "로그인 실패");
 
         localStorage.setItem(AUTH_TOKEN_KEY, data.access_token);
-        await initializeAuth();
+        setTimeout(() => location.reload(), 500);
     }
 
     async function logout(): Promise<void> {
