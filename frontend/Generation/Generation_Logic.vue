@@ -21,14 +21,9 @@ export interface GenerationArguments {
 export interface GenerationLogic {
     handleBatchFileSelect(files: FileList | File[]): Promise<void>;
     resetSelection(): void;
-    fetchTextFromUrl(): Promise<void>;
-    fetchTextFromYoutube(): Promise<void>;
-    pasteText(): Promise<void>;
+    submitComposerInput(): Promise<void>;
     openAddSourceMenu(): void;
     openAddSourceMenuForFolder(folderId: string | null): void;
-    selectLinkMode(): void;
-    selectYoutubeMode(): void;
-    selectPasteMode(): void;
     closeAddSourceSheet(): void;
     onGenerateClick(): Promise<void>;
     onLoginPromptConfirm(): void;
@@ -221,61 +216,48 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
         if (validFiles.length > 1) await processBatchFiles(validFiles);
     }
 
-    async function fetchTextFromUrl(): Promise<void> {
-        const url = state.urlInputValue.value.trim();
-        if (!url) return;
-        if (!authLogic.isLoggedIn()) {
+    // 공백 없이 도메인처럼 생겼으면 링크로 본다(프로토콜 생략 허용:
+    // "youtu.be/abc"도 링크로 인식). 그 외(여러 줄이거나 공백을 포함한
+    // 문장)는 전부 붙여넣은 텍스트로 취급한다.
+    function looksLikeUrl(input: string): boolean {
+        if (/\s/.test(input)) return false;
+        return /^(https?:\/\/)?([\w-]+\.)+[a-z]{2,}(:\d+)?([/?#]\S*)?$/i.test(input);
+    }
+
+    function isYoutubeUrl(input: string): boolean {
+        try {
+            const host = new URL(input.startsWith("http") ? input : `https://${input}`).hostname
+                .replace(/^www\.|^m\./, "").toLowerCase();
+            return host === "youtu.be" || host === "youtube.com" || host === "youtube-nocookie.com";
+        } catch {
+            return false;
+        }
+    }
+
+    async function submitComposerInput(): Promise<void> {
+        const raw = state.composerInputValue.value.trim();
+        if (!raw) return;
+
+        const isLink = looksLikeUrl(raw);
+        if (isLink && !authLogic.isLoggedIn()) {
             showToast("링크 가져오기는 로그인 후 이용할 수 있습니다.", "info");
             document.getElementById("headerLoginSlot")?.scrollIntoView({ behavior: "smooth", block: "center" });
             return;
         }
-        state.isUrlFetchBusy.value = true;
-        try {
-            applyExtractedText(await extractTextFromUrl(url));
-            state.urlInputValue.value = "";
-            state.addSourceMode.value = null;
-        } catch (error) {
-            console.error(error);
-            showToast((error as Error).message, "error");
-        } finally {
-            state.isUrlFetchBusy.value = false;
-        }
-    }
 
-    async function fetchTextFromYoutube(): Promise<void> {
-        const url = state.youtubeInputValue.value.trim();
-        if (!url) return;
-        if (!authLogic.isLoggedIn()) {
-            showToast("유튜브 가져오기는 로그인 후 이용할 수 있습니다.", "info");
-            document.getElementById("headerLoginSlot")?.scrollIntoView({ behavior: "smooth", block: "center" });
-            return;
-        }
-        state.isYoutubeFetchBusy.value = true;
+        state.isComposerBusy.value = true;
         try {
-            applyExtractedText(await extractTextFromYoutube(url));
-            state.youtubeInputValue.value = "";
+            const data = !isLink
+                ? await extractPastedText(raw)
+                : isYoutubeUrl(raw) ? await extractTextFromYoutube(raw) : await extractTextFromUrl(raw);
+            applyExtractedText(data);
+            state.composerInputValue.value = "";
             state.addSourceMode.value = null;
         } catch (error) {
             console.error(error);
             showToast((error as Error).message, "error");
         } finally {
-            state.isYoutubeFetchBusy.value = false;
-        }
-    }
-
-    async function pasteText(): Promise<void> {
-        const text = state.pasteTextValue.value.trim();
-        if (!text) return;
-        state.isPasteBusy.value = true;
-        try {
-            applyExtractedText(await extractPastedText(text));
-            state.pasteTextValue.value = "";
-            state.addSourceMode.value = null;
-        } catch (error) {
-            console.error(error);
-            showToast((error as Error).message, "error");
-        } finally {
-            state.isPasteBusy.value = false;
+            state.isComposerBusy.value = false;
         }
     }
 
@@ -288,18 +270,6 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
     function openAddSourceMenuForFolder(folderId: string | null): void {
         state.targetFolderId.value = folderId;
         state.addSourceMode.value = "menu";
-    }
-
-    function selectLinkMode(): void {
-        state.addSourceMode.value = "url";
-    }
-
-    function selectYoutubeMode(): void {
-        state.addSourceMode.value = "youtube";
-    }
-
-    function selectPasteMode(): void {
-        state.addSourceMode.value = "paste";
     }
 
     function closeAddSourceSheet(): void {
@@ -482,14 +452,9 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
     return {
         handleBatchFileSelect,
         resetSelection,
-        fetchTextFromUrl,
-        fetchTextFromYoutube,
-        pasteText,
+        submitComposerInput,
         openAddSourceMenu,
         openAddSourceMenuForFolder,
-        selectLinkMode,
-        selectYoutubeMode,
-        selectPasteMode,
         closeAddSourceSheet,
         onGenerateClick,
         onLoginPromptConfirm,

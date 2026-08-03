@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, type ComponentPublicInstance } from "vue";
+import { onMounted, onUnmounted, ref, type ComponentPublicInstance } from "vue";
 import type { ReaderState } from "./Reader_State.vue";
 import type { ReaderLogic } from "./Reader_Logic.vue";
 import type { ReaderControlsState } from "./ReaderControls/ReaderControls_State.vue";
@@ -10,6 +10,7 @@ import IndexSheetView from "../Sheet/IndexSheet_View.vue";
 import ReaderMoreSheetView from "../Sheet/ReaderMoreSheet_View.vue";
 import ReaderOptionsSheetView from "../Sheet/ReaderOptionsSheet_View.vue";
 import type { ThemeLogic } from "../Theme/Theme_Logic.vue";
+import { useSwipeToDismiss } from "../utils/swipeToDismiss";
 
 const props = defineProps<{
     state: ReaderState;
@@ -46,17 +47,23 @@ function setAudioEl(el: Element | ComponentPublicInstance | null): void {
     props.state.audioEl.value = el instanceof HTMLAudioElement ? el : null;
 }
 
-let detachUiCollapseHandlers: (() => void) | null = null;
+let detachResizeHandler: (() => void) | null = null;
 onMounted(() => {
-    detachUiCollapseHandlers = props.logic.attachUiCollapseHandlers();
+    detachResizeHandler = props.logic.attachReaderResizeHandler();
 });
-onUnmounted(() => detachUiCollapseHandlers?.());
+onUnmounted(() => detachResizeHandler?.());
+
+// 상단바를 끌어내리면 화면 전체가 따라 내려가다가, 충분히 끌면(또는
+// 빠르게 튕기면) 읽기 화면을 닫는다 — 다른 바텀시트들과 같은 제스처를
+// 손잡이만 상단바로 바꿔 쓴다.
+const header = ref<HTMLElement | null>(null);
+useSwipeToDismiss(props.state.containerEl, () => props.logic.closeReader(), header);
 </script>
 
 <template>
     <div class="reader-overlay" :class="{ show: state.isOpen.value }" role="dialog" aria-modal="true" aria-label="오디오북 듣기">
         <div class="reader-container" :ref="setContainerEl">
-            <header class="reader-header">
+            <header class="reader-header" ref="header">
                 <button class="btn-reader-close" aria-label="오디오북 듣기 닫기" title="오디오북 듣기 닫기" type="button" @click="logic.closeReader">
                     <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
                 </button>

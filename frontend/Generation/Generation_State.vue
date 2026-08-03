@@ -13,7 +13,7 @@ export interface GeneratingItem {
     folderId: string | null;
 }
 
-export type AddSourceMode = "menu" | "url" | "paste" | "youtube" | null;
+export type AddSourceMode = "menu" | null;
 
 export interface GenerationState {
     currentTextId: Ref<string | null>;
@@ -30,12 +30,10 @@ export interface GenerationState {
     isGenerateDisabled: Ref<boolean>;
     isModalOpen: Ref<boolean>;
     isLoginPromptOpen: Ref<boolean>;
-    urlInputValue: Ref<string>;
-    isUrlFetchBusy: Ref<boolean>;
-    youtubeInputValue: Ref<string>;
-    isYoutubeFetchBusy: Ref<boolean>;
-    pasteTextValue: Ref<string>;
-    isPasteBusy: Ref<boolean>;
+    // 문서 추가 시트의 통합 입력창(링크 붙여넣기/텍스트 붙여넣기 겸용) —
+    // 무엇을 붙여넣었는지는 Generation_Logic.vue가 판단한다.
+    composerInputValue: Ref<string>;
+    isComposerBusy: Ref<boolean>;
     addSourceMode: Ref<AddSourceMode>;
     speed: Ref<number>;
     pitch: Ref<number>;
@@ -62,12 +60,8 @@ export function useGenerationState(): GenerationState {
         isGenerateDisabled: ref(true),
         isModalOpen: ref(false),
         isLoginPromptOpen: ref(false),
-        urlInputValue: ref(""),
-        isUrlFetchBusy: ref(false),
-        youtubeInputValue: ref(""),
-        isYoutubeFetchBusy: ref(false),
-        pasteTextValue: ref(""),
-        isPasteBusy: ref(false),
+        composerInputValue: ref(""),
+        isComposerBusy: ref(false),
         addSourceMode: ref(null),
         speed: ref(5),
         pitch: ref(0),

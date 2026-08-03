@@ -10,8 +10,8 @@ const props = defineProps<{
     onSelectFile: () => void;
 }>();
 
-const sheet = ref<HTMLElement | null>(null);
-useSwipeToDismiss(sheet, () => props.logic.closeAddSourceSheet());
+const composer = ref<HTMLElement | null>(null);
+useSwipeToDismiss(composer, () => props.logic.closeAddSourceSheet());
 
 watch(() => props.state.addSourceMode.value, (mode) => {
     document.body.style.overflow = mode ? "hidden" : "";
@@ -21,133 +21,56 @@ function onBackdropClick(event: MouseEvent): void {
     if (event.target === event.currentTarget) props.logic.closeAddSourceSheet();
 }
 
-function onSelectFileClick(): void {
+function onAttachClick(): void {
     props.logic.closeAddSourceSheet();
     props.onSelectFile();
 }
 
-function onUrlKeydown(event: KeyboardEvent): void {
+function onComposerKeydown(event: KeyboardEvent): void {
     if (event.key === "Enter") {
         event.preventDefault();
-        props.logic.fetchTextFromUrl();
-    }
-}
-
-function onYoutubeKeydown(event: KeyboardEvent): void {
-    if (event.key === "Enter") {
-        event.preventDefault();
-        props.logic.fetchTextFromYoutube();
+        props.logic.submitComposerInput();
     }
 }
 </script>
 
 <template>
     <div
-        class="action-sheet-backdrop"
+        class="action-sheet-backdrop composer-backdrop"
         :class="{ show: !!state.addSourceMode.value }"
         role="dialog"
         aria-modal="true"
         aria-label="문서 추가"
         @click="onBackdropClick"
     >
-        <div class="action-sheet" ref="sheet">
-            <div class="action-sheet-handle"></div>
-
-            <template v-if="state.addSourceMode.value === 'menu'">
-                <div class="index-sheet-header">
-                    <h3>문서 추가</h3>
-                </div>
-                <button class="action-sheet-btn" type="button" @click="onSelectFileClick">
-                    <i data-lucide="file-up"></i>
-                    파일 (MD, PDF, TXT, DOCX, HWP)
-                </button>
-                <button class="action-sheet-btn" type="button" @click="logic.selectLinkMode">
-                    <i data-lucide="link"></i>
-                    링크 (기사, 블로그, 게시글)
-                </button>
-                <button class="action-sheet-btn" type="button" @click="logic.selectPasteMode">
-                    <i data-lucide="clipboard-paste"></i>
-                    텍스트 붙여넣기
-                </button>
-                <button class="action-sheet-btn" type="button" @click="logic.selectYoutubeMode">
-                    <i data-lucide="clapperboard"></i>
-                    유튜브
-                </button>
-                <button class="action-sheet-btn action-sheet-btn-cancel" type="button" @click="logic.closeAddSourceSheet">닫기</button>
-            </template>
-
-            <template v-else-if="state.addSourceMode.value === 'url'">
-                <div class="index-sheet-header">
-                    <h3>링크에서 가져오기</h3>
-                </div>
-                <div class="sheet-input-body">
-                    <input
-                        type="url"
-                        inputmode="url"
-                        placeholder="뉴스 기사나 커뮤니티 게시글 링크를 붙여넣으세요"
-                        v-model="state.urlInputValue.value"
-                        @keydown="onUrlKeydown"
-                    >
-                    <button
-                        type="button"
-                        class="btn-url-fetch btn-url-fetch-block"
-                        :class="{ 'is-loading': state.isUrlFetchBusy.value }"
-                        :disabled="state.isUrlFetchBusy.value"
-                        @click="logic.fetchTextFromUrl"
-                    >
-                        <span>{{ state.isUrlFetchBusy.value ? "가져오는 중..." : "가져오기" }}</span>
-                    </button>
-                </div>
-                <button class="action-sheet-btn action-sheet-btn-cancel" type="button" @click="logic.closeAddSourceSheet">닫기</button>
-            </template>
-
-            <template v-else-if="state.addSourceMode.value === 'youtube'">
-                <div class="index-sheet-header">
-                    <h3>유튜브</h3>
-                </div>
-                <div class="sheet-input-body">
-                    <input
-                        type="url"
-                        inputmode="url"
-                        placeholder="유튜브 영상 링크를 붙여넣으세요"
-                        v-model="state.youtubeInputValue.value"
-                        @keydown="onYoutubeKeydown"
-                    >
-                    <button
-                        type="button"
-                        class="btn-url-fetch btn-url-fetch-block"
-                        :class="{ 'is-loading': state.isYoutubeFetchBusy.value }"
-                        :disabled="state.isYoutubeFetchBusy.value"
-                        @click="logic.fetchTextFromYoutube"
-                    >
-                        <span>{{ state.isYoutubeFetchBusy.value ? "가져오는 중..." : "가져오기" }}</span>
-                    </button>
-                </div>
-                <button class="action-sheet-btn action-sheet-btn-cancel" type="button" @click="logic.closeAddSourceSheet">닫기</button>
-            </template>
-
-            <template v-else-if="state.addSourceMode.value === 'paste'">
-                <div class="index-sheet-header">
-                    <h3>텍스트 붙여넣기</h3>
-                </div>
-                <div class="sheet-input-body">
-                    <textarea
-                        rows="6"
-                        placeholder="여기에 텍스트를 직접 붙여넣으세요"
-                        v-model="state.pasteTextValue.value"
-                    ></textarea>
-                    <button
-                        type="button"
-                        class="btn-url-fetch btn-url-fetch-block"
-                        :class="{ 'is-loading': state.isPasteBusy.value }"
-                        :disabled="state.isPasteBusy.value"
-                        @click="logic.pasteText"
-                    >
-                        <span>{{ state.isPasteBusy.value ? "처리 중..." : "사용하기" }}</span>
-                    </button>
-                </div>
-                <button class="action-sheet-btn action-sheet-btn-cancel" type="button" @click="logic.closeAddSourceSheet">닫기</button>
-            </template>
+        <div class="add-source-composer" ref="composer">
+            <button
+                type="button"
+                class="composer-attach-btn"
+                aria-label="파일 업로드"
+                title="파일 업로드 (MD, PDF, TXT, DOCX, HWP)"
+                @click="onAttachClick"
+            >
+                <i data-lucide="plus"></i>
+            </button>
+            <input
+                type="text"
+                inputmode="url"
+                placeholder="링크를 붙여넣거나 텍스트를 입력하세요"
+                v-model="state.composerInputValue.value"
+                @keydown="onComposerKeydown"
+            >
+            <button
+                type="button"
+                class="composer-submit-btn"
+                :class="{ 'is-loading': state.isComposerBusy.value }"
+                :disabled="state.isComposerBusy.value || !state.composerInputValue.value.trim()"
+                aria-label="추가"
+                title="추가"
+                @click="logic.submitComposerInput"
+            >
+                <i data-lucide="arrow-up"></i>
+            </button>
         </div>
     </div>
 </template>

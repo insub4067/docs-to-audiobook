@@ -3,7 +3,16 @@ import { onMounted, onUnmounted, type Ref } from "vue";
 // static/app.js의 setupSwipeToDismiss를 그대로 옮긴 것. 바텀시트류
 // (생성 모달, 액션시트, 로그인 안내) 전부에서 재사용하므로 UI 상태 없는
 // 순수 유틸로 둔다(View/State/Logic 3분할 예외).
-export function useSwipeToDismiss(contentElement: Ref<HTMLElement | null>, onDismiss: () => void): void {
+//
+// handleElement: 터치를 감지할 영역이 실제로 움직이는(transform이 걸리는)
+// contentElement와 다를 때만 넘긴다(예: 읽기 화면은 상단바를 끌어야 화면
+// 전체가 따라 내려간다). 생략하면 기존 방식대로 contentElement 자신이
+// 손잡이 역할도 겸한다.
+export function useSwipeToDismiss(
+    contentElement: Ref<HTMLElement | null>,
+    onDismiss: () => void,
+    handleElement?: Ref<HTMLElement | null>,
+): void {
     let startY = 0;
     let currentY = 0;
     let isDragging = false;
@@ -70,7 +79,7 @@ export function useSwipeToDismiss(contentElement: Ref<HTMLElement | null>, onDis
     }
 
     onMounted(() => {
-        const el = contentElement.value;
+        const el = (handleElement ?? contentElement).value;
         if (!el) return;
         el.addEventListener("touchstart", onTouchStart, { passive: true });
         el.addEventListener("touchmove", onTouchMove, { passive: false });
@@ -79,7 +88,7 @@ export function useSwipeToDismiss(contentElement: Ref<HTMLElement | null>, onDis
     });
 
     onUnmounted(() => {
-        const el = contentElement.value;
+        const el = (handleElement ?? contentElement).value;
         if (!el) return;
         el.removeEventListener("touchstart", onTouchStart);
         el.removeEventListener("touchmove", onTouchMove);
