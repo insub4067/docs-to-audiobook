@@ -149,6 +149,6 @@ useSwipeToDismiss(props.state.containerEl, () => props.logic.closeReader(), head
     </div>
 
     <IndexSheetView :state="state" :logic="logic" />
-    <ReaderMoreSheetView :state="state" :logic="logic" :theme-logic="themeLogic" :on-share-click="onShareClick" />
+    <ReaderMoreSheetView :state="state" :logic="logic" :controls-logic="controlsLogic" :theme-logic="themeLogic" :on-share-click="onShareClick" />
     <ReaderOptionsSheetView :state="controlsState" :logic="controlsLogic" />
 </template>

@@ -2,12 +2,14 @@
 import { ref, watch } from "vue";
 import type { ReaderState } from "../Reader/Reader_State.vue";
 import type { ReaderLogic } from "../Reader/Reader_Logic.vue";
+import type { ReaderControlsLogic } from "../Reader/ReaderControls/ReaderControls_Logic.vue";
 import type { ThemeLogic } from "../Theme/Theme_Logic.vue";
 import { useSwipeToDismiss } from "../utils/swipeToDismiss";
 
 const props = defineProps<{
     state: ReaderState;
     logic: ReaderLogic;
+    controlsLogic: ReaderControlsLogic;
     themeLogic: ThemeLogic;
     onShareClick: () => void;
 }>();
@@ -26,6 +28,16 @@ function onBackdropClick(event: MouseEvent): void {
 function onThemeClick(): void {
     props.logic.closeMoreSheet();
     props.themeLogic.openSheet();
+}
+
+function onFontFamilyClick(): void {
+    props.logic.closeMoreSheet();
+    props.controlsLogic.openSheet("fontFamily");
+}
+
+function onFontSizeClick(): void {
+    props.logic.closeMoreSheet();
+    props.controlsLogic.openSheet("fontSize");
 }
 
 function onIndexClick(): void {
@@ -68,8 +80,16 @@ function onSaveSharedClick(): void {
                 내 오디오북에 저장
             </button>
             <button class="action-sheet-btn" type="button" @click="onThemeClick">
-                <i data-lucide="type"></i>
+                <i data-lucide="palette"></i>
                 읽기 화면 테마
+            </button>
+            <button class="action-sheet-btn" type="button" @click="onFontFamilyClick">
+                <i data-lucide="type"></i>
+                글꼴
+            </button>
+            <button class="action-sheet-btn" type="button" @click="onFontSizeClick">
+                <i data-lucide="case-sensitive"></i>
+                글자 크기
             </button>
             <button class="action-sheet-btn action-sheet-btn-cancel" type="button" @click="logic.closeMoreSheet">닫기</button>
         </div>
