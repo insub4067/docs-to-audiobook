@@ -60,4 +60,12 @@ onUnmounted(() => {
     </div>
     <BaseToast />
     <IosInstallPromptView :state="pwaState" :logic="pwaLogic" />
+
+    <!-- iOS는 manifest의 orientation 잠금을 지키지 않아 회전 시 레이아웃이
+         깨진다. 화면 자체를 세로만 지원하도록 가로일 때는 이 안내만
+         보여준다. -->
+    <div class="landscape-lock">
+        <i data-lucide="smartphone"></i>
+        <p>세로 모드에서 이용해 주세요</p>
+    </div>
 </template>
