@@ -9,6 +9,7 @@ import os
 import time
 import uuid
 import asyncio
+import logging
 import requests
 from fastapi import APIRouter, Request, Header, HTTPException
 
@@ -16,6 +17,7 @@ from state import UPLOAD_DIR, upload_limit_for, synth_limit_for, text_storage, e
 from text_processing import extract_text
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 DRIVE_REQUEST_TIMEOUT_SEC = 30
 SUPPORTED_BINARY_EXTENSIONS = {".docx", ".pdf", ".txt", ".md", ".markdown", ".hwp"}
@@ -48,6 +50,7 @@ async def import_drive_file(request: Request, payload: dict, authorization: str 
     if meta_resp.status_code in (401, 403):
         raise HTTPException(status_code=401, detail="구글 드라이브 접근 권한이 만료되었습니다. 다시 시도해 주세요.")
     if not meta_resp.ok:
+        logger.warning("Drive metadata fetch failed status=%s body=%s", meta_resp.status_code, meta_resp.text[:500])
         raise HTTPException(status_code=400, detail="드라이브 파일 정보를 가져오지 못했습니다.")
 
     meta = meta_resp.json()
@@ -75,6 +78,7 @@ async def import_drive_file(request: Request, payload: dict, authorization: str 
                 timeout=DRIVE_REQUEST_TIMEOUT_SEC,
             )
             if not content_resp.ok:
+                logger.warning("Drive export failed status=%s body=%s", content_resp.status_code, content_resp.text[:500])
                 raise HTTPException(status_code=400, detail="구글 문서를 내보내지 못했습니다.")
             text = content_resp.content.decode("utf-8", errors="replace")
             filename = name
@@ -93,6 +97,7 @@ async def import_drive_file(request: Request, payload: dict, authorization: str 
                 timeout=DRIVE_REQUEST_TIMEOUT_SEC,
             )
             if not content_resp.ok:
+                logger.warning("Drive download failed status=%s body=%s", content_resp.status_code, content_resp.text[:500])
                 raise HTTPException(status_code=400, detail="드라이브 파일을 내려받지 못했습니다.")
 
             temp_path = os.path.join(UPLOAD_DIR, f"{uuid.uuid4()}_{os.path.basename(name)}")

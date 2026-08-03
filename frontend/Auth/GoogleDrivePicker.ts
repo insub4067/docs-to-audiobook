@@ -75,7 +75,7 @@ function requestDriveAccessToken(clientId: string): Promise<string> {
     });
 }
 
-function openPicker(accessToken: string, apiKey: string): Promise<{ id: string; name: string } | null> {
+function openPicker(accessToken: string, apiKey: string, appId: string): Promise<{ id: string; name: string } | null> {
     return new Promise((resolve, reject) => {
         try {
             const view = new window.google.picker.DocsView()
@@ -93,6 +93,10 @@ function openPicker(accessToken: string, apiKey: string): Promise<{ id: string; 
                     }
                 });
             if (apiKey) builder.setDeveloperKey(apiKey);
+            // drive.file 스코프로 고른 파일이 실제로 앱에 연결되려면
+            // Picker에 앱 ID(프로젝트 번호)를 알려줘야 한다 — 없으면
+            // 백엔드의 첫 Drive API 호출이 그 파일에 접근하지 못한다.
+            if (appId) builder.setAppId(appId);
             builder.build().setVisible(true);
         } catch (error) {
             reject(error as Error);
@@ -111,7 +115,10 @@ export async function pickGoogleDriveFile(clientId: string, apiKey: string): Pro
     await ensureOAuthClientReady();
     await ensurePickerLoaded();
     const accessToken = await requestDriveAccessToken(clientId);
-    const picked = await openPicker(accessToken, apiKey);
+    // OAuth 클라이언트 ID는 "<프로젝트 번호>-xxxx.apps.googleusercontent.com"
+    // 형태라, 대시 앞부분이 곧 Picker가 요구하는 앱 ID(프로젝트 번호)다.
+    const appId = clientId.split("-")[0];
+    const picked = await openPicker(accessToken, apiKey, appId);
     if (!picked) return null;
     return { fileId: picked.id, accessToken, name: picked.name };
 }

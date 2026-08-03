@@ -48,6 +48,8 @@ function onUploadFileClick(): void {
 }
 
 function onDriveImportClick(): void {
+    props.logic.closeFileSourceMenu();
+    props.logic.closeAddSourceSheet();
     props.logic.importFromGoogleDrive();
 }
 
