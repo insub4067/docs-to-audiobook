@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from state import BASE_DIR, STATIC_DIR, AUDIOBOOK_BUCKET
 from text_processing import extract_text
 from routes import tts as tts_routes
+from tts_providers import get_tts_provider
 from tts_providers.voice_catalog import DEFAULT_VOICE_KEY
 
 router = APIRouter()
@@ -23,13 +24,18 @@ default_book_lock = asyncio.Lock()
 
 
 def _default_book_fingerprint() -> str:
-    """음성 + 원문 내용으로 캐시 키를 만든다.
+    """공급자 + 음성 + 원문 내용으로 캐시 키를 만든다.
 
     음성만 넣었을 때는 원문을 바꿔도 키가 그대로라, 예전 내용으로 만든
     오디오가 계속 재사용됐다(축약본 3챕터가 전문으로 바꾼 뒤에도 남았다).
-    내용 해시를 함께 넣어 원문이 바뀌면 자동으로 다시 만들게 한다."""
+    내용 해시를 함께 넣어 원문이 바뀌면 자동으로 다시 만들게 한다.
+
+    공급자(TTS_PROVIDER)도 포함한다 — voice_key는 그대로 두고 공급자만
+    edge_tts <-> google로 바꿔도 실제 오디오가 완전히 달라지는데, 공급자가
+    빠져 있으면 이미 만들어둔 예전 공급자 캐시를 계속 재사용해버린다."""
     h = hashlib.sha256()
     h.update(DEFAULT_BOOK_VOICE.encode())
+    h.update(get_tts_provider().name.encode())
     try:
         with open(DEFAULT_BOOK_SOURCE, "rb") as f:
             h.update(f.read())
