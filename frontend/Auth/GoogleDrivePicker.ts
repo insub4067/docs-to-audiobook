@@ -98,9 +98,10 @@ function openPicker(accessToken: string, apiKey: string, appId: string): Promise
             // 백엔드의 첫 Drive API 호출이 그 파일에 접근하지 못한다.
             if (appId) builder.setAppId(appId);
             // 크기를 안 주면 Picker가 PWA 뷰포트에서 위치 계산을 잘못해
-            // 화면 위쪽에 작게 붙어 뜬다 — 실제 뷰포트 크기를 그대로
-            // 줘서 화면을 꽉 채우게 한다.
-            builder.setSize(window.innerWidth, window.innerHeight);
+            // 화면 위쪽에 작게 붙어 뜬다. 높이를 뷰포트보다 살짝 작게
+            // 줘서 style.css의 하단 시트 스타일(.picker-dialog)이 위쪽에
+            // 배경이 비치는 여백을 가질 수 있게 한다.
+            builder.setSize(window.innerWidth, Math.round(window.innerHeight * 0.9));
             builder.build().setVisible(true);
         } catch (error) {
             reject(error as Error);

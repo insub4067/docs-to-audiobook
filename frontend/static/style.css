@@ -3138,3 +3138,21 @@ input[type="range"]::-webkit-slider-thumb:active {
         background-color: rgba(217, 166, 111, 0.28);
     }
 }
+
+/* 구글 드라이브 Picker — 구글이 자체 스타일(.picker-dialog)로 그리는
+   위젯이라 공식 테마 API가 없다. 앱의 다른 시트처럼 하단에서 올라오는
+   모양으로 보이도록 좌표/모서리만 강제로 덮어쓴다. 구글이 내부 클래스명을
+   바꾸면 이 오버라이드는 조용히 무효화되고 Picker는 기본 모양으로
+   돌아간다(기능 자체는 영향 없음). */
+.picker-dialog {
+    top: auto !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    margin: 0 auto !important;
+    max-width: 500px !important;
+    width: 100% !important;
+    border-radius: 20px 20px 0 0 !important;
+    overflow: hidden !important;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.25) !important;
+}
