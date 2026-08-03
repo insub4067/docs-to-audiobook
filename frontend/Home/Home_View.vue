@@ -96,6 +96,20 @@ function onFileInputChange(event: Event): void {
     (event.target as HTMLInputElement).value = "";
 }
 
+// 텍스트 스캔(OCR, 관리자 전용) 버튼이 여는 카메라 입력. fileInput과
+// 같은 이유로 최상위에 둔다.
+const imageInput = ref<HTMLInputElement | null>(null);
+
+function openImageInput(): void {
+    imageInput.value?.click();
+}
+
+function onImageInputChange(event: Event): void {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (file) generationLogic.scanImageText(file);
+    (event.target as HTMLInputElement).value = "";
+}
+
 onMounted(async () => {
     document.addEventListener("keydown", onEscape);
     await voiceLogic.loadVoices();
@@ -155,7 +169,20 @@ onMounted(async () => {
         style="display: none;"
         @change="onFileInputChange"
     >
-    <AddSourceSheetView :state="generationState" :logic="generationLogic" :on-select-file="openFileInput" />
+    <input
+        ref="imageInput"
+        type="file"
+        accept="image/*"
+        capture="environment"
+        style="display: none;"
+        @change="onImageInputChange"
+    >
+    <AddSourceSheetView
+        :state="generationState"
+        :logic="generationLogic"
+        :on-select-file="openFileInput"
+        :on-select-image="openImageInput"
+    />
     <GenerationModalView :state="generationState" :logic="generationLogic" :voice-state="voiceState" :voice-logic="voiceLogic" />
     <LoginPromptSheetView :state="generationState" :logic="generationLogic" />
     <ReaderView

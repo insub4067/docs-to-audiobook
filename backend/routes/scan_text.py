@@ -1,0 +1,103 @@
+"""이미지에서 텍스트 스캔(OCR) — 관리자 전용, 추후 유료 사용자에게 개방 예정.
+
+구글 Cloud Vision API의 document_text_detection을 쓴다. Cloud TTS와 같은
+서비스 계정 자격증명(GOOGLE_APPLICATION_CREDENTIALS_JSON)을 재사용한다 —
+그 서비스 계정이 속한 GCP 프로젝트에서 Vision API가 활성화돼 있어야 한다.
+"""
+import os
+import json
+import time
+import uuid
+import asyncio
+from fastapi import APIRouter, Request, UploadFile, File, Header, HTTPException
+
+from state import synth_limit_for, upload_limit_for, text_storage, enforce_rate_limit, require_admin_user
+
+router = APIRouter()
+
+MAX_IMAGE_BYTES = 15 * 1024 * 1024  # Vision API 자체 제한(20MB)보다 여유를 둔다
+
+_vision_client = None
+
+
+def _get_vision_client():
+    global _vision_client
+    if _vision_client is None:
+        from google.cloud import vision
+
+        creds_json = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+        if creds_json:
+            # google_tts_adapter.py와 동일한 방식 — 파일 마운트 없이
+            # 환경변수로만 자격증명을 넣는 배포 환경(Fly.io) 대응.
+            from google.oauth2 import service_account
+
+            info = json.loads(creds_json)
+            credentials = service_account.Credentials.from_service_account_info(info)
+            _vision_client = vision.ImageAnnotatorClient(credentials=credentials)
+        else:
+            _vision_client = vision.ImageAnnotatorClient()
+    return _vision_client
+
+
+def _detect_document_text(content: bytes) -> str:
+    """동기 호출 — asyncio.to_thread로 감싸 쓴다. 테스트에서 패치하기
+    쉽도록 실제 Vision 호출을 이 함수 하나로 모은다."""
+    from google.cloud import vision
+
+    client = _get_vision_client()
+    image = vision.Image(content=content)
+    response = client.document_text_detection(image=image)
+    if response.error.message:
+        raise RuntimeError(response.error.message)
+    return (response.full_text_annotation.text or "").strip()
+
+
+@router.post("/api/scan-text")
+async def scan_text(request: Request, file: UploadFile = File(...), authorization: str = Header(None)):
+    require_admin_user(authorization)
+    enforce_rate_limit(request, "scan_text", limit=30, window_sec=600)
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="이미지 파일이 비어 있습니다.")
+    if len(content) > MAX_IMAGE_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"이미지가 너무 큽니다. 최대 {MAX_IMAGE_BYTES // (1024 * 1024)}MB까지 지원합니다.",
+        )
+
+    try:
+        text = await asyncio.to_thread(_detect_document_text, content)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"텍스트 인식에 실패했습니다: {e}")
+
+    if not text:
+        raise HTTPException(status_code=400, detail="이미지에서 텍스트를 찾지 못했습니다.")
+
+    max_upload_bytes = upload_limit_for(authorization)
+    max_synth_chars = synth_limit_for(max_upload_bytes)
+    if len(text) > max_synth_chars:
+        raise HTTPException(
+            status_code=413,
+            detail=f"텍스트가 너무 깁니다. 최대 {max_synth_chars:,}자까지 지원합니다.",
+        )
+
+    text_id = str(uuid.uuid4())
+    filename = f"스캔한 텍스트 {time.strftime('%Y-%m-%d %H:%M')}"
+    text_storage[text_id] = {
+        "filename": filename,
+        "text": text,
+        "char_count": len(text),
+        "max_synth_chars": max_synth_chars,
+        "created_at": time.time(),
+        "access_token": uuid.uuid4().hex,
+    }
+
+    preview_len = min(500, len(text))
+    return {
+        "text_id": text_id,
+        "filename": filename,
+        "char_count": len(text),
+        "preview": text[:preview_len] + ("..." if len(text) > preview_len else ""),
+        "text_access_token": text_storage[text_id]["access_token"],
+    }

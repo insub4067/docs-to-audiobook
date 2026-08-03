@@ -3,12 +3,16 @@ import { ref, watch } from "vue";
 import type { GenerationState } from "../Generation/Generation_State.vue";
 import type { GenerationLogic } from "../Generation/Generation_Logic.vue";
 import { useSwipeToDismiss } from "../utils/swipeToDismiss";
+import { useAuthStore } from "../stores/auth";
 
 const props = defineProps<{
     state: GenerationState;
     logic: GenerationLogic;
     onSelectFile: () => void;
+    onSelectImage: () => void;
 }>();
+
+const authStore = useAuthStore();
 
 const composer = ref<HTMLElement | null>(null);
 useSwipeToDismiss(composer, () => props.logic.closeAddSourceSheet());
@@ -51,6 +55,12 @@ function onDriveImportClick(): void {
     props.logic.closeFileSourceMenu();
     props.logic.closeAddSourceSheet();
     props.logic.importFromGoogleDrive();
+}
+
+function onScanTextClick(): void {
+    props.logic.closeFileSourceMenu();
+    props.logic.closeAddSourceSheet();
+    props.onSelectImage();
 }
 
 function onComposerKeydown(event: KeyboardEvent): void {
@@ -123,6 +133,10 @@ function onComposerKeydown(event: KeyboardEvent): void {
             <button class="action-sheet-btn" type="button" @click="onDriveImportClick">
                 <i data-lucide="hard-drive"></i>
                 Google Drive에서 가져오기
+            </button>
+            <button v-if="authStore.isAdmin" class="action-sheet-btn" type="button" @click="onScanTextClick">
+                <i data-lucide="scan-text"></i>
+                텍스트 스캔 (관리자 전용)
             </button>
             <button class="action-sheet-btn action-sheet-btn-cancel" type="button" @click="logic.closeFileSourceMenu">닫기</button>
         </div>
