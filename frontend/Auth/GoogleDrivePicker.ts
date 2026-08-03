@@ -97,6 +97,10 @@ function openPicker(accessToken: string, apiKey: string, appId: string): Promise
             // Picker에 앱 ID(프로젝트 번호)를 알려줘야 한다 — 없으면
             // 백엔드의 첫 Drive API 호출이 그 파일에 접근하지 못한다.
             if (appId) builder.setAppId(appId);
+            // 크기를 안 주면 Picker가 PWA 뷰포트에서 위치 계산을 잘못해
+            // 화면 위쪽에 작게 붙어 뜬다 — 실제 뷰포트 크기를 그대로
+            // 줘서 화면을 꽉 채우게 한다.
+            builder.setSize(window.innerWidth, window.innerHeight);
             builder.build().setVisible(true);
         } catch (error) {
             reject(error as Error);
