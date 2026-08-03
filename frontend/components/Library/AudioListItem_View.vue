@@ -12,6 +12,7 @@ const props = withDefaults(defineProps<{
     swipeEnabled: true,
 });
 
+const root = ref<HTMLElement | null>(null);
 const front = ref<HTMLElement | null>(null);
 const isSwipeOpen = ref(false);
 const isDeleting = ref(false);
@@ -90,7 +91,13 @@ function onBgClick(event: MouseEvent): void {
 }
 
 function onDocumentTouchStart(event: TouchEvent): void {
-    if (isSwipeOpen.value && front.value && !front.value.contains(event.target as Node)) resetTransform();
+    // front(앞면)만 기준으로 삼으면 안 된다 — 스와이프로 드러난 빨간
+    // 삭제 배경(.audio-item-bg)은 front의 형제 요소라 거기를 눌러도
+    // "바깥을 눌렀다"고 오판해 즉시 닫혀 버린다. 그러면 같은 터치의
+    // click은 이미 원위치로 돌아온 front에서 발생하고, isSwipeOpen이
+    // 먼저 꺼진 탓에 onItemClick의 방어 로직도 못 걸려 읽기모드가
+    // 열리는 버그로 이어진다 — 반드시 행 전체(root) 기준으로 판단한다.
+    if (isSwipeOpen.value && root.value && !root.value.contains(event.target as Node)) resetTransform();
 }
 
 async function onItemClick(event: MouseEvent): Promise<void> {
@@ -108,7 +115,7 @@ onUnmounted(() => document.removeEventListener("touchstart", onDocumentTouchStar
 </script>
 
 <template>
-    <div class="audio-item" :class="{ 'deleting-row': isDeleting, 'swipe-open': isSwipeOpen }" @click="onItemClick">
+    <div ref="root" class="audio-item" :class="{ 'deleting-row': isDeleting, 'swipe-open': isSwipeOpen }" @click="onItemClick">
         <div class="audio-item-bg" @click="onBgClick"><i data-lucide="trash-2"></i></div>
         <div
             ref="front"
