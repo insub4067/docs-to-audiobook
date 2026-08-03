@@ -146,11 +146,6 @@ onMounted(() => browserLogic.loadCurrentFolder());
             </button>
         </div>
 
-        <div class="library-empty" v-show="isEmpty">
-            <i data-lucide="folder-open"></i>
-            <p>이 폴더는 비어 있습니다.</p>
-        </div>
-
         <div class="myfiles-list">
             <div
                 v-if="!isAtRoot"
@@ -161,6 +156,11 @@ onMounted(() => browserLogic.loadCurrentFolder());
             >
                 <i data-lucide="corner-left-up" class="myfiles-row-icon"></i>
                 <span class="myfiles-row-title">상위 폴더</span>
+            </div>
+
+            <div class="library-empty" v-show="isEmpty">
+                <i data-lucide="folder-open"></i>
+                <p>이 폴더는 비어 있습니다.</p>
             </div>
 
             <div
