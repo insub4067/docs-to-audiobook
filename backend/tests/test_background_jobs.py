@@ -79,6 +79,54 @@ async def test_synthesize_large_text_starts_background_job(mock_supabase):
 
 
 @pytest.mark.asyncio
+async def test_synthesize_large_text_with_folder_stores_folder_id(mock_supabase):
+    # 폴더 안에서 대용량 문서를 추가하면 그 폴더 id가 작업 큐 행에도
+    # 실려야, 완료 후 _store_background_audiobook이 같은 폴더에 저장한다.
+    import httpx
+
+    _seed_large_text()
+    mock_supabase.table().select().eq().eq().execute.return_value = MagicMock(data=[{"id": "folder-1"}])
+    mock_supabase.table().select().in_().limit().execute.return_value = MagicMock(data=[])
+
+    with patch("state.require_user_id", return_value="admin-user"), \
+         patch("routes.tts.process_background_synthesis_task"):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/synthesize",
+                data={"text_id": "large-doc", "text_access_token": "text-token", "folder_id": "folder-1"},
+                headers={"Authorization": "Bearer fake"},
+            )
+
+    assert response.status_code == 200
+    data = response.json()
+    inserted = mock_supabase.table().insert.call_args[0][0]
+    assert inserted["folder_id"] == "folder-1"
+
+    state.jobs.pop(data["job_id"], None)
+    state.text_storage.pop("large-doc", None)
+
+
+@pytest.mark.asyncio
+async def test_synthesize_large_text_rejects_folder_not_owned(mock_supabase):
+    import httpx
+
+    _seed_large_text()
+    mock_supabase.table().select().eq().eq().execute.return_value = MagicMock(data=[])
+
+    with patch("state.require_user_id", return_value="admin-user"):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/synthesize",
+                data={"text_id": "large-doc", "text_access_token": "text-token", "folder_id": "not-mine"},
+                headers={"Authorization": "Bearer fake"},
+            )
+
+    assert response.status_code == 404
+    mock_supabase.table().insert.assert_not_called()
+    state.text_storage.pop("large-doc", None)
+
+
+@pytest.mark.asyncio
 async def test_synthesize_large_text_rejected_when_job_already_running(mock_supabase):
     import httpx
 
@@ -188,6 +236,33 @@ def test_store_background_audiobook_rolls_back_mp3_on_sentences_failure(mock_sup
     mock_supabase.table().insert.assert_not_called()
 
 
+def test_store_background_audiobook_includes_folder_id(mock_supabase, tmp_path):
+    audio_file = tmp_path / "out.mp3"
+    audio_file.write_bytes(b"fake-mp3-bytes")
+    job = {"audio_path": str(audio_file), "sentences": []}
+    mock_supabase.table().select().eq().eq().execute.return_value = MagicMock(data=[{"id": "folder-1"}])
+
+    tts._store_background_audiobook("user-1", "제목", job, "folder-1")
+
+    inserted = mock_supabase.table().insert.call_args[0][0]
+    assert inserted["folder_id"] == "folder-1"
+
+
+def test_store_background_audiobook_falls_back_to_root_when_folder_deleted(mock_supabase, tmp_path):
+    # 큐에 올릴 때는 폴더가 있었지만, 몇 시간짜리 작업이 끝나기 전에
+    # 사용자가 그 폴더를 지웠을 수 있다 — 저장 자체를 실패시키지 말고
+    # 루트에 저장해야 한다.
+    audio_file = tmp_path / "out.mp3"
+    audio_file.write_bytes(b"fake-mp3-bytes")
+    job = {"audio_path": str(audio_file), "sentences": []}
+    mock_supabase.table().select().eq().eq().execute.return_value = MagicMock(data=[])
+
+    tts._store_background_audiobook("user-1", "제목", job, "deleted-folder")
+
+    inserted = mock_supabase.table().insert.call_args[0][0]
+    assert inserted["folder_id"] is None
+
+
 # ---- resume_background_synthesis_jobs: 재시작 후 재개 ----
 
 @pytest.mark.asyncio
@@ -217,10 +292,40 @@ async def test_resume_reschedules_queued_jobs(mock_supabase):
     # 공급자 중립 voice_key("ko_male_warm")로 정규화되어 전달돼야 한다.
     mock_task.assert_called_once_with(
         "job-resume-1", "user-1", "재개될 문서", "원문 텍스트",
-        "ko_male_warm", "+0%", "+0Hz",
+        "ko_male_warm", "+0%", "+0Hz", None,
     )
     assert state.jobs["job-resume-1"]["status"] == "processing"
     state.jobs.pop("job-resume-1", None)
+
+
+@pytest.mark.asyncio
+async def test_resume_reschedules_queued_jobs_with_folder_id(mock_supabase):
+    mock_supabase.table().select().in_().execute.return_value = MagicMock(
+        data=[{
+            "id": "job-resume-2",
+            "user_id": "user-1",
+            "title": "재개될 문서",
+            "source_text": "원문 텍스트",
+            "voice": "ko_male_warm",
+            "rate": "+0%",
+            "pitch": "+0Hz",
+            "status": "queued",
+            "folder_id": "folder-1",
+        }]
+    )
+    mock_supabase.table().update().eq().eq().execute.return_value = MagicMock(
+        data=[{"id": "job-resume-2"}]
+    )
+
+    with patch("routes.tts.process_background_synthesis_task", new_callable=AsyncMock) as mock_task:
+        await tts.resume_background_synthesis_jobs()
+        await __import__("asyncio").sleep(0)
+
+    mock_task.assert_called_once_with(
+        "job-resume-2", "user-1", "재개될 문서", "원문 텍스트",
+        "ko_male_warm", "+0%", "+0Hz", "folder-1",
+    )
+    state.jobs.pop("job-resume-2", None)
 
 
 @pytest.mark.asyncio

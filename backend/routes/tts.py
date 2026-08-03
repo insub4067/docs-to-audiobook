@@ -20,7 +20,7 @@ from state import (
     BASE_DIR, JOB_AUDIO_DIR, jobs, text_storage, MAX_SYNTH_CHARS,
     DOCUMENT_PART_CONCURRENCY, background_synthesis_lock, _has_enough_disk_for_synthesis,
     _supabase_or_503, _object_paths, AUDIOBOOK_BUCKET, resolve_job_owner, require_job_owner,
-    enforce_rate_limit,
+    enforce_rate_limit, _validate_folder_ownership,
 )
 from text_processing import (
     build_document_representations, extract_markdown_headings,
@@ -331,7 +331,7 @@ async def process_synthesis_task(job_id: str, raw_text: str, voice: str, rate: s
         jobs[job_id]["error"] = str(e)
 
 
-def _store_background_audiobook(user_id: str, title: str, job: dict) -> str:
+def _store_background_audiobook(user_id: str, title: str, job: dict, folder_id: str | None = None) -> str:
     """브라우저가 없어도 서버가 완성본을 사용자 보관함에 저장한다.
 
     Storage 업로드를 모두 마친 뒤에야 DB 행을 만든다 — 순서를 반대로 하면
@@ -355,12 +355,22 @@ def _store_background_audiobook(user_id: str, title: str, job: dict) -> str:
         storage.remove([audio_path])
         raise
 
+    if folder_id:
+        # 작업을 큐에 올릴 때는 폴더 소유권을 확인했지만, 몇 시간짜리
+        # 작업이 끝나기 전에 그 폴더가 삭제됐을 수 있다 — 그 경우 오류로
+        # 날리지 말고 루트에 저장한다.
+        found = supabase.table("folders").select("id") \
+            .eq("id", folder_id).eq("user_id", user_id).execute().data
+        if not found:
+            folder_id = None
+
     supabase.table("audiobooks").insert({
         "id": audiobook_id,
         "user_id": user_id,
         "title": title[:255],
         "file_name": title[:255],
         "storage_path": audio_path,
+        "folder_id": folder_id,
     }).execute()
     return audiobook_id
 
@@ -383,7 +393,7 @@ def _fresh_job_state(user_id: str) -> dict:
     }
 
 
-async def process_background_synthesis_task(job_id: str, user_id: str, title: str, raw_text: str, voice: str, rate: str, pitch: str):
+async def process_background_synthesis_task(job_id: str, user_id: str, title: str, raw_text: str, voice: str, rate: str, pitch: str, folder_id: str | None = None):
     """청크 단위 재시도로도 못 살린 실패는 문서 전체를 처음부터 다시 돌린다.
 
     몇 시간짜리 관리자 작업이 청크 하나의 일시적 오류 때문에 통째로
@@ -406,7 +416,7 @@ async def process_background_synthesis_task(job_id: str, user_id: str, title: st
             await process_synthesis_task(job_id, raw_text, voice, rate, pitch)
             job = jobs.get(job_id, {})
             if job.get("status") == "completed":
-                audiobook_id = await asyncio.to_thread(_store_background_audiobook, user_id, title, job)
+                audiobook_id = await asyncio.to_thread(_store_background_audiobook, user_id, title, job, folder_id)
                 await asyncio.to_thread(
                     lambda: supabase.table("background_synthesis_jobs").update({
                         "status": "completed",
@@ -443,6 +453,7 @@ async def synthesize_text(
     voice: str = Form(DEFAULT_VOICE_KEY),
     rate: str = Form("+5%"),
     pitch: str = Form("+0Hz"),
+    folder_id: str = Form(None),
     authorization: str = Header(None),
     anonymous_session: str = Header(None, alias="X-Anonymous-Session")
 ):
@@ -481,6 +492,8 @@ async def synthesize_text(
             raise HTTPException(status_code=401, detail="대용량 문서는 로그인 후 변환할 수 있습니다.")
 
         supabase = _supabase_or_503()
+        if folder_id:
+            _validate_folder_ownership(supabase, user_id, folder_id)
         async with background_synthesis_lock:
             # 업로드 단계의 락과 별개다. 실제 CPU를 오래 쓰는 건 합성이므로,
             # 이미 진행 중인 대용량 작업이 있으면 새 작업을 거부한다. 확인과
@@ -512,6 +525,7 @@ async def synthesize_text(
                     "voice": voice,
                     "rate": rate,
                     "pitch": pitch,
+                    "folder_id": folder_id,
                 }).execute()
             )
         background_tasks.add_task(
@@ -523,6 +537,7 @@ async def synthesize_text(
             voice,
             rate,
             pitch,
+            folder_id,
         )
         return {"job_id": job_id, "background_started": True}
 
@@ -618,6 +633,7 @@ async def resume_background_synthesis_jobs():
             asyncio.create_task(process_background_synthesis_task(
                 job_id, row["user_id"], row["title"], row["source_text"],
                 resolve_voice_key(row["voice"]), row["rate"], row["pitch"],
+                row.get("folder_id"),
             ))
     except Exception as e:
         print(f"Background job resume failed: {e}")

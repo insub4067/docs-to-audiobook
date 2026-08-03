@@ -198,6 +198,15 @@ def _object_paths(user_id: str, audiobook_id: str):
     base = f"{user_id}/{audiobook_id}"
     return f"{base}.mp3", f"{base}.sentences.json"
 
+def _validate_folder_ownership(supabase, user_id: str, folder_id: str) -> None:
+    """folder_id가 이 사용자 소유인지 확인한다. 아니면 404.
+
+    audiobooks.py(즉시 생성)와 tts.py(백그라운드 작업 큐 등록)가 함께 쓴다."""
+    found = supabase.table("folders").select("id") \
+        .eq("id", folder_id).eq("user_id", user_id).execute().data
+    if not found:
+        raise HTTPException(status_code=404, detail="폴더를 찾을 수 없습니다.")
+
 APP_BUILD_ID = str(int(time.time()))
 
 text_storage = {}

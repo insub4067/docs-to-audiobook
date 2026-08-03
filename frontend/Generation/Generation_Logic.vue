@@ -315,6 +315,10 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
             formData.append("voice", args.voice);
             formData.append("rate", args.rate);
             formData.append("pitch", args.pitch);
+            // 대용량 문서는 백그라운드 작업으로 넘어가 서버가 직접 오디오북
+            // 행을 만든다(아래 entry.folderId는 그 경로를 안 탄다) — 폴더
+            // 배치를 여기서도 실어 보내야 그 경로에서도 적용된다.
+            if (state.targetFolderId.value) formData.append("folder_id", state.targetFolderId.value);
 
             const response = await fetch("/api/synthesize", {
                 method: "POST",
