@@ -204,7 +204,10 @@ html {
     z-index: 15;
     display: flex;
     padding-bottom: env(safe-area-inset-bottom);
-    background-color: var(--card-bg-solid);
+    /* --card-bg-solid(카드용 흰색)를 쓰면 --bg-color가 흰색과 다른
+       테마(예: warm의 크림색)에서 하단 바만 색이 붕 뜬다. 페이지
+       배경색을 그대로 써서 경계선+블러만으로 구분되게 한다. */
+    background-color: var(--bg-color);
     border-top: 1px solid var(--border-color);
     backdrop-filter: blur(24px) saturate(160%);
     -webkit-backdrop-filter: blur(24px) saturate(160%);
@@ -2595,7 +2598,8 @@ input[type="range"]::-webkit-slider-thumb:active {
 }
 
 .app-header.scrolled {
-    background-color: var(--card-bg-solid);
+    /* .tab-bar와 같은 이유로 --card-bg-solid 대신 페이지 배경색을 쓴다 */
+    background-color: var(--bg-color);
     border-bottom-color: var(--border-color);
     backdrop-filter: blur(24px) saturate(160%);
     -webkit-backdrop-filter: blur(24px) saturate(160%);
