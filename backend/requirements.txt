@@ -6,6 +6,9 @@ pypdf>=4.2.0
 edge-tts>=7.2.8
 # TTS_PROVIDER=google로 전환할 때만 실제로 쓰인다(개발/기본값은 edge-tts).
 google-cloud-texttospeech>=2.16.0
+# Chirp3-HD처럼 SSML mark 타임포인팅을 지원하지 않는 Google 음성의 문장
+# 경계를 근사할 때, 실제 mp3 길이를 재기 위해 필요하다.
+mutagen>=1.47.0
 requests>=2.31.0
 olefile>=0.46
 trafilatura>=1.8.0

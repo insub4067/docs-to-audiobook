@@ -1,19 +1,21 @@
 """Google Cloud Text-to-Speech 어댑터.
 
-주의(중요): 이 어댑터는 실제 Google Cloud 서비스 계정 자격증명 없이
-작성됐다 — 자격증명 발급(GCP 프로젝트 생성, Text-to-Speech API 활성화,
-서비스 계정 키 발급)은 콘솔 접근이 필요해 사용자가 직접 해야 하는
-단계라 이 세션에서는 라이브 호출을 한 번도 검증하지 못했다.
-TTS_PROVIDER=google로 전환한 뒤 실제 음성/타이밍 품질을 확인해야 한다.
-
 문장 경계(타이밍) 확보 방식: edge-tts는 스트리밍 중 SentenceBoundary
 이벤트를 그대로 준다. Google Cloud TTS는 그런 이벤트가 없는 대신 SSML
 <mark> 태그 + enable_time_pointing=[SSML_MARK]로 각 마크가 오디오의 몇
 초 지점에 나오는지 돌려준다(v1beta1 API 전용 기능) — 문장마다 앞에
-마크를 심어 그 시각을 문장 시작 시각으로 쓴다. 마지막 문장은 다음
-마크가 없어 정확한 끝 시각을 알 수 없는데, mp3를 디코딩해 실제 길이를
-재는 대신(새 의존성 추가) 앞선 문장들의 글자당 평균 소요 시간으로
-근사한다 — 근사치라는 점에 주의.
+마크를 심어 그 시각을 문장 시작 시각으로 쓴다. 텍스트 맨 끝에도 마크를
+하나 더 심어(내용 없는 마크) 마지막 문장의 끝 시각까지 실측한다.
+
+주의(실사용 중 발견): Chirp3-HD 계열 음성은 SSML mark 타임포인팅을
+아예 지원하지 않는다 — 요청은 성공하고 오디오도 정상 나오지만
+response.timepoints가 빈 채로 온다(Neural2/WaveNet/Standard는 정상
+동작 확인함). 이 경우 문장별 시작/끝을 전혀 알 수 없어 처음엔 앞
+문장들의 글자당 평균 속도로 추정했는데, routes/tts.py가 청크 끝 시각을
+다음 청크의 시작 오프셋으로 그대로 이어붙이는 구조라 문서가 길어질수록
+오차가 누적돼 읽기모드 하이라이트가 점점 어긋났다. mark가 비어 있으면
+mutagen으로 오디오 전체 길이를 실측해(청크 경계는 정확해짐) 문장
+내부 경계만 글자 수 비율로 나누는 방식으로 대체한다.
 
 rate/pitch 변환도 근사치다: edge-tts의 "+N%"는 Google의 speaking_rate
 배수로 비교적 자연스럽게 옮겨지지만("+10%" -> 1.10), "+NHz" 형태의 pitch는
@@ -57,6 +59,27 @@ def _split_sentences(text: str) -> list[str]:
     문장 경계 판정 방식을 앱 전체에서 일관되게 유지하기 위함."""
     parts = [p.strip() for p in text.split(". ") if p.strip()]
     return parts or [text]
+
+
+def _proportional_sentence_boundaries(sentences_text: list[str], audio_data: bytes) -> list[SentenceBoundary]:
+    """SSML mark 타임포인팅을 지원하지 않는 음성(Chirp3-HD 등)을 위한
+    대체 방식. 오디오 전체 길이는 mutagen으로 정확히 실측하므로 청크
+    경계(다음 청크 오프셋)는 정확하다 — 문장 내부 경계만 글자 수 비율로
+    나눠 근사한다."""
+    from io import BytesIO
+    from mutagen.mp3 import MP3
+
+    total_ms = MP3(fileobj=BytesIO(audio_data)).info.length * 1000
+    total_chars = sum(len(s) for s in sentences_text) or 1
+
+    sentences: list[SentenceBoundary] = []
+    offset = 0.0
+    for sentence_text in sentences_text:
+        duration = total_ms * (len(sentence_text) / total_chars)
+        end = offset + duration
+        sentences.append({"text": sentence_text, "start": int(offset), "end": int(end)})
+        offset = end
+    return sentences
 
 
 class GoogleTTSAdapter(TTSProvider):
@@ -119,6 +142,9 @@ class GoogleTTSAdapter(TTSProvider):
         ssml_parts = ["<speak>"]
         for i, sentence in enumerate(sentences_text):
             ssml_parts.append(f'<mark name="s{i}"/>{escape(sentence)}. ')
+        # 마지막 문장의 정확한 끝 시각을 실측하기 위한 마크 — 뒤에 텍스트가
+        # 없어도 그 시점의 오디오 위치를 timepoints에 넣어준다.
+        ssml_parts.append('<mark name="end"/>')
         ssml_parts.append("</speak>")
         ssml = "".join(ssml_parts)
 
@@ -138,21 +164,18 @@ class GoogleTTSAdapter(TTSProvider):
             response = await client.synthesize_speech(request=request)
 
         audio_data = response.audio_content
+        # marks_ms[i]는 문장 i의 시작, marks_ms[-1]은 트레일링 "end" 마크라
+        # 정상 지원 음성이면 항상 len(sentences_text) + 1개가 온다. Chirp3-HD
+        # 처럼 아예 지원하지 않는 음성은 timepoints가 빈 채로 온다 —
+        # 그런 경우엔 실측한 오디오 길이 기반 근사로 대체한다.
         marks_ms = [tp.time_seconds * 1000 for tp in response.timepoints]
 
-        sentences: list[SentenceBoundary] = []
-        avg_ms_per_char = None
-        for i, sentence_text in enumerate(sentences_text):
-            start = marks_ms[i] if i < len(marks_ms) else (sentences[-1]["end"] if sentences else 0)
-            if i + 1 < len(marks_ms):
-                end = marks_ms[i + 1]
-            else:
-                # 마지막 문장은 다음 마크가 없어 정확한 끝 시각을 모른다 —
-                # 앞선 문장들의 글자당 평균 소요 시간으로 근사한다.
-                if avg_ms_per_char is None:
-                    preceding_chars = sum(len(s) for s in sentences_text[:-1])
-                    avg_ms_per_char = (marks_ms[-1] / preceding_chars) if (len(marks_ms) > 1 and preceding_chars) else 90.0
-                end = start + avg_ms_per_char * len(sentence_text)
-            sentences.append({"text": sentence_text, "start": int(start), "end": int(end)})
+        if len(marks_ms) >= len(sentences_text) + 1:
+            sentences: list[SentenceBoundary] = [
+                {"text": sentence_text, "start": int(marks_ms[i]), "end": int(marks_ms[i + 1])}
+                for i, sentence_text in enumerate(sentences_text)
+            ]
+        else:
+            sentences = _proportional_sentence_boundaries(sentences_text, audio_data)
 
         return audio_data, sentences
