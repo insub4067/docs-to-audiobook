@@ -4,10 +4,13 @@ import type { AudiobookRecord } from "../../services/indexedDb";
 import type { AudioListLogic } from "./AudioList_Logic.vue";
 import { getAudiobookDisplayTitle } from "../../utils/format";
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
     audio: AudiobookRecord;
     logic: AudioListLogic;
-}>();
+    swipeEnabled?: boolean;
+}>(), {
+    swipeEnabled: true,
+});
 
 const front = ref<HTMLElement | null>(null);
 const isSwipeOpen = ref(false);
@@ -30,6 +33,7 @@ function resetTransform(): void {
 }
 
 function onTouchStart(event: TouchEvent): void {
+    if (!props.swipeEnabled) return;
     startX = event.touches[0].clientX;
     startY = event.touches[0].clientY;
     currentX = startX;

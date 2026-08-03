@@ -96,7 +96,7 @@ onMounted(() => {
                     </div>
                 </template>
 
-                <AudioListItemView v-for="audio in displayedItems" :key="audio.id" :audio="audio" :logic="logic" />
+                <AudioListItemView v-for="audio in displayedItems" :key="audio.id" :audio="audio" :logic="logic" :swipe-enabled="false" />
             </div>
         </div>
     </section>
