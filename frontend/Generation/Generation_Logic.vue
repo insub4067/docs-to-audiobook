@@ -7,7 +7,7 @@ import { saveAudiobookToDB } from "../services/indexedDb";
 import { getAudiobookDisplayTitle, formatBytes } from "../utils/format";
 import type { GenerationState, GeneratingItem } from "./Generation_State.vue";
 import type { VoiceLogic } from "../Voices/Voice_Logic.vue";
-import { pickGoogleDriveFile } from "../Auth/GoogleDrivePicker";
+import { pickGoogleDriveFile, preloadGoogleDrivePicker } from "../Auth/GoogleDrivePicker";
 
 export interface GenerationArguments {
     textId: string;
@@ -282,6 +282,7 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
 
     function openFileSourceMenu(): void {
         state.isFileSourceMenuOpen.value = true;
+        preloadGoogleDrivePicker();
     }
 
     function closeFileSourceMenu(): void {

@@ -110,6 +110,18 @@ export interface PickedDriveFile {
     name: string;
 }
 
+/**
+ * Picker 스크립트(gapi)를 미리 불러온다 — 처음 실제로 파일을 고를 때
+ * ensurePickerLoaded()의 네트워크 로딩이 클릭과 OAuth 팝업 호출 사이에
+ * 끼어들면, 브라우저가 "사용자 제스처" 컨텍스트를 잃어 팝업이 조용히
+ * 막힌다(그래서 처음 누르면 안 뜨고 두 번째부터 뜬다). 파일 소스 메뉴가
+ * 열리는 시점에 미리 불러와 두면 실제 클릭 시점엔 캐시돼 있어 즉시
+ * OAuth 요청으로 넘어간다.
+ */
+export function preloadGoogleDrivePicker(): void {
+    ensurePickerLoaded().catch(() => {});
+}
+
 /** 사용자가 취소하면 null을 돌려준다(에러가 아니다). */
 export async function pickGoogleDriveFile(clientId: string, apiKey: string): Promise<PickedDriveFile | null> {
     await ensureOAuthClientReady();
