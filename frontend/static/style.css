@@ -688,16 +688,6 @@ html {
     align-items: flex-end;
 }
 
-/* 다른 시트들(action-sheet 등)의 blur(4px)보다 훨씬 옅게 — 이 입력창은
-   전통적인 바텀시트가 아니라 화면 위에 뜬 입력줄이라 배경을 심하게
-   흐릴 필요가 없다. .action-sheet-backdrop과 클래스를 함께 쓰므로,
-   소스 순서와 무관하게 반드시 이기도록 두 클래스를 겹쳐 specificity를
-   올린다. */
-.action-sheet-backdrop.composer-backdrop {
-    backdrop-filter: blur(1px);
-    -webkit-backdrop-filter: blur(1px);
-}
-
 .add-source-composer {
     display: flex;
     align-items: center;
