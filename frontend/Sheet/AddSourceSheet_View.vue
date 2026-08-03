@@ -59,11 +59,11 @@ function onYoutubeKeydown(event: KeyboardEvent): void {
                 </div>
                 <button class="action-sheet-btn" type="button" @click="onSelectFileClick">
                     <i data-lucide="file-up"></i>
-                    파일 업로드
+                    파일 (MD, PDF, TXT, DOCX, HWP)
                 </button>
                 <button class="action-sheet-btn" type="button" @click="logic.selectLinkMode">
                     <i data-lucide="link"></i>
-                    링크(기사, 블로그)에서 가져오기
+                    링크 (기사, 블로그, 게시글)
                 </button>
                 <button class="action-sheet-btn" type="button" @click="logic.selectPasteMode">
                     <i data-lucide="clipboard-paste"></i>
