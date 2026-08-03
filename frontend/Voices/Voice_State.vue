@@ -2,7 +2,7 @@
 import { ref, type Ref } from "vue";
 
 export interface VoiceOption {
-    short_name: string;
+    key: string;
     friendly_name: string;
     locale: string;
     description?: string;

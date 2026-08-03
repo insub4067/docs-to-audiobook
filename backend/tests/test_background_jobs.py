@@ -213,9 +213,11 @@ async def test_resume_reschedules_queued_jobs(mock_supabase):
         await tts.resume_background_synthesis_jobs()
         await __import__("asyncio").sleep(0)  # create_task로 예약된 코루틴이 시작되게 한 틱 양보
 
+    # DB에는 예전 edge-tts short_name이 그대로 저장돼 있지만, 재개 시점에
+    # 공급자 중립 voice_key("ko_male_warm")로 정규화되어 전달돼야 한다.
     mock_task.assert_called_once_with(
         "job-resume-1", "user-1", "재개될 문서", "원문 텍스트",
-        "ko-KR-HyunsuMultilingualNeural", "+0%", "+0Hz",
+        "ko_male_warm", "+0%", "+0Hz",
     )
     assert state.jobs["job-resume-1"]["status"] == "processing"
     state.jobs.pop("job-resume-1", None)

@@ -60,7 +60,7 @@ function onVoiceChange(event: Event): void {
                                 <div class="select-wrapper">
                                     <select id="voiceSelect" v-model="voiceState.selectedVoice.value" @change="onVoiceChange">
                                         <option v-if="voiceState.voices.value.length === 0" value="" disabled selected>불러오는 중...</option>
-                                        <option v-for="voice in voiceState.voices.value" :key="voice.short_name" :value="voice.short_name">
+                                        <option v-for="voice in voiceState.voices.value" :key="voice.key" :value="voice.key">
                                             {{ voice.friendly_name }}
                                         </option>
                                     </select>

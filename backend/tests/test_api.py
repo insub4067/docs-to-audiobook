@@ -20,7 +20,7 @@ async def test_api_voices():
         if len(data) > 0:
             voice = data[0]
             assert "name" in voice
-            assert "short_name" in voice
+            assert "key" in voice
             assert "gender" in voice
 
 @pytest.mark.asyncio

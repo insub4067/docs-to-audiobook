@@ -20,19 +20,24 @@ async def test_get_voice_preview():
     with patch("routes.tts.synthesize_document") as mock_synth:
         mock_synth.return_value = (b"fake_audio", [], 0)
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-            response = await client.get("/api/voices/ko-KR-SunHiNeural/preview")
+            # 신형 voice_key로도, 예전 edge-tts short_name(캐시된 구버전
+            # 프론트 대응)으로도 모두 접근 가능해야 한다.
+            response = await client.get("/api/voices/ko_female_calm/preview")
             assert response.status_code == 200
             assert response.headers["content-type"] == "audio/mpeg"
-            
+
+            response = await client.get("/api/voices/ko-KR-SunHiNeural/preview")
+            assert response.status_code == 200
+
             # test invalid
             response = await client.get("/api/voices/invalid/preview")
             assert response.status_code == 404
-            
+
     # Test generation failure mock
     with patch("main.os.path.exists", return_value=False):
         with patch("routes.tts.synthesize_document", side_effect=Exception("Network error")):
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-                response = await client.get("/api/voices/ko-KR-SunHiNeural/preview")
+                response = await client.get("/api/voices/ko_female_calm/preview")
                 assert response.status_code == 503
 
 @pytest.mark.asyncio

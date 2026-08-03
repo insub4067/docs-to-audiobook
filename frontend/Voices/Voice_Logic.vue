@@ -5,24 +5,26 @@ import { useToastState } from "../components/Toast/Toast_State.vue";
 
 export interface VoiceLogic {
     loadVoices(): Promise<void>;
-    updateDescription(shortName: string): void;
+    updateDescription(voiceKey: string): void;
     togglePreview(): Promise<void>;
     stopPreview(): void;
     getSelectedVoice(): string;
 }
 
+// 백엔드 tts_providers/voice_catalog.py의 VOICE_CATALOG과 같은 목록이어야
+// 한다 — 여기 있는데 백엔드엔 없는(혹은 그 반대인) 음성은 선택은 되지만
+// 합성 시 알 수 없는 값이라 기본 음성으로 조용히 대체된다.
 const FALLBACK_VOICES: VoiceOption[] = [
-    { short_name: "ko-KR-SunHiNeural", friendly_name: "🇰🇷 선희 (차분한 뉴스/정보 전달 - 여성)", locale: "ko-KR", description: "단정하고 차분하며, 정보 전달이나 지적인 낭독에 적합합니다." },
-    { short_name: "ko-KR-InJoonNeural", friendly_name: "🇰🇷 인준 (신뢰감 있는 소설/다큐 - 남성)", locale: "ko-KR", description: "진중하고 신뢰감 있는 남성 톤으로, 다큐멘터리나 소설 낭독에 적합합니다." },
-    { short_name: "ko-KR-JiMinNeural", friendly_name: "🇰🇷 지민 (밝고 상냥한 동화/안내 - 여성)", locale: "ko-KR", description: "밝고 친근하며, 동화책 낭독이나 상냥한 안내 멘트에 잘 어울립니다." },
+    { key: "ko_male_warm", friendly_name: "🇰🇷 현수 (자연스러운 낭독 - 남성)", locale: "ko-KR", description: "억양이 자연스럽고, 한글과 영어가 섞인 문장도 매끄럽게 읽습니다." },
+    { key: "ko_female_calm", friendly_name: "🇰🇷 선희 (차분한 낭독 - 여성)", locale: "ko-KR", description: "단정하고 차분한 여성 음성으로, 정보 전달이나 긴 호흡의 낭독에 적합합니다." },
 ];
 
 export function useVoiceLogic(state: VoiceState): VoiceLogic {
     const { showToast } = useToastLogic(useToastState());
     let previewAudio: HTMLAudioElement | null = null;
 
-    function updateDescription(shortName: string): void {
-        const voice = state.voices.value.find((item) => item.short_name === shortName);
+    function updateDescription(voiceKey: string): void {
+        const voice = state.voices.value.find((item) => item.key === voiceKey);
         state.voiceDesc.value = voice?.description || "선택한 음성의 상세 특징이 표시됩니다.";
     }
 
@@ -73,20 +75,20 @@ export function useVoiceLogic(state: VoiceState): VoiceLogic {
             const voices: VoiceOption[] = await response.json();
 
             if (voices.length === 0) {
-                state.voices.value = [{ short_name: "ko-KR-SunHiNeural", friendly_name: "선희 (차분한 뉴스/정보 전달 - 여성)", locale: "ko-KR" }];
+                state.voices.value = FALLBACK_VOICES;
             } else {
                 state.voices.value = voices.map((voice) => ({
                     ...voice,
                     friendly_name: `${voice.locale.startsWith("ko-KR") ? "🇰🇷" : "🇺🇸"} ${voice.friendly_name}`,
                 }));
             }
-            state.selectedVoice.value = state.voices.value[0].short_name;
+            state.selectedVoice.value = state.voices.value[0].key;
             updateDescription(state.selectedVoice.value);
         } catch (error) {
             console.error(error);
             showToast("음성 목록을 가져오지 못했습니다. 기본 설정을 사용합니다.", "error");
             state.voices.value = FALLBACK_VOICES;
-            state.selectedVoice.value = FALLBACK_VOICES[0].short_name;
+            state.selectedVoice.value = FALLBACK_VOICES[0].key;
             updateDescription(state.selectedVoice.value);
         }
     }

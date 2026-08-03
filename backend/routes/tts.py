@@ -12,7 +12,6 @@ import logging
 import secrets
 import shutil
 from datetime import datetime, timezone
-import edge_tts
 from fastapi import APIRouter, Request, BackgroundTasks, Form, Header, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.background import BackgroundTask
@@ -28,132 +27,86 @@ from text_processing import (
     annotate_sentences_with_headings, annotate_sentences_with_tables, clean_tts_text,
 )
 from push_notifications import send_background_job_ready
+from tts_providers import get_tts_provider
+from tts_providers.voice_catalog import (
+    VOICE_CATALOG, VOICE_KEYS, DEFAULT_VOICE_KEY, find_voice_key, resolve_voice_key,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# 실제로 제공할 음성. edge-tts가 주는 ko-KR 음성은 3개뿐이고, 예전
-# 메타데이터에 있던 지민/서현/순복/유진/현민은 존재하지 않아 선택할 수
-# 없었다. 낭독에 쓸 두 개만 남긴다. 목록의 첫 번째가 기본값이다.
-SUPPORTED_VOICES = [
-    "ko-KR-HyunsuMultilingualNeural",
-    "ko-KR-SunHiNeural",
-]
-
 # 음성 미리듣기. 짧은 한 문장이라 합성이 몇 초면 끝나고, 한 번 만들면
-# 디스크에 캐시해 재사용한다.
+# 디스크에 캐시해 재사용한다. 공급자별로 실제 오디오가 다르므로 파일명에
+# 공급자 이름을 넣어 캐시가 섞이지 않게 한다.
 VOICE_PREVIEW_TEXT = "안녕하세요. 이 목소리로 문서를 읽어 드릴게요. 오늘도 좋은 하루 보내세요."
 VOICE_PREVIEW_DIR = os.path.join(BASE_DIR, "voice_previews")
 os.makedirs(VOICE_PREVIEW_DIR, exist_ok=True)
 voice_preview_lock = asyncio.Lock()
 
-VOICE_METADATA = {
-    "ko-KR-HyunsuMultilingualNeural": {
-        "friendly_name": "현수 (자연스러운 낭독 - 남성)",
-        "description": "멀티링구얼 신형 모델로 억양이 자연스럽고, 한글과 영어가 섞인 문장도 매끄럽게 읽습니다.",
-        "tone": "natural", "use_case": ["novel", "audiobook", "documentation", "long_text"]
-    },
-    "ko-KR-SunHiNeural": {
-        "friendly_name": "선희 (차분한 낭독 - 여성)",
-        "description": "단정하고 차분한 여성 음성으로, 정보 전달이나 긴 호흡의 낭독에 적합합니다.",
-        "tone": "formal", "use_case": ["news", "education", "audiobook", "long_text"]
-    },
-}
-
 
 @router.get("/api/voices")
 async def get_voices(tone: str = None, use_case: str = None):
     """음성 목록 반환. tone/use_case로 필터링 가능."""
+    provider = get_tts_provider()
     try:
-        # Get all voices
-        all_voices = await edge_tts.VoicesManager.create()
-        voices = all_voices.voices
-
-        filtered_voices = []
-        for voice in voices:
-            lang = voice.get("Locale", "")
-            short_name = voice.get("ShortName", "")
-            if short_name in SUPPORTED_VOICES:
-
-                # Check if we have custom metadata for this Korean voice
-                meta = VOICE_METADATA.get(short_name, {})
-                friendly_name = meta.get("friendly_name", voice.get("FriendlyName", short_name))
-                description = meta.get("description", "표준 신경망(Neural) 음성입니다.")
-
-                voice_tone = meta.get("tone", "")
-                voice_use_cases = meta.get("use_case", [])
-
-                # Apply filters
-                if tone and voice_tone != tone:
-                    continue
-                if use_case and use_case not in voice_use_cases:
-                    continue
-
-                filtered_voices.append({
-                    "name": voice.get("Name", ""),
-                    "short_name": short_name,
-                    "gender": voice.get("Gender", ""),
-                    "locale": lang,
-                    "friendly_name": friendly_name,
-                    "description": description,
-                    "tone": voice_tone,
-                    "use_case": voice_use_cases
-                })
-
-        # SUPPORTED_VOICES에 적은 순서를 유지한다. 첫 번째가 기본값이다.
-        filtered_voices.sort(key=lambda x: SUPPORTED_VOICES.index(x["short_name"]))
-        return filtered_voices
+        voices = await provider.list_voices()
     except Exception as e:
-        # edge-tts 목록 조회가 실패해도 UI가 비지 않도록. SUPPORTED_VOICES와
-        # 같은 순서를 유지한다(첫 번째가 기본값).
+        # 공급자 목록 조회가 실패해도 UI가 비지 않도록 카탈로그로 대체한다.
         print(f"Voice list fetch failed, using fallback: {e}")
-        return [
+        voices = [
             {
-                "name": short_name,
-                "short_name": short_name,
-                "gender": "Male" if "Hyunsu" in short_name else "Female",
-                "locale": "ko-KR",
-                "friendly_name": VOICE_METADATA[short_name]["friendly_name"],
-                "description": VOICE_METADATA[short_name]["description"],
-                "tone": VOICE_METADATA[short_name]["tone"],
-                "use_case": VOICE_METADATA[short_name]["use_case"],
+                "key": key,
+                "name": meta["friendly_name"],
+                "gender": meta["gender"],
+                "locale": meta["locale"],
+                "friendly_name": meta["friendly_name"],
+                "description": meta["description"],
+                "tone": meta["tone"],
+                "use_case": meta["use_case"],
             }
-            for short_name in SUPPORTED_VOICES
+            for key, meta in VOICE_CATALOG.items()
         ]
 
+    if tone:
+        voices = [v for v in voices if v.get("tone") == tone]
+    if use_case:
+        voices = [v for v in voices if use_case in v.get("use_case", [])]
 
-@router.get("/api/voices/{short_name}/preview")
-async def get_voice_preview(short_name: str):
+    # VOICE_KEYS에 적은 순서를 유지한다. 첫 번째가 기본값이다.
+    voices.sort(key=lambda v: VOICE_KEYS.index(v["key"]) if v["key"] in VOICE_KEYS else len(VOICE_KEYS))
+    return voices
+
+
+@router.get("/api/voices/{voice_key}/preview")
+async def get_voice_preview(voice_key: str):
     """음성 미리듣기. 처음 요청될 때 한 번 만들고 디스크에 캐시한다."""
-    # 경로에 그대로 들어가므로 반드시 허용 목록으로 검증한다
-    if short_name not in SUPPORTED_VOICES:
+    # 경로에 그대로 들어가므로 반드시 허용 목록으로 검증한다. 예전
+    # edge-tts short_name 형식도 함께 받아들이되(캐시된 구버전 프론트
+    # 대응), 모르는 값은 거부한다.
+    resolved_key = find_voice_key(voice_key)
+    if resolved_key is None:
         raise HTTPException(status_code=404, detail="지원하지 않는 음성입니다.")
 
-    path = os.path.join(VOICE_PREVIEW_DIR, f"{short_name}.mp3")
+    provider = get_tts_provider()
+    path = os.path.join(VOICE_PREVIEW_DIR, f"{provider.name}_{resolved_key}.mp3")
     if not os.path.exists(path):
         async with voice_preview_lock:
             # 락을 기다리는 동안 다른 요청이 이미 만들었을 수 있다
             if not os.path.exists(path):
                 try:
                     audio_bytes, _, _ = await synthesize_document(
-                        VOICE_PREVIEW_TEXT, short_name, "+5%", "+0Hz"
+                        VOICE_PREVIEW_TEXT, resolved_key, "+5%", "+0Hz"
                     )
                     if not audio_bytes:
                         raise RuntimeError("빈 오디오")
                     with open(path, "wb") as f:
                         f.write(audio_bytes)
                 except Exception as e:
-                    print(f"Voice preview generation failed ({short_name}): {e}")
+                    print(f"Voice preview generation failed ({resolved_key}): {e}")
                     raise HTTPException(status_code=503, detail="미리듣기를 만들지 못했습니다.")
 
     return FileResponse(path, media_type="audio/mpeg")
 
-
-# Edge-TTS 동시 연결 상한. 이전에는 문서의 모든 청크를 상한 없이
-# asyncio.gather로 한꺼번에 띄웠고(2만 자 = 25개 동시), 여러 작업이 겹치면
-# 수백 개까지 늘어났다. 아래 재시도 로직이 필요했던 간헐적 연결 끊김이
-# 사실상 이 과도한 동시성 때문이다. 작업 수와 무관하게 전역으로 묶는다.
-TTS_CONCURRENCY = asyncio.Semaphore(8)
 
 async def synthesize_chunk(chunk_index: int, text_chunk: str, voice: str, rate: str, pitch: str, max_attempts: int = 3):
     # TTS 발음용 깨끗한 텍스트
@@ -161,32 +114,14 @@ async def synthesize_chunk(chunk_index: int, text_chunk: str, voice: str, rate: 
     if not tts_text:
         tts_text = text_chunk
 
-    # Edge-TTS는 특정 호스팅 환경에서 개별 연결이 간헐적으로 끊긴다.
+    provider = get_tts_provider()
+    # TTS 공급자는 특정 호스팅 환경에서 개별 연결이 간헐적으로 끊긴다.
     # 청크 단위로 재시도해, 문서 전체를 병렬 변환할 때 청크 하나의 일시적
     # 실패가 전체 asyncio.gather를 실패시키지 않도록 한다.
     last_error = None
     for attempt in range(max_attempts):
         try:
-            # 백오프 sleep은 슬롯을 잡은 채로 기다리지 않도록 밖에 둔다
-            async with TTS_CONCURRENCY:
-                communicate = edge_tts.Communicate(tts_text, voice=voice, rate=rate, pitch=pitch)
-                # bytes는 불변이라 += 누적은 조각마다 전체 복사본을 새로 만든다.
-                # 조각을 모아 마지막에 한 번만 합친다.
-                audio_parts = []
-                sentences = []
-                async for msg in communicate.stream():
-                    if msg.get("type") == "audio":
-                        audio_parts.append(msg.get("data"))
-                    elif msg.get("type") == "SentenceBoundary":
-                        offset_ms = msg.get("offset", 0) // 10000
-                        duration_ms = msg.get("duration", 0) // 10000
-                        sentences.append({
-                            "text": msg.get("text", ""),
-                            "start": offset_ms,
-                            "end": offset_ms + duration_ms
-                        })
-                audio_data = b"".join(audio_parts)
-                audio_parts.clear()
+            audio_data, sentences = await provider.synthesize(tts_text, voice, rate, pitch)
             if audio_data:
                 return chunk_index, audio_data, sentences
             last_error = RuntimeError("빈 오디오 응답을 받았습니다.")
@@ -498,12 +433,15 @@ async def synthesize_text(
     background_tasks: BackgroundTasks,
     text_id: str = Form(...),
     text_access_token: str = Form(""),
-    voice: str = Form("ko-KR-HyunsuMultilingualNeural"),
+    voice: str = Form(DEFAULT_VOICE_KEY),
     rate: str = Form("+5%"),
     pitch: str = Form("+0Hz"),
     authorization: str = Header(None),
     anonymous_session: str = Header(None, alias="X-Anonymous-Session")
 ):
+    # voice_key든 예전 edge-tts short_name(캐시된 구버전 프론트)이든 여기서
+    # 한 번에 정규화한다 — 이후로는 항상 voice_key만 흐른다.
+    voice = resolve_voice_key(voice)
     user_id = resolve_job_owner(authorization, anonymous_session)
     # 가장 비싼 엔드포인트다. 배치 8개를 여러 번 돌릴 여유는 남긴다.
     enforce_rate_limit(request, "synthesize", limit=40, window_sec=600)
@@ -668,9 +606,11 @@ async def resume_background_synthesis_jobs():
                 continue
 
             jobs[job_id] = _fresh_job_state(row["user_id"])
+            # 이 배포 이전에 큐에 들어간 행은 voice 컬럼에 예전 edge-tts
+            # short_name이 그대로 남아있을 수 있다 — voice_key로 정규화한다.
             asyncio.create_task(process_background_synthesis_task(
                 job_id, row["user_id"], row["title"], row["source_text"],
-                row["voice"], row["rate"], row["pitch"],
+                resolve_voice_key(row["voice"]), row["rate"], row["pitch"],
             ))
     except Exception as e:
         print(f"Background job resume failed: {e}")

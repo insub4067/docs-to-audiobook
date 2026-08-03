@@ -6,32 +6,33 @@ from routes.tts import synthesize_document, synthesize_chunk, process_synthesis_
 
 @pytest.mark.asyncio
 async def test_synthesize_chunk_success():
-    # We want to mock edge_tts.Communicate so it doesn't actually synthesize anything
-    with patch('routes.tts.edge_tts.Communicate') as MockCommunicate:
+    # edge_tts.Communicate는 이제 tts_providers/edge_tts_adapter.py 안에서만
+    # 호출된다 — synthesize_chunk는 그 어댑터를 거쳐 실제 합성 없이 동작한다.
+    with patch('tts_providers.edge_tts_adapter.edge_tts.Communicate') as MockCommunicate:
         mock_instance = MagicMock()
-        
+
         async def mock_stream():
             yield {"type": "audio", "data": b"fake_audio_data"}
             yield {"type": "SentenceBoundary"}
-            
+
         mock_instance.stream.return_value = mock_stream()
         MockCommunicate.return_value = mock_instance
-        
-        idx, audio, _ = await synthesize_chunk(0, "Test chunk", "ko-KR-SunHiNeural", "1.0", "0.0", max_attempts=1)
-        
+
+        idx, audio, _ = await synthesize_chunk(0, "Test chunk", "ko_female_calm", "1.0", "0.0", max_attempts=1)
+
         assert idx == 0
         assert audio == b"fake_audio_data"
 
 @pytest.mark.asyncio
 async def test_synthesize_chunk_failure():
     # If the TTS engine raises an exception, we want to see if it retries and fails
-    with patch('routes.tts.edge_tts.Communicate') as MockCommunicate:
+    with patch('tts_providers.edge_tts_adapter.edge_tts.Communicate') as MockCommunicate:
         mock_instance = MagicMock()
         mock_instance.stream.side_effect = Exception("TTS failed")
         MockCommunicate.return_value = mock_instance
-        
+
         with pytest.raises(Exception) as exc_info:
-            await synthesize_chunk(0, "Test chunk", "ko-KR-SunHiNeural", "1.0", "0.0", max_attempts=1)
+            await synthesize_chunk(0, "Test chunk", "ko_female_calm", "1.0", "0.0", max_attempts=1)
 
         assert "TTS failed" in str(exc_info.value)
 

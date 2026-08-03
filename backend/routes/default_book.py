@@ -9,13 +9,14 @@ from fastapi.responses import FileResponse, JSONResponse
 from state import BASE_DIR, STATIC_DIR, AUDIOBOOK_BUCKET
 from text_processing import extract_text
 from routes import tts as tts_routes
+from tts_providers.voice_catalog import DEFAULT_VOICE_KEY
 
 router = APIRouter()
 
 DEFAULT_BOOK_DIR = os.path.join(BASE_DIR, "default_book")
 DEFAULT_BOOK_SOURCE = os.path.join(STATIC_DIR, "samples", "demian.txt")
 DEFAULT_BOOK_TITLE = "데미안"
-DEFAULT_BOOK_VOICE = tts_routes.SUPPORTED_VOICES[0]
+DEFAULT_BOOK_VOICE = DEFAULT_VOICE_KEY
 
 default_book_state = {"status": "pending", "error": None}
 default_book_lock = asyncio.Lock()
