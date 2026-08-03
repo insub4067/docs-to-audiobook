@@ -140,6 +140,7 @@ onMounted(async () => {
         :my-files-state="myFilesState"
         :my-files-logic="myFilesLogic"
         :generation-logic="generationLogic"
+        :generating-items="generationState.generatingItems.value"
     />
 
     <TabBarView v-show="!readerState.isOpen.value" :active-tab="activeTab" @select="(tab) => (activeTab = tab)" />

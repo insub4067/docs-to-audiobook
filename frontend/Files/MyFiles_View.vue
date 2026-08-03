@@ -6,6 +6,7 @@ import type { AudiobookRecord } from "../services/indexedDb";
 import type { MyFilesState } from "./MyFiles_State.vue";
 import type { MyFilesLogic } from "./MyFiles_Logic.vue";
 import type { GenerationLogic } from "../Generation/Generation_Logic.vue";
+import type { GeneratingItem } from "../Generation/Generation_State.vue";
 import { useFolderBrowserState } from "./FolderBrowser_State.vue";
 import { useFolderBrowserLogic } from "./FolderBrowser_Logic.vue";
 import { getAudiobookDisplayTitle } from "../utils/format";
@@ -21,6 +22,7 @@ const props = defineProps<{
     myFilesState: MyFilesState;
     myFilesLogic: MyFilesLogic;
     generationLogic: GenerationLogic;
+    generatingItems: GeneratingItem[];
 }>();
 
 const browserState = useFolderBrowserState("내 파일");
@@ -32,8 +34,23 @@ const currentFolderAudiobooks = computed(() =>
     )
 );
 
+// 지금 보고 있는 폴더 안에서 추가한 문서가 완성되기 전까지, Home의
+// "최근 추가"와 같은 진행률 행을 여기에도 보여준다(전경/백그라운드 작업
+// 둘 다). 목록은 전역 공유 상태라 폴더 id로 걸러서 쓴다.
+const currentFolderGeneratingItems = computed(() =>
+    props.generatingItems.filter((item) => (item.folderId ?? null) === browserState.currentFolderId.value)
+);
+const currentFolderBackgroundJobItems = computed(() =>
+    props.audioListState.backgroundJobItems.value.filter(
+        (item) => (item.folderId ?? null) === browserState.currentFolderId.value
+    )
+);
+
 const isEmpty = computed(() =>
-    browserState.subfolders.value.length === 0 && currentFolderAudiobooks.value.length === 0
+    browserState.subfolders.value.length === 0
+    && currentFolderAudiobooks.value.length === 0
+    && currentFolderGeneratingItems.value.length === 0
+    && currentFolderBackgroundJobItems.value.length === 0
 );
 
 const isAtRoot = computed(() => browserState.breadcrumb.value.length <= 1);
@@ -209,6 +226,29 @@ onUnmounted(() => {
                 <button class="btn-icon-round btn-more" title="더보기" type="button" @click.stop="myFilesLogic.openFolderActionSheet(folder)">
                     <i data-lucide="more-horizontal"></i>
                 </button>
+            </div>
+
+            <div v-for="item in currentFolderGeneratingItems" :key="item.id" class="audio-item audio-item-generating">
+                <div class="audio-title-group">
+                    <div class="generating-spinner"></div>
+                    <div class="generating-info">
+                        <span class="audio-title">{{ item.title }}</span>
+                        <div class="generating-progress-track">
+                            <div class="generating-progress-fill" :style="{ width: item.progressPercent + '%' }"></div>
+                        </div>
+                        <span class="generating-status">{{ item.statusText }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div v-for="item in currentFolderBackgroundJobItems" :key="item.jobId" class="audio-item audio-item-generating">
+                <div class="audio-title-group">
+                    <div class="generating-spinner"></div>
+                    <div class="generating-info">
+                        <span class="audio-title">{{ item.title }}</span>
+                        <span class="generating-status">서버에서 생성 중...</span>
+                    </div>
+                </div>
             </div>
 
             <AudioListItemView

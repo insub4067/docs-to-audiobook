@@ -7,6 +7,10 @@ export interface GeneratingItem {
     progressPercent: number;
     statusText: string;
     backgroundJobId?: string;
+    // 내 파일의 어느 폴더에서 추가했는지 — MyFilesView가 지금 보고 있는
+    // 폴더에만 진행 중 행을 보여줄 때 쓴다. 홈 화면 드롭존에서 추가한
+    // 경우는 null(루트).
+    folderId: string | null;
 }
 
 export type AddSourceMode = "menu" | "url" | "paste" | null;

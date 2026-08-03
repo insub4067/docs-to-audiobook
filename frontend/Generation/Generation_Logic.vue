@@ -295,6 +295,7 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
             title: getAudiobookDisplayTitle(args.filename),
             progressPercent: 0,
             statusText: "오디오북 생성 중...",
+            folderId: state.targetFolderId.value,
         };
         state.generatingItems.value.unshift(item);
         setTimeout(() => {
@@ -334,8 +335,8 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
                 // 이어 보이는 알림 기능 쪽 목록(showBackgroundJobLoading)으로
                 // 넘긴다 — 완료 시 그쪽에서 지운다.
                 removeItem();
-                (window as any).__rememberBackgroundJob?.(jobId, args.filename);
-                (window as any).__showBackgroundJobLoading?.(jobId, args.filename);
+                (window as any).__rememberBackgroundJob?.(jobId, args.filename, state.targetFolderId.value);
+                (window as any).__showBackgroundJobLoading?.(jobId, args.filename, state.targetFolderId.value);
                 showToast("서버에서 백그라운드 생성이 시작되었습니다. 완료되면 보관함에 저장됩니다.", "info");
                 return true;
             }

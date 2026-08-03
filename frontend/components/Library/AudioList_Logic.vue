@@ -486,9 +486,9 @@ export function useAudioListLogic(state: AudioListState): AudioListLogic {
 
     // notifications.js가 백그라운드(대용량) 생성 작업을 페이지 재방문 시
     // 이어서 보여줄 때 쓰는 훅 — generation-status.js의 show/remove에 대응.
-    function showBackgroundJob(jobId: string, title = "오디오북"): void {
+    function showBackgroundJob(jobId: string, title = "오디오북", folderId: string | null = null): void {
         if (state.backgroundJobItems.value.some((item) => item.jobId === jobId)) return;
-        state.backgroundJobItems.value = [...state.backgroundJobItems.value, { jobId, title }];
+        state.backgroundJobItems.value = [...state.backgroundJobItems.value, { jobId, title, folderId }];
     }
 
     function removeBackgroundJob(jobId: string): void {

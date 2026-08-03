@@ -88,6 +88,15 @@ export function useNotificationsLogic(state: NotificationsState): NotificationsL
         }
     }
 
+    function readPendingBackgroundJobFolderId(userId: string | null, jobId: string): string | null {
+        try {
+            const value = JSON.parse(localStorage.getItem(pendingBackgroundJobKey(userId, jobId)) || "null");
+            return typeof value?.folderId === "string" ? value.folderId : null;
+        } catch {
+            return null;
+        }
+    }
+
     function updateBackgroundJobCheckInterval(): void {
         const hasPendingJobs = readPendingBackgroundJobs().length > 0;
         if (hasPendingJobs && !backgroundJobCheckInterval) {
@@ -98,10 +107,10 @@ export function useNotificationsLogic(state: NotificationsState): NotificationsL
         }
     }
 
-    function rememberBackgroundJob(jobId: string, title = "오디오북"): void {
+    function rememberBackgroundJob(jobId: string, title = "오디오북", folderId: string | null = null): void {
         const userId = currentUserId();
         if (!userId || typeof jobId !== "string" || !jobId) return;
-        localStorage.setItem(pendingBackgroundJobKey(userId, jobId), JSON.stringify({ title }));
+        localStorage.setItem(pendingBackgroundJobKey(userId, jobId), JSON.stringify({ title, folderId }));
         updateBackgroundJobCheckInterval();
     }
 
@@ -345,7 +354,9 @@ export function useNotificationsLogic(state: NotificationsState): NotificationsL
 
         const userId = currentUserId();
         for (const jobId of readPendingBackgroundJobs(userId)) {
-            (window as any).__showBackgroundJobLoading?.(jobId, readPendingBackgroundJobTitle(userId, jobId));
+            (window as any).__showBackgroundJobLoading?.(
+                jobId, readPendingBackgroundJobTitle(userId, jobId), readPendingBackgroundJobFolderId(userId, jobId),
+            );
         }
         checkPendingBackgroundJobs();
         updateBackgroundJobCheckInterval();

@@ -5,6 +5,7 @@ import type { AudiobookRecord } from "../../services/indexedDb";
 export interface BackgroundJobItem {
     jobId: string;
     title: string;
+    folderId: string | null;
 }
 
 export interface AudioListState {
