@@ -22,10 +22,12 @@ export interface GenerationLogic {
     handleBatchFileSelect(files: FileList | File[]): Promise<void>;
     resetSelection(): void;
     fetchTextFromUrl(): Promise<void>;
+    fetchTextFromYoutube(): Promise<void>;
     pasteText(): Promise<void>;
     openAddSourceMenu(): void;
     openAddSourceMenuForFolder(folderId: string | null): void;
     selectLinkMode(): void;
+    selectYoutubeMode(): void;
     selectPasteMode(): void;
     closeAddSourceSheet(): void;
     onGenerateClick(): Promise<void>;
@@ -97,6 +99,17 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || "링크에서 텍스트를 가져오지 못했습니다.");
+        return data;
+    }
+
+    async function extractTextFromYoutube(url: string) {
+        const response = await fetch("/api/extract-youtube", {
+            method: "POST",
+            headers: { ...authLogic.authHeaders(), "Content-Type": "application/json" },
+            body: JSON.stringify({ url }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "유튜브에서 자막을 가져오지 못했습니다.");
         return data;
     }
 
@@ -229,6 +242,27 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
         }
     }
 
+    async function fetchTextFromYoutube(): Promise<void> {
+        const url = state.youtubeInputValue.value.trim();
+        if (!url) return;
+        if (!authLogic.isLoggedIn()) {
+            showToast("유튜브 가져오기는 로그인 후 이용할 수 있습니다.", "info");
+            document.getElementById("headerLoginSlot")?.scrollIntoView({ behavior: "smooth", block: "center" });
+            return;
+        }
+        state.isYoutubeFetchBusy.value = true;
+        try {
+            applyExtractedText(await extractTextFromYoutube(url));
+            state.youtubeInputValue.value = "";
+            state.addSourceMode.value = null;
+        } catch (error) {
+            console.error(error);
+            showToast((error as Error).message, "error");
+        } finally {
+            state.isYoutubeFetchBusy.value = false;
+        }
+    }
+
     async function pasteText(): Promise<void> {
         const text = state.pasteTextValue.value.trim();
         if (!text) return;
@@ -258,6 +292,10 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
 
     function selectLinkMode(): void {
         state.addSourceMode.value = "url";
+    }
+
+    function selectYoutubeMode(): void {
+        state.addSourceMode.value = "youtube";
     }
 
     function selectPasteMode(): void {
@@ -445,10 +483,12 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
         handleBatchFileSelect,
         resetSelection,
         fetchTextFromUrl,
+        fetchTextFromYoutube,
         pasteText,
         openAddSourceMenu,
         openAddSourceMenuForFolder,
         selectLinkMode,
+        selectYoutubeMode,
         selectPasteMode,
         closeAddSourceSheet,
         onGenerateClick,

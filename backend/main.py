@@ -31,6 +31,7 @@ app.add_middleware(
 )
 
 from routes import extract_url as extract_url_routes
+from routes import extract_youtube as extract_youtube_routes
 from routes import upload as upload_routes
 from routes import paste_text as paste_text_routes
 from routes import tts as tts_routes
@@ -42,6 +43,7 @@ from routes import auth_social as auth_social_routes
 from routes import system as system_routes
 from routes import notifications as notifications_routes
 app.include_router(extract_url_routes.router)
+app.include_router(extract_youtube_routes.router)
 app.include_router(upload_routes.router)
 app.include_router(paste_text_routes.router)
 app.include_router(tts_routes.router)

@@ -13,7 +13,7 @@ export interface GeneratingItem {
     folderId: string | null;
 }
 
-export type AddSourceMode = "menu" | "url" | "paste" | null;
+export type AddSourceMode = "menu" | "url" | "paste" | "youtube" | null;
 
 export interface GenerationState {
     currentTextId: Ref<string | null>;
@@ -32,6 +32,8 @@ export interface GenerationState {
     isLoginPromptOpen: Ref<boolean>;
     urlInputValue: Ref<string>;
     isUrlFetchBusy: Ref<boolean>;
+    youtubeInputValue: Ref<string>;
+    isYoutubeFetchBusy: Ref<boolean>;
     pasteTextValue: Ref<string>;
     isPasteBusy: Ref<boolean>;
     addSourceMode: Ref<AddSourceMode>;
@@ -62,6 +64,8 @@ export function useGenerationState(): GenerationState {
         isLoginPromptOpen: ref(false),
         urlInputValue: ref(""),
         isUrlFetchBusy: ref(false),
+        youtubeInputValue: ref(""),
+        isYoutubeFetchBusy: ref(false),
         pasteTextValue: ref(""),
         isPasteBusy: ref(false),
         addSourceMode: ref(null),
