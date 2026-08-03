@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import HeaderView from "../components/Header/Header_View.vue";
 import UploadView from "../components/Upload/Upload_View.vue";
+import AddSourceSheetView from "../Sheet/AddSourceSheet_View.vue";
 import GenerationModalView from "../Sheet/GenerationModal_View.vue";
 import LoginPromptSheetView from "../Sheet/LoginPromptSheet_View.vue";
 import AudioListView from "../components/Library/AudioList_View.vue";
@@ -76,6 +77,23 @@ function onImportLink(): void {
     if (url) readerLogic.importSharedLink(url);
 }
 
+// 문서 추가 시트(AddSourceSheetView)와 그 안의 "파일 업로드" 버튼이 여는
+// 실제 파일 입력창. 홈 탭이 아닐 때도(내 파일 화면의 "파일 추가"에서)
+// 열려야 해서, 탭에 따라 v-show로 숨겨지는 <main> 안이 아니라 여기
+// 최상위에 둔다 — 조상 요소가 display:none이면 숨겨진 input을 눌러도
+// 파일 선택 창이 안 열리는 브라우저가 있다.
+const fileInput = ref<HTMLInputElement | null>(null);
+
+function openFileInput(): void {
+    fileInput.value?.click();
+}
+
+function onFileInputChange(event: Event): void {
+    const files = (event.target as HTMLInputElement).files;
+    if (files && files.length > 0) generationLogic.handleBatchFileSelect(files);
+    (event.target as HTMLInputElement).value = "";
+}
+
 onMounted(async () => {
     document.addEventListener("keydown", onEscape);
     await voiceLogic.loadVoices();
@@ -121,10 +139,20 @@ onMounted(async () => {
         :audio-list-logic="audioListLogic"
         :my-files-state="myFilesState"
         :my-files-logic="myFilesLogic"
+        :generation-logic="generationLogic"
     />
 
     <TabBarView v-show="!readerState.isOpen.value" :active-tab="activeTab" @select="(tab) => (activeTab = tab)" />
 
+    <input
+        ref="fileInput"
+        type="file"
+        accept=".docx,.pdf,.txt,.md,.markdown,.hwp"
+        multiple
+        style="display: none;"
+        @change="onFileInputChange"
+    >
+    <AddSourceSheetView :state="generationState" :logic="generationLogic" :on-select-file="openFileInput" />
     <GenerationModalView :state="generationState" :logic="generationLogic" :voice-state="voiceState" :voice-logic="voiceLogic" />
     <LoginPromptSheetView :state="generationState" :logic="generationLogic" />
     <ReaderView

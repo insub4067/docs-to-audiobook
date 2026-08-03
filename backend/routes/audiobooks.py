@@ -17,6 +17,14 @@ from state import (
 router = APIRouter()
 
 
+def _validate_folder_ownership(supabase, user_id: str, folder_id: str) -> None:
+    """folder_id가 이 사용자 소유인지 확인한다. 아니면 404."""
+    found = supabase.table("folders").select("id") \
+        .eq("id", folder_id).eq("user_id", user_id).execute().data
+    if not found:
+        raise HTTPException(status_code=404, detail="폴더를 찾을 수 없습니다.")
+
+
 def audiobook_items_with_urls(supabase, user_id: str, rows: list) -> list:
     """오디오북 행마다 재생/문장 데이터용 서명 URL을 붙인다.
     /api/audiobooks와 /api/folders(폴더 내용 조회)가 같이 쓴다."""
@@ -51,6 +59,11 @@ async def create_audiobook(request: Request, payload: dict, authorization: str =
         raise HTTPException(status_code=400, detail="제목이 필요합니다.")
 
     supabase = _supabase_or_503()
+
+    folder_id = payload.get("folder_id")
+    if folder_id:
+        _validate_folder_ownership(supabase, user_id, folder_id)
+
     audiobook_id = str(uuid.uuid4())
     audio_path, sentences_path = _object_paths(user_id, audiobook_id)
 
@@ -62,6 +75,7 @@ async def create_audiobook(request: Request, payload: dict, authorization: str =
             "file_name": (payload.get("file_name") or title)[:255],
             "duration_seconds": payload.get("duration_seconds"),
             "storage_path": audio_path,
+            "folder_id": folder_id,
         }).execute()
 
         storage = supabase.storage.from_(AUDIOBOOK_BUCKET)
@@ -107,10 +121,7 @@ async def update_audiobook(audiobook_id: str, payload: dict, authorization: str 
     if "folder_id" in payload:
         folder_id = payload.get("folder_id")
         if folder_id:
-            found = supabase.table("folders").select("id") \
-                .eq("id", folder_id).eq("user_id", user_id).execute().data
-            if not found:
-                raise HTTPException(status_code=404, detail="폴더를 찾을 수 없습니다.")
+            _validate_folder_ownership(supabase, user_id, folder_id)
         updates["folder_id"] = folder_id
     if "is_bookmarked" in payload:
         updates["is_bookmarked"] = bool(payload.get("is_bookmarked"))

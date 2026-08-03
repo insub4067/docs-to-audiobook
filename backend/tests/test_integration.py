@@ -34,6 +34,70 @@ async def test_get_audiobooks_success(mock_supabase, mock_auth):
         assert data["audiobooks"][0]["title"] == "Test Book"
 
 @pytest.mark.asyncio
+async def test_create_audiobook_without_folder(mock_supabase, mock_auth):
+    mock_supabase.table().insert().execute.return_value = MagicMock(data=[{"id": "book1"}])
+    mock_supabase.storage.from_().create_signed_upload_url.return_value = {"signed_url": "https://x"}
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/audiobooks", json={"title": "제목"}, headers={"Authorization": "Bearer fake_token"},
+        )
+
+    assert response.status_code == 200
+    inserted = mock_supabase.table().insert.call_args[0][0]
+    assert inserted["folder_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_create_audiobook_with_valid_folder(mock_supabase, mock_auth):
+    folders_table = MagicMock()
+    folders_table.select().eq().eq().execute.return_value = MagicMock(data=[{"id": "f1"}])
+
+    audiobooks_table = MagicMock()
+    audiobooks_table.insert().execute.return_value = MagicMock(data=[{"id": "book1"}])
+
+    def table_side_effect(name):
+        return {"folders": folders_table, "audiobooks": audiobooks_table}[name]
+
+    mock_supabase.table.side_effect = table_side_effect
+    mock_supabase.storage.from_().create_signed_upload_url.return_value = {"signed_url": "https://x"}
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/audiobooks",
+            json={"title": "제목", "folder_id": "f1"},
+            headers={"Authorization": "Bearer fake_token"},
+        )
+
+    assert response.status_code == 200
+    inserted = audiobooks_table.insert.call_args[0][0]
+    assert inserted["folder_id"] == "f1"
+
+
+@pytest.mark.asyncio
+async def test_create_audiobook_rejects_missing_folder(mock_supabase, mock_auth):
+    folders_table = MagicMock()
+    folders_table.select().eq().eq().execute.return_value = MagicMock(data=[])
+
+    audiobooks_table = MagicMock()
+
+    def table_side_effect(name):
+        return {"folders": folders_table, "audiobooks": audiobooks_table}[name]
+
+    mock_supabase.table.side_effect = table_side_effect
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/audiobooks",
+            json={"title": "제목", "folder_id": "does-not-exist"},
+            headers={"Authorization": "Bearer fake_token"},
+        )
+
+    assert response.status_code == 404
+    audiobooks_table.insert.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_delete_audiobook_success(mock_supabase, mock_auth):
     # main.py의 실제 조회 체인은 select("id").eq("id", ..).eq("user_id", ..)이다.
     # .single()을 모킹하면 이 체인과 어긋나 실제 코드는 설정 안 된(참으로 취급되는)

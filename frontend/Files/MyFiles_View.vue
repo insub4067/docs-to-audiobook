@@ -5,6 +5,7 @@ import type { AudioListLogic } from "../components/Library/AudioList_Logic.vue";
 import type { AudiobookRecord } from "../services/indexedDb";
 import type { MyFilesState } from "./MyFiles_State.vue";
 import type { MyFilesLogic } from "./MyFiles_Logic.vue";
+import type { GenerationLogic } from "../Generation/Generation_Logic.vue";
 import { useFolderBrowserState } from "./FolderBrowser_State.vue";
 import { useFolderBrowserLogic } from "./FolderBrowser_Logic.vue";
 import { getAudiobookDisplayTitle } from "../utils/format";
@@ -12,12 +13,14 @@ import AudioListItemView from "../components/Library/AudioListItem_View.vue";
 import ActionSheetView from "../Sheet/ActionSheet_View.vue";
 import FolderActionSheetView from "../Sheet/FolderActionSheet_View.vue";
 import MoveToFolderSheetView from "../Sheet/MoveToFolderSheet_View.vue";
+import AddMenuSheetView from "../Sheet/AddMenuSheet_View.vue";
 
 const props = defineProps<{
     audioListState: AudioListState;
     audioListLogic: AudioListLogic;
     myFilesState: MyFilesState;
     myFilesLogic: MyFilesLogic;
+    generationLogic: GenerationLogic;
 }>();
 
 const browserState = useFolderBrowserState("내 파일");
@@ -49,6 +52,12 @@ function goUpOneLevel(): void {
 function onNewFolder(): void {
     const name = window.prompt("새 폴더 이름");
     if (name) browserLogic.createFolder(name);
+}
+
+// 지금 보고 있는 폴더 안에서 문서를 추가하면, 완성된 오디오북이 루트가
+// 아니라 이 폴더에 들어가야 한다(Generation_State.targetFolderId).
+function onAddFile(): void {
+    props.generationLogic.openAddSourceMenuForFolder(browserState.currentFolderId.value);
 }
 
 // 오디오북 항목을 폴더 위에 길게 눌러 끌어다 놓으면 그 폴더로 이동한다.
@@ -165,7 +174,7 @@ onUnmounted(() => {
                 </template>
             </div>
             <span v-else></span>
-            <button class="btn-icon-round btn-more" aria-label="새 폴더" title="새 폴더" type="button" @click="onNewFolder">
+            <button class="btn-icon-round btn-more" aria-label="추가" title="추가" type="button" @click="myFilesLogic.openAddMenu">
                 <i data-lucide="folder-plus"></i>
             </button>
         </div>
@@ -217,6 +226,7 @@ onUnmounted(() => {
         <ActionSheetView :state="audioListState" :logic="audioListLogic" :my-files-logic="myFilesLogic" />
         <FolderActionSheetView :state="myFilesState" :logic="myFilesLogic" :folder-browser-logic="browserLogic" />
         <MoveToFolderSheetView :state="myFilesState" :logic="myFilesLogic" :audio-list-logic="audioListLogic" />
+        <AddMenuSheetView :state="myFilesState" :logic="myFilesLogic" :on-add-folder="onNewFolder" :on-add-file="onAddFile" />
 
         <!-- 리스트 행의 overflow:hidden에 잘리지 않도록 body에 그린다.
              주의: 이 컴포넌트는 Home_View가 v-show로 탭을 제어하므로 루트가

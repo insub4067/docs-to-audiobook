@@ -128,7 +128,10 @@ export function useAudioListLogic(state: AudioListState): AudioListLogic {
         const res = await fetch("/api/audiobooks", {
             method: "POST",
             headers: { ...authLogic.authHeaders(), "Content-Type": "application/json" },
-            body: JSON.stringify({ title: entry.title, file_name: entry.title, duration_seconds: null }),
+            body: JSON.stringify({
+                title: entry.title, file_name: entry.title, duration_seconds: null,
+                folder_id: entry.folderId ?? null,
+            }),
         });
         if (!res.ok) throw new Error("클라우드 등록 실패");
         const { id, audio_upload, sentences_upload } = await res.json();

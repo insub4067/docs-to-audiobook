@@ -34,6 +34,10 @@ export interface GenerationState {
     speed: Ref<number>;
     pitch: Ref<number>;
     generatingItems: Ref<GeneratingItem[]>;
+    // 내 파일 화면에서 폴더 안에 있는 동안 문서를 추가하면, 생성된
+    // 오디오북이 root가 아니라 이 폴더에 들어가야 한다. 홈 화면
+    // 드롭존에서 시작한 추가는 항상 null(루트)이어야 한다.
+    targetFolderId: Ref<string | null>;
 }
 
 export function useGenerationState(): GenerationState {
@@ -60,6 +64,7 @@ export function useGenerationState(): GenerationState {
         speed: ref(5),
         pitch: ref(0),
         generatingItems: ref([]),
+        targetFolderId: ref(null),
     };
 }
 

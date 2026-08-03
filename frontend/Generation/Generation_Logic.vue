@@ -24,6 +24,7 @@ export interface GenerationLogic {
     fetchTextFromUrl(): Promise<void>;
     pasteText(): Promise<void>;
     openAddSourceMenu(): void;
+    openAddSourceMenuForFolder(folderId: string | null): void;
     selectLinkMode(): void;
     selectPasteMode(): void;
     closeAddSourceSheet(): void;
@@ -245,6 +246,13 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
     }
 
     function openAddSourceMenu(): void {
+        // 홈 화면 드롭존에서 시작한 추가는 항상 루트에 들어가야 한다.
+        state.targetFolderId.value = null;
+        state.addSourceMode.value = "menu";
+    }
+
+    function openAddSourceMenuForFolder(folderId: string | null): void {
+        state.targetFolderId.value = folderId;
         state.addSourceMode.value = "menu";
     }
 
@@ -369,6 +377,7 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
                 }),
                 sizeBytes: audioBlob.size,
                 charCount: args.charCount,
+                folderId: state.targetFolderId.value,
             };
             await saveAudiobookToDB(entry);
             if (isAnonymousTrial) localStorage.setItem("anonymousTrialUsed", "true");
@@ -433,6 +442,7 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
         fetchTextFromUrl,
         pasteText,
         openAddSourceMenu,
+        openAddSourceMenuForFolder,
         selectLinkMode,
         selectPasteMode,
         closeAddSourceSheet,

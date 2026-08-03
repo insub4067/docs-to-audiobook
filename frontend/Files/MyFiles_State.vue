@@ -8,6 +8,7 @@ export interface MyFilesState {
     folderActionTarget: Ref<FolderNode | null>;
     isMovePickerOpen: Ref<boolean>;
     moveTarget: Ref<AudiobookRecord | null>;
+    isAddMenuOpen: Ref<boolean>;
 }
 
 export function useMyFilesState(): MyFilesState {
@@ -16,6 +17,7 @@ export function useMyFilesState(): MyFilesState {
         folderActionTarget: ref(null),
         isMovePickerOpen: ref(false),
         moveTarget: ref(null),
+        isAddMenuOpen: ref(false),
     };
 }
 

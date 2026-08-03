@@ -1,29 +1,16 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed } from "vue";
 import type { GenerationState } from "../../Generation/Generation_State.vue";
 import type { GenerationLogic } from "../../Generation/Generation_Logic.vue";
-import AddSourceSheetView from "../../Sheet/AddSourceSheet_View.vue";
 
 const props = defineProps<{
     state: GenerationState;
     logic: GenerationLogic;
 }>();
 
-const fileInput = ref<HTMLInputElement | null>(null);
-
 const isMobileDevice = computed(() =>
     /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768
 );
-
-function openFileInput(): void {
-    fileInput.value?.click();
-}
-
-function onFileInputChange(event: Event): void {
-    const files = (event.target as HTMLInputElement).files;
-    if (files && files.length > 0) props.logic.handleBatchFileSelect(files);
-    (event.target as HTMLInputElement).value = "";
-}
 
 function onDrop(event: DragEvent): void {
     props.state.isDragOver.value = false;
@@ -79,15 +66,6 @@ function onDropzoneTouchEnd(event: TouchEvent): void {
             @dragleave.prevent.stop="state.isDragOver.value = false"
             @drop.prevent.stop="onDrop"
         >
-            <input
-                ref="fileInput"
-                type="file"
-                accept=".docx,.pdf,.txt,.md,.markdown,.hwp"
-                multiple
-                style="display: none;"
-                @change="onFileInputChange"
-                @click.stop
-            >
             <div v-show="!state.isDropzoneLoading.value">
                 <i data-lucide="upload-cloud" class="dropzone-icon"></i>
                 <p class="dropzone-text">{{ isMobileDevice ? "이곳을 터치하여 문서를 추가하세요" : "파일을 끌어다 놓거나 터치하여 추가 방법을 선택하세요" }}</p>
@@ -103,6 +81,4 @@ function onDropzoneTouchEnd(event: TouchEvent): void {
             </div>
         </div>
     </section>
-
-    <AddSourceSheetView :state="state" :logic="logic" :on-select-file="openFileInput" />
 </template>

@@ -8,6 +8,8 @@ export interface MyFilesLogic {
     closeFolderActionSheet(): void;
     openMovePicker(audio: AudiobookRecord): void;
     closeMovePicker(): void;
+    openAddMenu(): void;
+    closeAddMenu(): void;
 }
 
 export function useMyFilesLogic(state: MyFilesState): MyFilesLogic {
@@ -31,7 +33,18 @@ export function useMyFilesLogic(state: MyFilesState): MyFilesLogic {
         state.moveTarget.value = null;
     }
 
-    return { openFolderActionSheet, closeFolderActionSheet, openMovePicker, closeMovePicker };
+    function openAddMenu(): void {
+        state.isAddMenuOpen.value = true;
+    }
+
+    function closeAddMenu(): void {
+        state.isAddMenuOpen.value = false;
+    }
+
+    return {
+        openFolderActionSheet, closeFolderActionSheet, openMovePicker, closeMovePicker,
+        openAddMenu, closeAddMenu,
+    };
 }
 
 export default {};
