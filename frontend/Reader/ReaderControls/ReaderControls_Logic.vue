@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { Ref } from "vue";
-import type { ReaderControlsState, RepeatMode, ReaderOptionSheetKind } from "./ReaderControls_State.vue";
+import type { ReaderControlsState, RepeatMode, ReaderOptionSheetKind, ReaderFontFamily } from "./ReaderControls_State.vue";
 import { useToastLogic } from "../../components/Toast/Toast_Logic.vue";
 import { useToastState } from "../../components/Toast/Toast_State.vue";
 
@@ -18,6 +18,8 @@ export interface ReaderControlsLogic {
     selectRepeatMode(mode: RepeatMode): void;
     selectSpeed(value: number): void;
     selectTimerMinutes(minutes: number): void;
+    selectFontFamily(value: ReaderFontFamily): void;
+    selectFontSize(value: number): void;
     skipBack(): void;
     skipForward(): void;
     onEnded(): void;
@@ -28,6 +30,10 @@ export const REPEAT_LABELS: Record<RepeatMode, string> = { off: "반복 안 함"
 export const SPEED_OPTIONS = [0.75, 1.0, 1.25, 1.5, 2.0];
 export const TIMER_OPTIONS_MIN = [0, 15, 30, 60];
 export const TIMER_LABELS: Record<number, string> = { 0: "해제", 15: "15분", 30: "30분", 60: "60분" };
+export const FONT_FAMILY_OPTIONS: ReaderFontFamily[] = ["serif", "sans"];
+export const FONT_FAMILY_LABELS: Record<ReaderFontFamily, string> = { serif: "명조체", sans: "고딕체" };
+export const FONT_SIZE_OPTIONS = [0.9, 1.0, 1.15, 1.3, 1.5];
+export const FONT_SIZE_LABELS: Record<number, string> = { 0.9: "작게", 1.0: "보통", 1.15: "크게", 1.3: "매우 크게", 1.5: "최대" };
 
 // static/js/reader-controls.js를 옮긴 것. 원본은 아이콘을 탭할 때마다
 // 다음 값으로 순환했는데, 이번에 시트를 열어 옵션을 직접 선택하는
@@ -43,6 +49,10 @@ export function useReaderControlsLogic(state: ReaderControlsState, audioEl: Ref<
     if (savedRepeat && REPEAT_MODES.includes(savedRepeat)) state.repeatMode.value = savedRepeat;
     const savedSpeed = Number.parseFloat(localStorage.getItem("textAudio_playbackSpeed") || "");
     if (SPEED_OPTIONS.includes(savedSpeed)) state.playbackSpeed.value = savedSpeed;
+    const savedFontFamily = localStorage.getItem("textAudio_readerFontFamily") as ReaderFontFamily | null;
+    if (savedFontFamily && FONT_FAMILY_OPTIONS.includes(savedFontFamily)) state.fontFamily.value = savedFontFamily;
+    const savedFontSize = Number.parseFloat(localStorage.getItem("textAudio_readerFontSize") || "");
+    if (FONT_SIZE_OPTIONS.includes(savedFontSize)) state.fontSize.value = savedFontSize;
 
     function getPlaybackSettings(): PlaybackSettings {
         return { playbackSpeed: state.playbackSpeed.value, repeatMode: state.repeatMode.value };
@@ -118,6 +128,20 @@ export function useReaderControlsLogic(state: ReaderControlsState, audioEl: Ref<
         closeSheet();
     }
 
+    function selectFontFamily(value: ReaderFontFamily): void {
+        state.fontFamily.value = value;
+        localStorage.setItem("textAudio_readerFontFamily", value);
+        showToast(`글꼴: ${FONT_FAMILY_LABELS[value]}`, "info");
+        closeSheet();
+    }
+
+    function selectFontSize(value: number): void {
+        state.fontSize.value = value;
+        localStorage.setItem("textAudio_readerFontSize", String(value));
+        showToast(`글자 크기: ${FONT_SIZE_LABELS[value]}`, "info");
+        closeSheet();
+    }
+
     function skipBack(): void {
         if (audioEl.value && !Number.isNaN(audioEl.value.currentTime)) {
             audioEl.value.currentTime = Math.max(0, audioEl.value.currentTime - 10);
@@ -142,6 +166,7 @@ export function useReaderControlsLogic(state: ReaderControlsState, audioEl: Ref<
     return {
         getPlaybackSettings, applyPlaybackSettings, clearSleepTimer,
         openSheet, closeSheet, selectRepeatMode, selectSpeed, selectTimerMinutes,
+        selectFontFamily, selectFontSize,
         skipBack, skipForward, onEnded,
     };
 }

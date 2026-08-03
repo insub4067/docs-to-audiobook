@@ -73,7 +73,14 @@ useSwipeToDismiss(props.state.containerEl, () => props.logic.closeReader(), head
                 </button>
             </header>
 
-            <div class="reader-content" :ref="setContentEl">
+            <div
+                class="reader-content"
+                :ref="setContentEl"
+                :style="{
+                    fontFamily: controlsState.fontFamily.value === 'sans' ? 'var(--font-sans)' : 'var(--font-serif)',
+                    '--reader-font-scale': controlsState.fontSize.value,
+                }"
+            >
                 <template v-for="(item, itemIdx) in state.displayItems.value" :key="itemIdx">
                     <component v-if="item.kind === 'heading'" :is="'h' + item.level" class="reader-heading" :class="`h${item.level}`">
                         <span

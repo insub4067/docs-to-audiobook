@@ -2,7 +2,10 @@
 import { computed, ref, watch } from "vue";
 import type { ReaderControlsState } from "../Reader/ReaderControls/ReaderControls_State.vue";
 import type { ReaderControlsLogic } from "../Reader/ReaderControls/ReaderControls_Logic.vue";
-import { REPEAT_MODES, REPEAT_LABELS, SPEED_OPTIONS, TIMER_OPTIONS_MIN, TIMER_LABELS } from "../Reader/ReaderControls/ReaderControls_Logic.vue";
+import {
+    REPEAT_MODES, REPEAT_LABELS, SPEED_OPTIONS, TIMER_OPTIONS_MIN, TIMER_LABELS,
+    FONT_FAMILY_OPTIONS, FONT_FAMILY_LABELS, FONT_SIZE_OPTIONS, FONT_SIZE_LABELS,
+} from "../Reader/ReaderControls/ReaderControls_Logic.vue";
 import { useSwipeToDismiss } from "../utils/swipeToDismiss";
 
 const props = defineProps<{
@@ -21,6 +24,8 @@ const title = computed(() => {
     if (props.state.activeSheet.value === "repeat") return "반복 모드";
     if (props.state.activeSheet.value === "speed") return "재생 속도";
     if (props.state.activeSheet.value === "timer") return "취침 타이머";
+    if (props.state.activeSheet.value === "fontFamily") return "글꼴";
+    if (props.state.activeSheet.value === "fontSize") return "글자 크기";
     return "";
 });
 
@@ -55,6 +60,22 @@ const options = computed<OptionRow[]>(() => {
             label: TIMER_LABELS[minutes],
             isSelected: minutes === 0 ? !props.state.isTimerActive.value : false,
             select: () => props.logic.selectTimerMinutes(minutes),
+        }));
+    }
+    if (kind === "fontFamily") {
+        return FONT_FAMILY_OPTIONS.map((value) => ({
+            key: value,
+            label: FONT_FAMILY_LABELS[value],
+            isSelected: props.state.fontFamily.value === value,
+            select: () => props.logic.selectFontFamily(value),
+        }));
+    }
+    if (kind === "fontSize") {
+        return FONT_SIZE_OPTIONS.map((value) => ({
+            key: String(value),
+            label: FONT_SIZE_LABELS[value],
+            isSelected: props.state.fontSize.value === value,
+            select: () => props.logic.selectFontSize(value),
         }));
     }
     return [];

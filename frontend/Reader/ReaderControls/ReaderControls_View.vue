@@ -40,5 +40,25 @@ const props = defineProps<{
         >
             <i data-lucide="moon"></i>
         </button>
+        <button
+            class="btn-reader-secondary"
+            :class="{ active: state.fontFamily.value !== 'serif' }"
+            aria-label="글꼴"
+            title="글꼴"
+            type="button"
+            @click="logic.openSheet('fontFamily')"
+        >
+            <i data-lucide="type"></i>
+        </button>
+        <button
+            class="btn-reader-secondary"
+            :class="{ active: state.fontSize.value !== 1.0 }"
+            aria-label="글자 크기"
+            title="글자 크기"
+            type="button"
+            @click="logic.openSheet('fontSize')"
+        >
+            <i data-lucide="case-sensitive"></i>
+        </button>
     </div>
 </template>
