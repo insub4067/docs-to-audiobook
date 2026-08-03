@@ -4,9 +4,11 @@ voice_key(예: "ko_male_warm")는 API 계약·프론트엔드·DB(background_syn
 컬럼)에 저장되는 값이고, TTS_PROVIDER 환경변수를 바꿔도 그대로 유지된다.
 실제 공급자별 음성 ID는 각 어댑터가 provider_voice_id()로 이 표에서 찾아 쓴다.
 
-주의: Google 쪽 음성 ID(ko-KR-Neural2-*)는 Google Cloud 서비스 계정
-자격증명이 아직 없어 실제 계정으로 검증하지 못했다. TTS_PROVIDER=google로
-전환해 실사용해 본 뒤 필요하면 조정해야 한다.
+Google 쪽 음성 ID는 실제 서비스 계정으로 라이브 합성까지 확인했다
+(Neural2-A/C, Chirp3-HD-Charon/Kore). edge-tts는 ko-KR 음성이 3개뿐이라
+(Hyunsu/InJoon 남성, SunHi 여성) ko_female_calm과 ko_female_kore는
+edge-tts로 전환 시 둘 다 SunHi로 겹친다 — 대응하는 두 번째 여성 음성이
+없어서 어쩔 수 없다.
 """
 
 VOICE_CATALOG = {
@@ -34,6 +36,30 @@ VOICE_CATALOG = {
             "google": "ko-KR-Neural2-A",
         },
     },
+    "ko_male_charon": {
+        "friendly_name": "카론 (Google 프리미엄 낭독 - 남성)",
+        "description": "Google Cloud의 최신 Chirp3 HD 모델 음성입니다.",
+        "gender": "Male",
+        "locale": "ko-KR",
+        "tone": "natural",
+        "use_case": ["novel", "audiobook", "documentation", "long_text"],
+        "provider_ids": {
+            "edge_tts": "ko-KR-InJoonNeural",
+            "google": "ko-KR-Chirp3-HD-Charon",
+        },
+    },
+    "ko_female_kore": {
+        "friendly_name": "코어 (Google 프리미엄 낭독 - 여성)",
+        "description": "Google Cloud의 최신 Chirp3 HD 모델 음성입니다.",
+        "gender": "Female",
+        "locale": "ko-KR",
+        "tone": "natural",
+        "use_case": ["novel", "audiobook", "documentation", "long_text"],
+        "provider_ids": {
+            "edge_tts": "ko-KR-SunHiNeural",
+            "google": "ko-KR-Chirp3-HD-Kore",
+        },
+    },
 }
 
 # VOICE_CATALOG에 적은 순서가 곧 노출 순서 — 첫 번째가 기본값이다.
@@ -43,11 +69,13 @@ DEFAULT_VOICE_KEY = VOICE_KEYS[0]
 # 이 마이그레이션 이전에 저장된 값(background_synthesis_jobs.voice 컬럼의
 # 기존 행, 캐시된 구버전 프론트가 보내는 요청)은 edge-tts 원본 short_name
 # ("ko-KR-HyunsuMultilingualNeural") 그대로다. 역방향 조회로 두 포맷을
-# 모두 받아들인다.
-_LEGACY_SHORT_NAME_TO_KEY = {
-    meta["provider_ids"]["edge_tts"]: key
-    for key, meta in VOICE_CATALOG.items()
-}
+# 모두 받아들인다. 여러 voice_key가 같은 edge_tts id를 공유할 수 있어서
+# (예: ko_female_calm과 ko_female_kore가 둘 다 SunHi) 먼저 등장한 항목이
+# 이기게 한다 — 나중 항목이 덮어쓰면 예전에 저장된 값이 전혀 다른(방금
+# 새로 추가된) 음성으로 조용히 바뀌어버린다.
+_LEGACY_SHORT_NAME_TO_KEY: dict[str, str] = {}
+for _key, _meta in VOICE_CATALOG.items():
+    _LEGACY_SHORT_NAME_TO_KEY.setdefault(_meta["provider_ids"]["edge_tts"], _key)
 
 
 def find_voice_key(value: str) -> str | None:
