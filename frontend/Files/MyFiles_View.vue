@@ -35,6 +35,17 @@ const isEmpty = computed(() =>
 
 const isAtRoot = computed(() => browserState.breadcrumb.value.length <= 1);
 
+// 폴더 안에 있을 때(!isAtRoot) 목록 맨 위에 "상위 폴더" 행을 두고, 여기로
+// 파일을 끌어 놓으면 한 단계 위(부모 폴더가 없으면 루트)로 이동한다.
+const parentFolderId = computed<string | null>(() => {
+    const crumbs = browserState.breadcrumb.value;
+    return crumbs.length >= 2 ? crumbs[crumbs.length - 2].id : null;
+});
+
+function goUpOneLevel(): void {
+    browserLogic.goToBreadcrumb(browserState.breadcrumb.value.length - 2);
+}
+
 function onNewFolder(): void {
     const name = window.prompt("새 폴더 이름");
     if (name) browserLogic.createFolder(name);
@@ -46,6 +57,10 @@ function onNewFolder(): void {
 // 제스처나 리스트 스크롤과 충돌하지 않도록 한다.
 const LONG_PRESS_MS = 450;
 const MOVE_CANCEL_PX = 10;
+// "상위 폴더" 행의 data-folder-id에 쓰는 값 — 실제 폴더 id가 아니라, 놓는
+// 시점에 parentFolderId로 다시 풀어낸다(부모가 루트면 null이 되어야 하는데
+// data-* 속성엔 null을 담을 수 없어서 자리표시자가 필요하다).
+const PARENT_DROP_TARGET = "__parent__";
 const dragAudioId = ref<string | null>(null);
 const dragOverFolderId = ref<string | null>(null);
 // 드래그 중 손가락을 따라다니는 고스트(iOS 스타일 축소+반투명 미리보기)의
@@ -102,9 +117,10 @@ function onDragTouchMove(event: TouchEvent): void {
 
 async function onDragTouchEnd(): Promise<void> {
     const audio = dragCandidate;
-    const folderId = dragOverFolderId.value;
+    const target = dragOverFolderId.value;
     resetDragState();
-    if (!audio || !folderId) return;
+    if (!audio || !target) return;
+    const folderId = target === PARENT_DROP_TARGET ? parentFolderId.value : target;
     await props.audioListLogic.moveToFolder(audio, folderId);
 }
 
@@ -136,6 +152,17 @@ onMounted(() => browserLogic.loadCurrentFolder());
         </div>
 
         <div class="myfiles-list">
+            <div
+                v-if="!isAtRoot"
+                class="myfiles-row myfiles-row-parent"
+                :class="{ 'drag-over': dragOverFolderId === PARENT_DROP_TARGET }"
+                :data-folder-id="PARENT_DROP_TARGET"
+                @click="goUpOneLevel"
+            >
+                <i data-lucide="corner-left-up" class="myfiles-row-icon"></i>
+                <span class="myfiles-row-title">상위 폴더</span>
+            </div>
+
             <div
                 v-for="folder in browserState.subfolders.value"
                 :key="folder.id"

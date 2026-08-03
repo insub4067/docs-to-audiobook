@@ -284,6 +284,12 @@ html {
     opacity: 0.85;
 }
 
+.myfiles-row-parent .myfiles-row-icon,
+.myfiles-row-parent .myfiles-row-title {
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
 .myfiles-row.drag-over .myfiles-row-icon,
 .myfiles-row.drag-over .myfiles-row-title {
     color: #fff;
