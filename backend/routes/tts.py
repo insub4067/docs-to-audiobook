@@ -29,7 +29,7 @@ from text_processing import (
 from push_notifications import send_background_job_ready
 from tts_providers import get_tts_provider
 from tts_providers.voice_catalog import (
-    VOICE_CATALOG, VOICE_KEYS, DEFAULT_VOICE_KEY, find_voice_key, resolve_voice_key,
+    VOICE_CATALOG, DEFAULT_VOICE_KEY, find_voice_key, resolve_voice_key, provider_for_voice,
 )
 
 router = APIRouter()
@@ -46,34 +46,30 @@ voice_preview_lock = asyncio.Lock()
 
 @router.get("/api/voices")
 async def get_voices(tone: str = None, use_case: str = None):
-    """음성 목록 반환. tone/use_case로 필터링 가능."""
-    provider = get_tts_provider()
-    try:
-        voices = await provider.list_voices()
-    except Exception as e:
-        # 공급자 목록 조회가 실패해도 UI가 비지 않도록 카탈로그로 대체한다.
-        print(f"Voice list fetch failed, using fallback: {e}")
-        voices = [
-            {
-                "key": key,
-                "name": meta["friendly_name"],
-                "gender": meta["gender"],
-                "locale": meta["locale"],
-                "friendly_name": meta["friendly_name"],
-                "description": meta["description"],
-                "tone": meta["tone"],
-                "use_case": meta["use_case"],
-            }
-            for key, meta in VOICE_CATALOG.items()
-        ]
+    """음성 목록 반환. tone/use_case로 필터링 가능.
+
+    음성마다 합성 엔진(edge_tts/google)이 고정돼 있어(voice_catalog.py),
+    실제 공급자에게 매번 물어볼 필요 없이 카탈로그를 그대로 신뢰한다.
+    VOICE_CATALOG의 등록 순서가 곧 노출 순서다(첫 번째가 기본값)."""
+    voices = [
+        {
+            "key": key,
+            "name": meta["friendly_name"],
+            "gender": meta["gender"],
+            "locale": meta["locale"],
+            "friendly_name": meta["friendly_name"],
+            "description": meta["description"],
+            "tone": meta["tone"],
+            "use_case": meta["use_case"],
+        }
+        for key, meta in VOICE_CATALOG.items()
+    ]
 
     if tone:
         voices = [v for v in voices if v.get("tone") == tone]
     if use_case:
         voices = [v for v in voices if use_case in v.get("use_case", [])]
 
-    # VOICE_KEYS에 적은 순서를 유지한다. 첫 번째가 기본값이다.
-    voices.sort(key=lambda v: VOICE_KEYS.index(v["key"]) if v["key"] in VOICE_KEYS else len(VOICE_KEYS))
     return voices
 
 
@@ -87,8 +83,8 @@ async def get_voice_preview(voice_key: str):
     if resolved_key is None:
         raise HTTPException(status_code=404, detail="지원하지 않는 음성입니다.")
 
-    provider = get_tts_provider()
-    path = os.path.join(VOICE_PREVIEW_DIR, f"{provider.name}_{resolved_key}.mp3")
+    provider_name = provider_for_voice(resolved_key)
+    path = os.path.join(VOICE_PREVIEW_DIR, f"{provider_name}_{resolved_key}.mp3")
     if not os.path.exists(path):
         async with voice_preview_lock:
             # 락을 기다리는 동안 다른 요청이 이미 만들었을 수 있다
@@ -108,13 +104,19 @@ async def get_voice_preview(voice_key: str):
     return FileResponse(path, media_type="audio/mpeg")
 
 
-async def synthesize_chunk(chunk_index: int, text_chunk: str, voice: str, rate: str, pitch: str, max_attempts: int = 3):
+async def synthesize_chunk(
+    chunk_index: int, text_chunk: str, voice: str, rate: str, pitch: str,
+    max_attempts: int = 3, provider_name: str | None = None,
+):
     # TTS 발음용 깨끗한 텍스트
     tts_text = clean_tts_text(text_chunk)
     if not tts_text:
         tts_text = text_chunk
 
-    provider = get_tts_provider()
+    # 보통은 음성에 고정된 엔진을 쓴다(voice_catalog.provider_for_voice).
+    # provider_name이 명시적으로 오면(기본 제공 오디오북처럼 특정 음성의
+    # 고정 엔진과 무관하게 특정 공급자를 강제하고 싶을 때) 그걸 우선한다.
+    provider = get_tts_provider(provider_name or provider_for_voice(voice))
     # TTS 공급자는 특정 호스팅 환경에서 개별 연결이 간헐적으로 끊긴다.
     # 청크 단위로 재시도해, 문서 전체를 병렬 변환할 때 청크 하나의 일시적
     # 실패가 전체 asyncio.gather를 실패시키지 않도록 한다.
@@ -151,7 +153,9 @@ def split_tts_chunks(text: str) -> list[str]:
         chunks.append(current_chunk.strip())
     return chunks or [text]
 
-async def synthesize_document(raw_text: str, voice: str, rate: str, pitch: str, progress_callback=None) -> tuple:
+async def synthesize_document(
+    raw_text: str, voice: str, rate: str, pitch: str, progress_callback=None, provider_name: str | None = None,
+) -> tuple:
     """Synthesize a full document into (audio_bytes, annotated_sentences, heading_index)."""
     display_markdown, text, tables = build_document_representations(raw_text)
     headings = extract_markdown_headings(display_markdown)
@@ -162,7 +166,7 @@ async def synthesize_document(raw_text: str, voice: str, rate: str, pitch: str, 
 
     async def synthesize_with_progress(chunk_index: int, chunk: str):
         nonlocal completed_chunks
-        result = await synthesize_chunk(chunk_index, chunk, voice, rate, pitch)
+        result = await synthesize_chunk(chunk_index, chunk, voice, rate, pitch, provider_name=provider_name)
         completed_chunks += 1
         if progress_callback:
             progress_callback(completed_chunks, len(chunks))
@@ -221,6 +225,7 @@ async def synthesize_document_to_file(
     pitch: str,
     output_path: str,
     progress_callback=None,
+    provider_name: str | None = None,
 ) -> tuple[list, list, str]:
     """긴 문서를 최대 다섯 묶음으로 병렬 합성해 MP3를 디스크에 기록한다."""
     display_markdown, text, tables = build_document_representations(raw_text)
@@ -243,7 +248,9 @@ async def synthesize_document_to_file(
         current_offset = 0
         with open(part_paths[part_index], "wb") as audio_file:
             for chunk_index, chunk in part:
-                _, audio_data, sentences = await synthesize_chunk(chunk_index, chunk, voice, rate, pitch)
+                _, audio_data, sentences = await synthesize_chunk(
+                    chunk_index, chunk, voice, rate, pitch, provider_name=provider_name
+                )
                 audio_file.write(audio_data)
                 for sentence in sentences:
                     part_sentences.append({

@@ -48,7 +48,7 @@ async def test_synthesize_document_splits_orders_and_offsets():
     """
     calls = []
 
-    async def fake_synthesize_chunk(idx, text_chunk, voice, rate, pitch, max_attempts=3):
+    async def fake_synthesize_chunk(idx, text_chunk, voice, rate, pitch, max_attempts=3, provider_name=None):
         calls.append(idx)
         # 청크마다 서로 다른 오디오 바이트를 줘서 순서가 뒤집히면 바로 티가 나게 한다
         audio = f"chunk{idx}".encode()
@@ -93,7 +93,7 @@ async def test_synthesize_document_chunk_failure_propagates():
     # 청크 하나가 재시도 끝에 완전히 실패하면 asyncio.gather가 예외를
     # 전파해 문서 전체 합성이 실패해야 한다(부분 성공으로 조용히 넘어가면
     # 안 된다).
-    async def failing_chunk(idx, text_chunk, voice, rate, pitch, max_attempts=3):
+    async def failing_chunk(idx, text_chunk, voice, rate, pitch, max_attempts=3, provider_name=None):
         raise RuntimeError("네트워크 끊김")
 
     with patch("routes.tts.synthesize_chunk", side_effect=failing_chunk):
@@ -103,7 +103,7 @@ async def test_synthesize_document_chunk_failure_propagates():
 
 @pytest.mark.asyncio
 async def test_synthesize_document_reports_completed_chunks():
-    async def fake_synthesize_chunk(idx, text_chunk, voice, rate, pitch, max_attempts=3):
+    async def fake_synthesize_chunk(idx, text_chunk, voice, rate, pitch, max_attempts=3, provider_name=None):
         return idx, b"audio", [{"text": f"문장 {idx}", "start": 0, "end": 100}]
 
     progress_updates = []
@@ -128,7 +128,7 @@ async def test_synthesize_document_to_file_limits_workers_and_preserves_order(tm
     active_workers = 0
     max_active_workers = 0
 
-    async def fake_synthesize_chunk(idx, text_chunk, voice, rate, pitch, max_attempts=3):
+    async def fake_synthesize_chunk(idx, text_chunk, voice, rate, pitch, max_attempts=3, provider_name=None):
         nonlocal active_workers, max_active_workers
         active_workers += 1
         max_active_workers = max(max_active_workers, active_workers)

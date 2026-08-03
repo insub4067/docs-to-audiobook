@@ -1,14 +1,19 @@
 """공급자 중립 음성 키 <-> 공급자별 실제 음성 ID 매핑.
 
 voice_key(예: "ko_male_warm")는 API 계약·프론트엔드·DB(background_synthesis_jobs.voice
-컬럼)에 저장되는 값이고, TTS_PROVIDER 환경변수를 바꿔도 그대로 유지된다.
-실제 공급자별 음성 ID는 각 어댑터가 provider_voice_id()로 이 표에서 찾아 쓴다.
+컬럼)에 저장되는 값이고, 그대로 유지된다.
+
+각 음성은 "provider" 필드로 실제 합성 엔진을 고정한다(음성별 고정 —
+전역 스위치가 아니다). 원래 있던 두 음성(현수/선희)은 edge-tts 태생이라
+그대로 edge_tts에 고정하고, 나중에 추가한 두 음성(카론/코어)은 Google
+Chirp3-HD 전용이라 google에 고정한다 — edge-tts에는 대응하는 음성이
+아예 없어서(카론/코어는 edge-tts 정체성이 없는, 새로 만든 음성) 굳이
+대체 음성을 끼워 맞추지 않는다. 이전에는 TTS_PROVIDER 환경변수 하나로
+모든 음성을 한꺼번에 전환했는데, 그러면 카론/코어에 억지로 끼워 맞춘
+edge-tts 대체 음성(InJoon/SunHi)이 튀어나오는 문제가 있었다.
 
 Google 쪽 음성 ID는 실제 서비스 계정으로 라이브 합성까지 확인했다
-(Neural2-A/C, Chirp3-HD-Charon/Kore). edge-tts는 ko-KR 음성이 3개뿐이라
-(Hyunsu/InJoon 남성, SunHi 여성) ko_female_calm과 ko_female_kore는
-edge-tts로 전환 시 둘 다 SunHi로 겹친다 — 대응하는 두 번째 여성 음성이
-없어서 어쩔 수 없다.
+(Neural2-A/C, Chirp3-HD-Charon/Kore).
 """
 
 VOICE_CATALOG = {
@@ -19,6 +24,7 @@ VOICE_CATALOG = {
         "locale": "ko-KR",
         "tone": "natural",
         "use_case": ["novel", "audiobook", "documentation", "long_text"],
+        "provider": "edge_tts",
         "provider_ids": {
             "edge_tts": "ko-KR-HyunsuMultilingualNeural",
             "google": "ko-KR-Neural2-C",
@@ -31,6 +37,7 @@ VOICE_CATALOG = {
         "locale": "ko-KR",
         "tone": "formal",
         "use_case": ["news", "education", "audiobook", "long_text"],
+        "provider": "edge_tts",
         "provider_ids": {
             "edge_tts": "ko-KR-SunHiNeural",
             "google": "ko-KR-Neural2-A",
@@ -43,8 +50,8 @@ VOICE_CATALOG = {
         "locale": "ko-KR",
         "tone": "natural",
         "use_case": ["novel", "audiobook", "documentation", "long_text"],
+        "provider": "google",
         "provider_ids": {
-            "edge_tts": "ko-KR-InJoonNeural",
             "google": "ko-KR-Chirp3-HD-Charon",
         },
     },
@@ -55,8 +62,8 @@ VOICE_CATALOG = {
         "locale": "ko-KR",
         "tone": "natural",
         "use_case": ["novel", "audiobook", "documentation", "long_text"],
+        "provider": "google",
         "provider_ids": {
-            "edge_tts": "ko-KR-SunHiNeural",
             "google": "ko-KR-Chirp3-HD-Kore",
         },
     },
@@ -69,13 +76,12 @@ DEFAULT_VOICE_KEY = VOICE_KEYS[0]
 # 이 마이그레이션 이전에 저장된 값(background_synthesis_jobs.voice 컬럼의
 # 기존 행, 캐시된 구버전 프론트가 보내는 요청)은 edge-tts 원본 short_name
 # ("ko-KR-HyunsuMultilingualNeural") 그대로다. 역방향 조회로 두 포맷을
-# 모두 받아들인다. 여러 voice_key가 같은 edge_tts id를 공유할 수 있어서
-# (예: ko_female_calm과 ko_female_kore가 둘 다 SunHi) 먼저 등장한 항목이
-# 이기게 한다 — 나중 항목이 덮어쓰면 예전에 저장된 값이 전혀 다른(방금
-# 새로 추가된) 음성으로 조용히 바뀌어버린다.
+# 모두 받아들인다. edge_tts 매핑이 없는 음성(카론/코어)은 건너뛴다.
 _LEGACY_SHORT_NAME_TO_KEY: dict[str, str] = {}
 for _key, _meta in VOICE_CATALOG.items():
-    _LEGACY_SHORT_NAME_TO_KEY.setdefault(_meta["provider_ids"]["edge_tts"], _key)
+    _edge_id = _meta["provider_ids"].get("edge_tts")
+    if _edge_id:
+        _LEGACY_SHORT_NAME_TO_KEY.setdefault(_edge_id, _key)
 
 
 def find_voice_key(value: str) -> str | None:
@@ -91,6 +97,12 @@ def resolve_voice_key(value: str) -> str:
     합성 요청이나 재개된 백그라운드 작업이 알 수 없는 voice 값 때문에
     통째로 실패하는 것보다 기본 음성으로라도 진행하는 편이 낫다."""
     return find_voice_key(value) or DEFAULT_VOICE_KEY
+
+
+def provider_for_voice(voice_key: str) -> str:
+    """voice_key에 고정된 합성 엔진 이름("edge_tts" 또는 "google")을 반환한다."""
+    meta = VOICE_CATALOG.get(voice_key) or VOICE_CATALOG[DEFAULT_VOICE_KEY]
+    return meta["provider"]
 
 
 def provider_voice_id(voice_key: str, provider_name: str) -> str:

@@ -9,7 +9,6 @@ from fastapi.responses import FileResponse, JSONResponse
 from state import BASE_DIR, STATIC_DIR, AUDIOBOOK_BUCKET
 from text_processing import extract_text
 from routes import tts as tts_routes
-from tts_providers import get_tts_provider
 from tts_providers.voice_catalog import DEFAULT_VOICE_KEY
 
 router = APIRouter()
@@ -18,6 +17,10 @@ DEFAULT_BOOK_DIR = os.path.join(BASE_DIR, "default_book")
 DEFAULT_BOOK_SOURCE = os.path.join(STATIC_DIR, "samples", "demian.txt")
 DEFAULT_BOOK_TITLE = "데미안"
 DEFAULT_BOOK_VOICE = DEFAULT_VOICE_KEY
+# voice_catalog.py의 음성별 고정 공급자(현수=edge_tts)와 무관하게, 기본
+# 제공 오디오북은 항상 이 공급자로 강제한다 — 최초로 모든 방문자가 듣는
+# 샘플이라 품질을 직접 통제하고 싶어서 Google Cloud TTS로 고정했다.
+DEFAULT_BOOK_PROVIDER = "google"
 
 default_book_state = {"status": "pending", "error": None}
 default_book_lock = asyncio.Lock()
@@ -30,12 +33,12 @@ def _default_book_fingerprint() -> str:
     오디오가 계속 재사용됐다(축약본 3챕터가 전문으로 바꾼 뒤에도 남았다).
     내용 해시를 함께 넣어 원문이 바뀌면 자동으로 다시 만들게 한다.
 
-    공급자(TTS_PROVIDER)도 포함한다 — voice_key는 그대로 두고 공급자만
-    edge_tts <-> google로 바꿔도 실제 오디오가 완전히 달라지는데, 공급자가
-    빠져 있으면 이미 만들어둔 예전 공급자 캐시를 계속 재사용해버린다."""
+    DEFAULT_BOOK_PROVIDER도 포함한다 — 이 값을 바꾸면(예: google에서
+    edge_tts로) 실제 오디오가 완전히 달라지는데, 빠져 있으면 이미
+    만들어둔 예전 공급자 캐시를 계속 재사용해버린다."""
     h = hashlib.sha256()
     h.update(DEFAULT_BOOK_VOICE.encode())
-    h.update(get_tts_provider().name.encode())
+    h.update(DEFAULT_BOOK_PROVIDER.encode())
     try:
         with open(DEFAULT_BOOK_SOURCE, "rb") as f:
             h.update(f.read())
@@ -152,7 +155,7 @@ async def generate_default_book():
         raw_text = extract_text(DEFAULT_BOOK_SOURCE, "demian.txt")
         # edge-tts 경로는 오디오 바이트를 돌려주므로 여기서 디스크에 쓴다
         audio_bytes, sentences, headings = await tts_routes.synthesize_document(
-            raw_text, DEFAULT_BOOK_VOICE, "+5%", "+0Hz"
+            raw_text, DEFAULT_BOOK_VOICE, "+5%", "+0Hz", provider_name=DEFAULT_BOOK_PROVIDER
         )
         if not audio_bytes:
             raise RuntimeError("음성 합성 결과가 비어 있습니다.")
