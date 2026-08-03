@@ -1,4 +1,4 @@
-const CACHE_NAME = "2026.08.03.11";
+const CACHE_NAME = "2026.08.03.12";
 
 const ASSETS_TO_CACHE = [
   "/",
@@ -57,13 +57,25 @@ self.addEventListener("push", (event) => {
   if (payload.type !== "audiobook_ready") return;
 
   event.waitUntil(
-    self.registration.showNotification("TextAudio", {
-      body: "오디오북 생성이 완료되었습니다.",
-      icon: "/static/textaudio-icon.png",
-      badge: "/static/textaudio-icon.png",
-      tag: `audiobook-ready-${payload.job_id || "job"}`,
-      data: { job_id: payload.job_id || "" },
-    })
+    Promise.all([
+      self.registration.showNotification("TextAudio", {
+        body: "오디오북 생성이 완료되었습니다.",
+        icon: "/static/textaudio-icon.png",
+        badge: "/static/textaudio-icon.png",
+        tag: `audiobook-ready-${payload.job_id || "job"}`,
+        data: { job_id: payload.job_id || "" },
+      }),
+      // 알림을 탭하지 않아도(포그라운드에서 보고 있는 중이거나, 백그라운드
+      // 탭으로 열려 있는 경우) 열려 있는 모든 탭에 바로 알려서 "생성 중..."
+      // 로딩 표시가 최대 30초 폴링을 기다리지 않고 즉시 사라지게 한다.
+      // 이전에는 이 메시지가 notificationclick(알림을 직접 탭했을 때)에서만
+      // 나갔다.
+      clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
+        windowClients.forEach((client) => {
+          client.postMessage({ type: "check_pending_background_jobs", job_id: payload.job_id || "" });
+        });
+      }),
+    ])
   );
 });
 
