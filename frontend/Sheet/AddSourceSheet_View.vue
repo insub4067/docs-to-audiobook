@@ -9,7 +9,6 @@ const props = defineProps<{
     state: GenerationState;
     logic: GenerationLogic;
     onSelectFile: () => void;
-    onSelectImage: () => void;
 }>();
 
 const authStore = useAuthStore();
@@ -58,9 +57,8 @@ function onDriveImportClick(): void {
 }
 
 function onScanTextClick(): void {
-    props.logic.closeFileSourceMenu();
     props.logic.closeAddSourceSheet();
-    props.onSelectImage();
+    props.logic.openScanSheet();
 }
 
 function onComposerKeydown(event: KeyboardEvent): void {

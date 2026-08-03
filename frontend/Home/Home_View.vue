@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import HeaderView from "../components/Header/Header_View.vue";
 import UploadView from "../components/Upload/Upload_View.vue";
 import AddSourceSheetView from "../Sheet/AddSourceSheet_View.vue";
+import ScanTextSheetView from "../Sheet/ScanTextSheet_View.vue";
 import GenerationModalView from "../Sheet/GenerationModal_View.vue";
 import LoginPromptSheetView from "../Sheet/LoginPromptSheet_View.vue";
 import AudioListView from "../components/Library/AudioList_View.vue";
@@ -106,7 +107,7 @@ function openImageInput(): void {
 
 function onImageInputChange(event: Event): void {
     const file = (event.target as HTMLInputElement).files?.[0];
-    if (file) generationLogic.scanImageText(file);
+    if (file) generationLogic.addScannedImage(file);
     (event.target as HTMLInputElement).value = "";
 }
 
@@ -181,8 +182,8 @@ onMounted(async () => {
         :state="generationState"
         :logic="generationLogic"
         :on-select-file="openFileInput"
-        :on-select-image="openImageInput"
     />
+    <ScanTextSheetView :state="generationState" :logic="generationLogic" :on-add-photo="openImageInput" />
     <GenerationModalView :state="generationState" :logic="generationLogic" :voice-state="voiceState" :voice-logic="voiceLogic" />
     <LoginPromptSheetView :state="generationState" :logic="generationLogic" />
     <ReaderView

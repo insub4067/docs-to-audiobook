@@ -38,6 +38,10 @@ export interface GenerationState {
     // "+" 버튼을 누르면 파일 업로드/구글 드라이브 중 어디서 가져올지
     // 고르는 작은 시트 — 문서 추가 컴포저 위에 겹쳐 뜬다.
     isFileSourceMenuOpen: Ref<boolean>;
+    // 텍스트 스캔(OCR, 관리자 전용) — 여러 장을 연속 촬영해서 모아뒀다가
+    // 한 번에 추출한다. 아직 서버로 보내지 않은 대기열.
+    isScanSheetOpen: Ref<boolean>;
+    scannedImages: Ref<File[]>;
     speed: Ref<number>;
     pitch: Ref<number>;
     generatingItems: Ref<GeneratingItem[]>;
@@ -67,6 +71,8 @@ export function useGenerationState(): GenerationState {
         isComposerBusy: ref(false),
         addSourceMode: ref(null),
         isFileSourceMenuOpen: ref(false),
+        isScanSheetOpen: ref(false),
+        scannedImages: ref([]),
         speed: ref(5),
         pitch: ref(0),
         generatingItems: ref([]),

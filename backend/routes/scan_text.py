@@ -16,6 +16,7 @@ from state import synth_limit_for, upload_limit_for, text_storage, enforce_rate_
 router = APIRouter()
 
 MAX_IMAGE_BYTES = 15 * 1024 * 1024  # Vision API 자체 제한(20MB)보다 여유를 둔다
+MAX_IMAGE_COUNT = 30  # 한 번에 연속 촬영해서 올릴 수 있는 최대 장수
 
 _vision_client = None
 
@@ -70,24 +71,34 @@ def detect_pdf_text_via_ocr(pdf_path: str) -> str:
 
 
 @router.post("/api/scan-text")
-async def scan_text(request: Request, file: UploadFile = File(...), authorization: str = Header(None)):
+async def scan_text(request: Request, files: list[UploadFile] = File(...), authorization: str = Header(None)):
     require_admin_user(authorization)
     enforce_rate_limit(request, "scan_text", limit=30, window_sec=600)
 
-    content = await file.read()
-    if not content:
-        raise HTTPException(status_code=400, detail="이미지 파일이 비어 있습니다.")
-    if len(content) > MAX_IMAGE_BYTES:
-        raise HTTPException(
-            status_code=413,
-            detail=f"이미지가 너무 큽니다. 최대 {MAX_IMAGE_BYTES // (1024 * 1024)}MB까지 지원합니다.",
-        )
+    if not files:
+        raise HTTPException(status_code=400, detail="이미지 파일이 없습니다.")
+    if len(files) > MAX_IMAGE_COUNT:
+        raise HTTPException(status_code=413, detail=f"한 번에 최대 {MAX_IMAGE_COUNT}장까지 스캔할 수 있습니다.")
 
-    try:
-        text = await asyncio.to_thread(_detect_document_text, content)
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"텍스트 인식에 실패했습니다: {e}")
+    # 촬영한 순서(페이지 순서)를 그대로 유지해 순서대로 이어붙인다.
+    page_texts: list[str] = []
+    for image_file in files:
+        content = await image_file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="이미지 파일이 비어 있습니다.")
+        if len(content) > MAX_IMAGE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"이미지가 너무 큽니다. 최대 {MAX_IMAGE_BYTES // (1024 * 1024)}MB까지 지원합니다.",
+            )
+        try:
+            page_text = await asyncio.to_thread(_detect_document_text, content)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"텍스트 인식에 실패했습니다: {e}")
+        if page_text:
+            page_texts.append(page_text)
 
+    text = "\n\n".join(page_texts)
     if not text:
         raise HTTPException(status_code=400, detail="이미지에서 텍스트를 찾지 못했습니다.")
 
@@ -100,7 +111,8 @@ async def scan_text(request: Request, file: UploadFile = File(...), authorizatio
         )
 
     text_id = str(uuid.uuid4())
-    filename = f"스캔한 텍스트 {time.strftime('%Y-%m-%d %H:%M')}"
+    page_label = f" ({len(files)}장)" if len(files) > 1 else ""
+    filename = f"스캔한 텍스트{page_label} {time.strftime('%Y-%m-%d %H:%M')}"
     text_storage[text_id] = {
         "filename": filename,
         "text": text,

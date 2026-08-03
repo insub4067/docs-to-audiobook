@@ -29,7 +29,11 @@ export interface GenerationLogic {
     openFileSourceMenu(): void;
     closeFileSourceMenu(): void;
     importFromGoogleDrive(): Promise<void>;
-    scanImageText(file: File): Promise<void>;
+    openScanSheet(): void;
+    closeScanSheet(): void;
+    addScannedImage(file: File): void;
+    removeScannedImage(index: number): void;
+    submitScannedImages(): Promise<void>;
     onGenerateClick(): Promise<void>;
     onLoginPromptConfirm(): void;
     closeModal(): void;
@@ -325,9 +329,9 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
         }
     }
 
-    async function extractScannedImage(file: File) {
+    async function extractScannedImages(files: File[]) {
         const formData = new FormData();
-        formData.append("file", file);
+        for (const file of files) formData.append("files", file);
         const response = await fetch("/api/scan-text", {
             method: "POST",
             headers: authLogic.authHeaders(),
@@ -338,11 +342,31 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
         return data;
     }
 
-    async function scanImageText(file: File): Promise<void> {
+    function openScanSheet(): void {
         closeFileSourceMenu();
+        state.isScanSheetOpen.value = true;
+    }
+
+    function closeScanSheet(): void {
+        state.isScanSheetOpen.value = false;
+        state.scannedImages.value = [];
+    }
+
+    function addScannedImage(file: File): void {
+        state.scannedImages.value = [...state.scannedImages.value, file];
+    }
+
+    function removeScannedImage(index: number): void {
+        state.scannedImages.value = state.scannedImages.value.filter((_, i) => i !== index);
+    }
+
+    async function submitScannedImages(): Promise<void> {
+        if (state.scannedImages.value.length === 0) return;
         state.isComposerBusy.value = true;
         try {
-            applyExtractedText(await extractScannedImage(file));
+            applyExtractedText(await extractScannedImages(state.scannedImages.value));
+            state.scannedImages.value = [];
+            state.isScanSheetOpen.value = false;
             state.addSourceMode.value = null;
         } catch (error) {
             console.error(error);
@@ -535,7 +559,11 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
         openFileSourceMenu,
         closeFileSourceMenu,
         importFromGoogleDrive,
-        scanImageText,
+        openScanSheet,
+        closeScanSheet,
+        addScannedImage,
+        removeScannedImage,
+        submitScannedImages,
         onGenerateClick,
         onLoginPromptConfirm,
         closeModal,
