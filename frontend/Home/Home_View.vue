@@ -69,6 +69,8 @@ function onEscape(event: KeyboardEvent): void {
     if (generationState.isLoginPromptOpen.value) generationState.isLoginPromptOpen.value = false;
     else if (readerLogic.closeIndexSheetIfOpen()) {
         // 목차 시트를 닫았다
+    } else if (readerLogic.closeMoreSheetIfOpen()) {
+        // 더보기 시트를 닫았다
     } else if (generationState.isModalOpen.value) generationLogic.closeModal();
 }
 

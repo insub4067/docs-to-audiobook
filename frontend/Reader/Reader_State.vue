@@ -16,6 +16,7 @@ export interface ReaderState {
     showShareBtn: Ref<boolean>;
     showSaveSharedBtn: Ref<boolean>;
     isIndexSheetOpen: Ref<boolean>;
+    isMoreSheetOpen: Ref<boolean>;
     currentAudioObject: Ref<AudiobookRecord | null>;
     audioEl: Ref<HTMLAudioElement | null>;
     contentEl: Ref<HTMLElement | null>;
@@ -36,6 +37,7 @@ export function useReaderState(): ReaderState {
         showShareBtn: ref(false),
         showSaveSharedBtn: ref(false),
         isIndexSheetOpen: ref(false),
+        isMoreSheetOpen: ref(false),
         currentAudioObject: ref(null),
         audioEl: ref(null),
         contentEl: ref(null),

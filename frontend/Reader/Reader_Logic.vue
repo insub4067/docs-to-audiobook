@@ -21,6 +21,9 @@ export interface ReaderLogic {
     openIndexSheet(): void;
     closeIndexSheet(): void;
     closeIndexSheetIfOpen(): boolean;
+    openMoreSheet(): void;
+    closeMoreSheet(): void;
+    closeMoreSheetIfOpen(): boolean;
     importSharedLink(url: string): Promise<void>;
     saveSharedAudiobook(): Promise<void>;
     attachUiCollapseHandlers(): () => void;
@@ -304,6 +307,20 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         return true;
     }
 
+    function openMoreSheet(): void {
+        state.isMoreSheetOpen.value = true;
+    }
+
+    function closeMoreSheet(): void {
+        state.isMoreSheetOpen.value = false;
+    }
+
+    function closeMoreSheetIfOpen(): boolean {
+        if (!state.isMoreSheetOpen.value) return false;
+        closeMoreSheet();
+        return true;
+    }
+
     function closeReader(): void {
         const el = state.audioEl.value;
         const audioObject = state.currentAudioObject.value;
@@ -432,6 +449,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         open, openSharedReaderMode, closeReader, checkSharedLink,
         togglePlayPause, seekTo, onSentenceClick, onHeadingClick,
         openIndexSheet, closeIndexSheet, closeIndexSheetIfOpen,
+        openMoreSheet, closeMoreSheet, closeMoreSheetIfOpen,
         importSharedLink, saveSharedAudiobook, attachUiCollapseHandlers,
     };
 }

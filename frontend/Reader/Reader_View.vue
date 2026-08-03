@@ -7,6 +7,7 @@ import type { ReaderControlsLogic } from "./ReaderControls/ReaderControls_Logic.
 import type { AudioListLogic } from "../components/Library/AudioList_Logic.vue";
 import ReaderControlsView from "./ReaderControls/ReaderControls_View.vue";
 import IndexSheetView from "../Sheet/IndexSheet_View.vue";
+import ReaderMoreSheetView from "../Sheet/ReaderMoreSheet_View.vue";
 import ReaderOptionsSheetView from "../Sheet/ReaderOptionsSheet_View.vue";
 import type { ThemeLogic } from "../Theme/Theme_Logic.vue";
 
@@ -56,50 +57,13 @@ onUnmounted(() => detachUiCollapseHandlers?.());
     <div class="reader-overlay" :class="{ show: state.isOpen.value }" role="dialog" aria-modal="true" aria-label="오디오북 듣기">
         <div class="reader-container" :ref="setContainerEl">
             <header class="reader-header">
+                <button class="btn-reader-close" aria-label="오디오북 듣기 닫기" title="오디오북 듣기 닫기" type="button" @click="logic.closeReader">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
                 <h3 class="reader-book-title">{{ state.title.value }}</h3>
-                <div class="reader-header-actions" style="display: flex; gap: 8px;">
-                    <button
-                        class="btn-reader-close"
-                        aria-label="읽기 화면 테마"
-                        title="읽기 화면 테마"
-                        type="button"
-                        @click="themeLogic.openSheet"
-                    >
-                        <i data-lucide="type"></i>
-                    </button>
-                    <button
-                        class="btn-reader-close"
-                        aria-label="목차 보기"
-                        title="목차 보기"
-                        type="button"
-                        :style="{ display: state.headings.value.length > 0 ? 'flex' : 'none' }"
-                        @click="logic.openIndexSheet"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
-                    </button>
-                    <button
-                        class="btn-reader-close"
-                        aria-label="공유하기"
-                        title="공유하기"
-                        type="button"
-                        :style="{ display: state.showShareBtn.value ? 'flex' : 'none' }"
-                        @click="onShareClick"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
-                    </button>
-                    <button
-                        class="btn-reader-close"
-                        aria-label="내 오디오북에 저장"
-                        title="내 오디오북에 저장"
-                        :style="{ display: state.showSaveSharedBtn.value ? 'flex' : 'none' }"
-                        @click="logic.saveSharedAudiobook"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                    </button>
-                    <button class="btn-reader-close" aria-label="오디오북 듣기 닫기" title="오디오북 듣기 닫기" type="button" @click="logic.closeReader">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                    </button>
-                </div>
+                <button class="btn-reader-close" aria-label="더보기" title="더보기" type="button" @click="logic.openMoreSheet">
+                    <i data-lucide="more-horizontal"></i>
+                </button>
             </header>
 
             <div class="reader-content" :ref="setContentEl">
@@ -171,5 +135,6 @@ onUnmounted(() => detachUiCollapseHandlers?.());
     </div>
 
     <IndexSheetView :state="state" :logic="logic" />
+    <ReaderMoreSheetView :state="state" :logic="logic" :theme-logic="themeLogic" :on-share-click="onShareClick" />
     <ReaderOptionsSheetView :state="controlsState" :logic="controlsLogic" />
 </template>

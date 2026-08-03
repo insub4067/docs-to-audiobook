@@ -1574,13 +1574,15 @@ input[type="range"]::-webkit-slider-thumb:active {
     z-index: 1500;
     display: flex;
     justify-content: center;
-    opacity: 0;
+    /* iOS fullScreenCover처럼 아래에서 위로 올라오고, 닫을 때 다시
+       아래로 사라진다. */
+    transform: translateY(100%);
     pointer-events: none;
-    transition: opacity 0.3s cubic-bezier(0.19, 1, 0.22, 1);
+    transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 .reader-overlay.show {
-    opacity: 1;
+    transform: translateY(0);
     pointer-events: auto;
 }
 
@@ -1713,10 +1715,14 @@ input[type="range"]::-webkit-slider-thumb:active {
     left: 0;
     right: 0;
     z-index: 10;
-    display: flex;
-    justify-content: space-between;
+    /* 좌우 버튼 칸을 같은 너비로 고정해야 가운데 칸의 제목이 화면
+       중앙에 실제로 맞춰진다(버튼 하나씩만 남아 폭이 대칭이라 값 자체는
+       중요치 않지만, flex justify-content:space-between처럼 텍스트
+       길이에 따라 밀리는 걸 막는다). */
+    display: grid;
+    grid-template-columns: 40px 1fr 40px;
     align-items: center;
-    padding: calc(16px + env(safe-area-inset-top)) 24px 16px;
+    padding: calc(16px + env(safe-area-inset-top)) 20px 16px;
     border-bottom: 1px solid var(--reader-border);
     background-color: var(--reader-surface);
     backdrop-filter: blur(24px) saturate(160%);
@@ -1733,7 +1739,9 @@ input[type="range"]::-webkit-slider-thumb:active {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 80%;
+    text-align: center;
+    justify-self: center;
+    max-width: 100%;
 }
 
 .btn-reader-close {
