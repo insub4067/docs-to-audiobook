@@ -113,9 +113,10 @@ function onComposerKeydown(event: KeyboardEvent): void {
     >
         <div class="action-sheet" ref="fileSourceSheet">
             <div class="action-sheet-handle"></div>
+            <p class="action-sheet-hint">지원 형식: MD · PDF · TXT · DOCX · HWP</p>
             <button class="action-sheet-btn" type="button" @click="onUploadFileClick">
                 <i data-lucide="file-up"></i>
-                파일 업로드 (MD, PDF, TXT, DOCX, HWP)
+                파일 업로드
             </button>
             <button class="action-sheet-btn" type="button" @click="onDriveImportClick">
                 <i data-lucide="hard-drive"></i>
