@@ -13,8 +13,21 @@ const props = defineProps<{
 const composer = ref<HTMLElement | null>(null);
 useSwipeToDismiss(composer, () => props.logic.closeAddSourceSheet());
 
+const composerPlaceholder = "링크를 붙여넣거나\n텍스트를 입력하세요";
+
+// 진입 애니메이션이 끝나야만 transform을 완전히 없앤다(스타일 쪽 설명
+// 참고) — iOS에서 입력창에 포커스를 줬을 때 커서가 화면 하단에 엉뚱하게
+// 그려지는 버그를 피하기 위함이다.
+const isSettled = ref(false);
+function onComposerTransitionEnd(event: TransitionEvent): void {
+    if (event.propertyName === "transform" && event.target === composer.value) {
+        isSettled.value = !!props.state.addSourceMode.value;
+    }
+}
+
 watch(() => props.state.addSourceMode.value, (mode) => {
     document.body.style.overflow = mode ? "hidden" : "";
+    if (!mode) isSettled.value = false;
 });
 
 function onBackdropClick(event: MouseEvent): void {
@@ -27,7 +40,7 @@ function onAttachClick(): void {
 }
 
 function onComposerKeydown(event: KeyboardEvent): void {
-    if (event.key === "Enter") {
+    if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
         props.logic.submitComposerInput();
     }
@@ -43,7 +56,12 @@ function onComposerKeydown(event: KeyboardEvent): void {
         aria-label="문서 추가"
         @click="onBackdropClick"
     >
-        <div class="add-source-composer" ref="composer">
+        <div
+            class="add-source-composer"
+            :class="{ settled: isSettled }"
+            ref="composer"
+            @transitionend="onComposerTransitionEnd"
+        >
             <button
                 type="button"
                 class="composer-attach-btn"
@@ -53,13 +71,12 @@ function onComposerKeydown(event: KeyboardEvent): void {
             >
                 <i data-lucide="plus"></i>
             </button>
-            <input
-                type="text"
-                inputmode="url"
-                placeholder="링크를 붙여넣거나 텍스트를 입력하세요"
+            <textarea
+                rows="2"
+                :placeholder="composerPlaceholder"
                 v-model="state.composerInputValue.value"
                 @keydown="onComposerKeydown"
-            >
+            ></textarea>
             <button
                 type="button"
                 class="composer-submit-btn"
