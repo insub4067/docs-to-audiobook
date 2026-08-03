@@ -622,6 +622,62 @@ html {
     color: var(--text-color);
 }
 
+/* 예전 바닐라 리더(static/index.html + static/js/generation.js)의
+   링크 가져오기 버튼. Vue AddSourceSheet_View.vue는 더 이상 이 클래스를
+   쓰지 않지만, 레거시 화면(index.html)이 여전히 이 클래스와 urlFetchBtn
+   is-loading 토글에 의존한다 — 지우면 안 된다. */
+.btn-url-fetch {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 18px;
+    border-radius: 12px;
+    background-color: var(--primary-color);
+    border: none;
+    color: #fff;
+    font-family: var(--font-sans);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: opacity 0.2s ease;
+}
+
+.btn-url-fetch:hover {
+    opacity: 0.88;
+}
+
+.btn-url-fetch:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.btn-url-fetch.is-loading svg {
+    display: none;
+}
+
+.btn-url-fetch.is-loading::before {
+    content: "";
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.btn-url-fetch svg {
+    width: 16px;
+    height: 16px;
+}
+
+@media (max-width: 480px) {
+    .btn-url-fetch span {
+        display: none;
+    }
+}
+
 /* 문서 추가 시트(AddSourceSheet_View.vue)의 통합 입력창 — 링크 붙여넣기/
    텍스트 붙여넣기/파일 업로드를 각각 별도 화면으로 나누지 않고, 하나의
    채팅형 입력줄 + 왼쪽 "+"(파일 업로드) + 오른쪽 제출 버튼으로 합쳤다.
