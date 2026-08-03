@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import type { AudioListState } from "../components/Library/AudioList_State.vue";
 import type { AudioListLogic } from "../components/Library/AudioList_Logic.vue";
 import type { AudiobookRecord } from "../services/indexedDb";
@@ -124,7 +124,31 @@ async function onDragTouchEnd(): Promise<void> {
     await props.audioListLogic.moveToFolder(audio, folderId);
 }
 
-onMounted(() => browserLogic.loadCurrentFolder());
+// 안전망: 아이템에 직접 건 touchend/touchcancel가 어떤 이유로든(시스템
+// 제스처 가로채기, 드롭 중 목록 재렌더링 등) 못 걸리는 경우를 대비해
+// window 레벨에서 한 번 더 정리한다. 버블링상 아이템 쪽 리스너가 항상
+// 먼저 실행되므로(실제 이동 처리는 거기서 끝남) 여기서는 중복 호출이라도
+// 해가 없다 — 이미 정리된 상태를 다시 정리할 뿐이다. 특히 드래그 중
+// 탭바를 눌러 화면을 전환해도(고스트는 body에 teleport돼 있어 v-show로
+// 안 가려짐) 그 탭 클릭도 touchend라 여기서 같이 정리된다.
+function onVisibilityChange(): void {
+    // 드래그 중 앱이 백그라운드로 가면(알림, 다른 앱 전환 등) 터치가
+    // 끊겨 touchend/touchcancel이 아예 안 올 수 있다.
+    if (document.visibilityState !== "visible") resetDragState();
+}
+
+onMounted(() => {
+    browserLogic.loadCurrentFolder();
+    window.addEventListener("touchend", resetDragState, { passive: true });
+    window.addEventListener("touchcancel", resetDragState, { passive: true });
+    document.addEventListener("visibilitychange", onVisibilityChange);
+});
+
+onUnmounted(() => {
+    window.removeEventListener("touchend", resetDragState);
+    window.removeEventListener("touchcancel", resetDragState);
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+});
 </script>
 
 <template>
