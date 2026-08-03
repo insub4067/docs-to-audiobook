@@ -157,7 +157,11 @@ async def get_config():
     return JSONResponse(content={
         "providers": {k: v for k, v in providers.items() if v},
         # 이전 클라이언트 호환용
-        "google_client_id": providers.get("google", "")
+        "google_client_id": providers.get("google", ""),
+        # 구글 드라이브 가져오기(Picker)용 공개 API 키. Picker API 자체는
+        # OAuth 토큰만으로도 대부분 동작하지만, 구글 문서상 권장 조합이라
+        # 설정돼 있으면 함께 내려준다 — 없어도 기능은 그대로 동작한다.
+        "google_api_key": os.getenv("GOOGLE_API_KEY", ""),
     })
 
 

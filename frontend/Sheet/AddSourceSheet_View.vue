@@ -13,6 +13,9 @@ const props = defineProps<{
 const composer = ref<HTMLElement | null>(null);
 useSwipeToDismiss(composer, () => props.logic.closeAddSourceSheet());
 
+const fileSourceSheet = ref<HTMLElement | null>(null);
+useSwipeToDismiss(fileSourceSheet, () => props.logic.closeFileSourceMenu());
+
 const composerPlaceholder = "링크를 붙여넣거나\n텍스트를 입력하세요";
 
 // 진입 애니메이션이 끝나야만 transform을 완전히 없앤다(스타일 쪽 설명
@@ -34,9 +37,18 @@ function onBackdropClick(event: MouseEvent): void {
     if (event.target === event.currentTarget) props.logic.closeAddSourceSheet();
 }
 
-function onAttachClick(): void {
+function onFileSourceBackdropClick(event: MouseEvent): void {
+    if (event.target === event.currentTarget) props.logic.closeFileSourceMenu();
+}
+
+function onUploadFileClick(): void {
+    props.logic.closeFileSourceMenu();
     props.logic.closeAddSourceSheet();
     props.onSelectFile();
+}
+
+function onDriveImportClick(): void {
+    props.logic.importFromGoogleDrive();
 }
 
 function onComposerKeydown(event: KeyboardEvent): void {
@@ -65,9 +77,9 @@ function onComposerKeydown(event: KeyboardEvent): void {
             <button
                 type="button"
                 class="composer-attach-btn"
-                aria-label="파일 업로드"
-                title="파일 업로드 (MD, PDF, TXT, DOCX, HWP)"
-                @click="onAttachClick"
+                aria-label="파일 소스 선택"
+                title="파일 업로드 또는 Google Drive에서 가져오기"
+                @click="logic.openFileSourceMenu"
             >
                 <i data-lucide="plus"></i>
             </button>
@@ -88,6 +100,28 @@ function onComposerKeydown(event: KeyboardEvent): void {
             >
                 <i data-lucide="arrow-up"></i>
             </button>
+        </div>
+    </div>
+
+    <div
+        class="action-sheet-backdrop"
+        :class="{ show: state.isFileSourceMenuOpen.value }"
+        role="dialog"
+        aria-modal="true"
+        aria-label="파일 소스 선택"
+        @click="onFileSourceBackdropClick"
+    >
+        <div class="action-sheet" ref="fileSourceSheet">
+            <div class="action-sheet-handle"></div>
+            <button class="action-sheet-btn" type="button" @click="onUploadFileClick">
+                <i data-lucide="file-up"></i>
+                파일 업로드 (MD, PDF, TXT, DOCX, HWP)
+            </button>
+            <button class="action-sheet-btn" type="button" @click="onDriveImportClick">
+                <i data-lucide="hard-drive"></i>
+                Google Drive에서 가져오기
+            </button>
+            <button class="action-sheet-btn action-sheet-btn-cancel" type="button" @click="logic.closeFileSourceMenu">닫기</button>
         </div>
     </div>
 </template>

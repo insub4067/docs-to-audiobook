@@ -7,6 +7,7 @@ import { saveAudiobookToDB } from "../services/indexedDb";
 import { getAudiobookDisplayTitle, formatBytes } from "../utils/format";
 import type { GenerationState, GeneratingItem } from "./Generation_State.vue";
 import type { VoiceLogic } from "../Voices/Voice_Logic.vue";
+import { pickGoogleDriveFile } from "../Auth/GoogleDrivePicker";
 
 export interface GenerationArguments {
     textId: string;
@@ -25,6 +26,9 @@ export interface GenerationLogic {
     openAddSourceMenu(): void;
     openAddSourceMenuForFolder(folderId: string | null): void;
     closeAddSourceSheet(): void;
+    openFileSourceMenu(): void;
+    closeFileSourceMenu(): void;
+    importFromGoogleDrive(): Promise<void>;
     onGenerateClick(): Promise<void>;
     onLoginPromptConfirm(): void;
     closeModal(): void;
@@ -276,6 +280,49 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
         state.addSourceMode.value = null;
     }
 
+    function openFileSourceMenu(): void {
+        state.isFileSourceMenuOpen.value = true;
+    }
+
+    function closeFileSourceMenu(): void {
+        state.isFileSourceMenuOpen.value = false;
+    }
+
+    async function extractDriveFile(fileId: string, accessToken: string) {
+        const response = await fetch("/api/import-drive-file", {
+            method: "POST",
+            headers: { ...authLogic.authHeaders(), "Content-Type": "application/json" },
+            body: JSON.stringify({ file_id: fileId, access_token: accessToken }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "구글 드라이브에서 파일을 가져오지 못했습니다.");
+        return data;
+    }
+
+    async function importFromGoogleDrive(): Promise<void> {
+        closeFileSourceMenu();
+        if (!authLogic.isLoggedIn()) {
+            showToast("Google Drive 가져오기는 로그인 후 이용할 수 있습니다.", "info");
+            document.getElementById("headerLoginSlot")?.scrollIntoView({ behavior: "smooth", block: "center" });
+            return;
+        }
+        state.isComposerBusy.value = true;
+        try {
+            const config = await fetch("/api/config").then((r) => r.json());
+            const clientId = config.providers?.google;
+            if (!clientId) throw new Error("Google 설정이 준비되지 않았습니다.");
+            const picked = await pickGoogleDriveFile(clientId, config.google_api_key || "");
+            if (!picked) return; // 사용자가 선택창을 취소함
+            applyExtractedText(await extractDriveFile(picked.fileId, picked.accessToken));
+            state.addSourceMode.value = null;
+        } catch (error) {
+            console.error(error);
+            showToast((error as Error).message, "error");
+        } finally {
+            state.isComposerBusy.value = false;
+        }
+    }
+
     function generationArguments(): GenerationArguments {
         return {
             textId: state.currentTextId.value!,
@@ -456,6 +503,9 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
         openAddSourceMenu,
         openAddSourceMenuForFolder,
         closeAddSourceSheet,
+        openFileSourceMenu,
+        closeFileSourceMenu,
+        importFromGoogleDrive,
         onGenerateClick,
         onLoginPromptConfirm,
         closeModal,

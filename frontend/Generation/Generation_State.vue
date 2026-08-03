@@ -35,6 +35,9 @@ export interface GenerationState {
     composerInputValue: Ref<string>;
     isComposerBusy: Ref<boolean>;
     addSourceMode: Ref<AddSourceMode>;
+    // "+" 버튼을 누르면 파일 업로드/구글 드라이브 중 어디서 가져올지
+    // 고르는 작은 시트 — 문서 추가 컴포저 위에 겹쳐 뜬다.
+    isFileSourceMenuOpen: Ref<boolean>;
     speed: Ref<number>;
     pitch: Ref<number>;
     generatingItems: Ref<GeneratingItem[]>;
@@ -63,6 +66,7 @@ export function useGenerationState(): GenerationState {
         composerInputValue: ref(""),
         isComposerBusy: ref(false),
         addSourceMode: ref(null),
+        isFileSourceMenuOpen: ref(false),
         speed: ref(5),
         pitch: ref(0),
         generatingItems: ref([]),
