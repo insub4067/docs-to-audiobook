@@ -10,8 +10,22 @@ from state import (
     large_admin_upload_lock, save_upload_limited, text_storage, enforce_rate_limit,
 )
 from text_processing import extract_text
+from routes.scan_text import detect_pdf_text_via_ocr
 
 router = APIRouter()
+
+
+async def _pdf_ocr_fallback_text(temp_path: str, is_admin: bool, is_pdf: bool) -> str | None:
+    """스캔본 PDF(텍스트 레이어 없음)라 pypdf가 텍스트를 못 뽑을 때의
+    폴백. 관리자 PDF 요청에서만 시도하고, 실패하거나 대상이 아니면
+    None을 돌려줘 호출부가 기존 에러 메시지를 그대로 쓰게 한다."""
+    if not (is_admin and is_pdf and os.path.exists(temp_path)):
+        return None
+    try:
+        text = await asyncio.to_thread(detect_pdf_text_via_ocr, temp_path)
+        return text if text.strip() else None
+    except Exception:
+        return None
 
 
 @router.post("/api/upload")
@@ -28,6 +42,8 @@ async def upload_file(request: Request, file: UploadFile = File(...), authorizat
     temp_path = os.path.join(UPLOAD_DIR, f"{file_id}_{safe_name}")
     max_upload_bytes = upload_limit_for(authorization)
     max_synth_chars = synth_limit_for(max_upload_bytes)
+    is_admin = max_upload_bytes > MAX_UPLOAD_BYTES
+    is_pdf = safe_name.lower().endswith(".pdf")
 
     try:
         if max_upload_bytes > MAX_UPLOAD_BYTES:
@@ -42,10 +58,13 @@ async def upload_file(request: Request, file: UploadFile = File(...), authorizat
         else:
             await save_upload_limited(file, temp_path, max_upload_bytes)
             text = await asyncio.to_thread(extract_text, temp_path, safe_name)
-    except HTTPException:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
-        raise
+    except HTTPException as original_error:
+        fallback_text = await _pdf_ocr_fallback_text(temp_path, is_admin, is_pdf)
+        if fallback_text is None:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            raise original_error
+        text = fallback_text
     except Exception as e:
         if os.path.exists(temp_path):
             os.remove(temp_path)
@@ -54,7 +73,11 @@ async def upload_file(request: Request, file: UploadFile = File(...), authorizat
     # Extract text
     try:
         if not text.strip():
-            raise HTTPException(status_code=400, detail="추출된 텍스트가 없습니다. 빈 파일이거나 읽을 수 없는 문서입니다.")
+            fallback_text = await _pdf_ocr_fallback_text(temp_path, is_admin, is_pdf)
+            if fallback_text is not None:
+                text = fallback_text
+            else:
+                raise HTTPException(status_code=400, detail="추출된 텍스트가 없습니다. 빈 파일이거나 읽을 수 없는 문서입니다.")
 
         if len(text) > max_synth_chars:
             raise HTTPException(

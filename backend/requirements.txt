@@ -8,6 +8,9 @@ edge-tts>=7.2.8
 google-cloud-texttospeech>=2.16.0
 # 이미지 텍스트 스캔(OCR, 관리자 전용)에 쓰인다.
 google-cloud-vision>=3.7.0
+# 스캔본 PDF(텍스트 레이어 없음)를 Vision OCR로 넘기기 전 페이지를
+# 이미지로 렌더링하는 데 쓰인다(관리자 전용, PDF 업로드 폴백).
+pymupdf>=1.24.0
 # Chirp3-HD처럼 SSML mark 타임포인팅을 지원하지 않는 Google 음성의 문장
 # 경계를 근사할 때, 실제 mp3 길이를 재기 위해 필요하다.
 mutagen>=1.47.0

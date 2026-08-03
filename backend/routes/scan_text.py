@@ -52,6 +52,23 @@ def _detect_document_text(content: bytes) -> str:
     return (response.full_text_annotation.text or "").strip()
 
 
+def detect_pdf_text_via_ocr(pdf_path: str) -> str:
+    """스캔본 PDF(텍스트 레이어 없음) 폴백 — pypdf가 텍스트를 못 뽑을 때
+    upload.py가 관리자 요청에 한해 호출한다. 페이지를 이미지로 렌더링해
+    한 장씩 Vision에 넘긴다. 동기 함수라 asyncio.to_thread로 감싸 쓴다."""
+    import fitz  # PyMuPDF
+
+    doc = fitz.open(pdf_path)
+    try:
+        pages_text = []
+        for page in doc:
+            pixmap = page.get_pixmap(dpi=200)
+            pages_text.append(_detect_document_text(pixmap.tobytes("png")))
+        return "\n\n".join(t for t in pages_text if t)
+    finally:
+        doc.close()
+
+
 @router.post("/api/scan-text")
 async def scan_text(request: Request, file: UploadFile = File(...), authorization: str = Header(None)):
     require_admin_user(authorization)
