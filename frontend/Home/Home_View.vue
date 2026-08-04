@@ -6,6 +6,7 @@ import UploadBlockingOverlayView from "../components/Upload/UploadBlockingOverla
 import AuthLoadingOverlayView from "../Auth/AuthLoadingOverlay_View.vue";
 import AddSourceSheetView from "../Sheet/AddSourceSheet_View.vue";
 import TextInputSheetView from "../Sheet/TextInputSheet_View.vue";
+import NewsUploadSheetView from "../Sheet/NewsUploadSheet_View.vue";
 import ScanTextSheetView from "../Sheet/ScanTextSheet_View.vue";
 import GenerationModalView from "../Sheet/GenerationModal_View.vue";
 import LoginPromptSheetView from "../Sheet/LoginPromptSheet_View.vue";
@@ -18,6 +19,7 @@ import TabBarView from "../components/TabBar/TabBar_View.vue";
 import MiniPlayerView from "../components/MiniPlayer/MiniPlayer_View.vue";
 import MyFilesView from "../Files/MyFiles_View.vue";
 import TodayNewsView from "../components/News/TodayNews_View.vue";
+import NewsListSheetView from "../components/News/NewsListSheet_View.vue";
 import { useGenerationState } from "../Generation/Generation_State.vue";
 import { useGenerationLogic } from "../Generation/Generation_Logic.vue";
 import { useVoiceState } from "../Voices/Voice_State.vue";
@@ -279,4 +281,6 @@ onMounted(async () => {
     />
     <ThemeSheetView :state="themeState" :logic="themeLogic" />
     <PromptSheetView />
+    <NewsListSheetView :logic="readerLogic" />
+    <NewsUploadSheetView />
 </template>

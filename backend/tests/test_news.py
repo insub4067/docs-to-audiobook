@@ -75,8 +75,7 @@ async def test_add_news_strips_json_code_fence_and_stores_items(mock_supabase):
 
     assert response.status_code == 200
     data = response.json()
-    assert len(data["created"]) == 2
-    assert data["errors"] == []
+    assert data["queued"] == 2
 
     insert_calls = mock_supabase.table().insert.call_args_list
     inserted_rows = [call.args[0] for call in insert_calls if call.args]
@@ -85,6 +84,30 @@ async def test_add_news_strips_json_code_fence_and_stores_items(mock_supabase):
     assert inserted_rows[0]["news_category"] == "국제"
     assert inserted_rows[0]["news_source"] == "Reuters"
     assert inserted_rows[1]["news_category"] is None
+
+
+@pytest.mark.asyncio
+async def test_add_news_strips_chatgpt_citation_markers_from_content(mock_supabase):
+    mock_supabase.table().insert().execute.return_value = MagicMock(data=[{"id": "row-1"}])
+    payload_text = (
+        '[{"title": "산불 뉴스", '
+        '"content": "건물 700여 채가 파괴됐습니다.  [oaicitation:8\\u2021Reuters]."}]'
+    )
+
+    captured_text = {}
+
+    async def capturing_synthesize(text, voice, rate, pitch, progress_callback=None, provider_name=None):
+        captured_text["content"] = text
+        return await _fake_synthesize_document(text, voice, rate, pitch)
+
+    with patch("routes.news.require_admin_user", return_value="admin-user"), \
+         patch("routes.news.synthesize_document", side_effect=capturing_synthesize):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post("/api/admin/news", json={"text": payload_text}, headers=_auth_headers())
+
+    assert response.status_code == 200
+    assert "oaicitation" not in captured_text["content"]
+    assert captured_text["content"] == "건물 700여 채가 파괴됐습니다."
 
 
 @pytest.mark.asyncio
@@ -99,8 +122,12 @@ async def test_add_news_skips_items_missing_title_or_content(mock_supabase):
 
     assert response.status_code == 200
     data = response.json()
-    assert len(data["created"]) == 1
-    assert data["created"][0]["title"] == "정상 뉴스"
+    assert data["queued"] == 1
+
+    insert_calls = mock_supabase.table().insert.call_args_list
+    inserted_rows = [call.args[0] for call in insert_calls if call.args]
+    assert len(inserted_rows) == 1
+    assert inserted_rows[0]["title"] == "정상 뉴스"
 
 
 @pytest.mark.asyncio
@@ -123,9 +150,44 @@ async def test_add_news_reports_partial_failure_without_failing_whole_request(mo
 
     assert response.status_code == 200
     data = response.json()
-    assert len(data["created"]) == 1
-    assert len(data["errors"]) == 1
-    assert data["errors"][0]["title"] == "실패할 뉴스"
+    assert data["queued"] == 2
+
+    insert_calls = mock_supabase.table().insert.call_args_list
+    inserted_rows = [call.args[0] for call in insert_calls if call.args]
+    assert len(inserted_rows) == 1
+    assert inserted_rows[0]["title"] == "성공할 뉴스"
+
+
+@pytest.mark.asyncio
+async def test_add_news_broadcasts_push_after_background_processing(mock_supabase):
+    mock_supabase.table().insert().execute.return_value = MagicMock(data=[{"id": "row-1"}])
+    payload_text = '[{"title": "첫 뉴스", "content": "본문1"}, {"title": "둘째 뉴스", "content": "본문2"}]'
+
+    with patch("routes.news.require_admin_user", return_value="admin-user"), \
+         patch("routes.news.synthesize_document", side_effect=_fake_synthesize_document), \
+         patch("routes.news.send_news_ready_broadcast") as broadcast:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post("/api/admin/news", json={"text": payload_text}, headers=_auth_headers())
+
+    assert response.status_code == 200
+    broadcast.assert_called_once_with(2)
+
+
+@pytest.mark.asyncio
+async def test_add_news_skips_broadcast_when_nothing_created(mock_supabase):
+    payload_text = '[{"title": "실패할 뉴스", "content": "본문"}]'
+
+    async def always_fails(text, voice, rate, pitch, progress_callback=None, provider_name=None):
+        raise RuntimeError("합성 실패")
+
+    with patch("routes.news.require_admin_user", return_value="admin-user"), \
+         patch("routes.news.synthesize_document", side_effect=always_fails), \
+         patch("routes.news.send_news_ready_broadcast") as broadcast:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post("/api/admin/news", json={"text": payload_text}, headers=_auth_headers())
+
+    assert response.status_code == 200
+    broadcast.assert_not_called()
 
 
 @pytest.mark.asyncio

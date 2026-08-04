@@ -109,6 +109,64 @@ def push_is_configured() -> bool:
     return True
 
 
+def _deliver_to_subscriptions(supabase, subscriptions: list, payload: dict, scope_user_id: str | None) -> None:
+    """subscriptions 각각에 payload를 보내고, 만료된 구독은 정리한다.
+    scope_user_id가 있으면 그 사용자 소유 구독만 삭제 조건에 건다(개인
+    알림용) — 없으면 전체 방송이라 구독 id만으로 삭제한다."""
+    success_count = 0
+    failed_count = 0
+    expired_count = 0
+    for subscription in subscriptions:
+        if not is_supported_push_endpoint(subscription.get("endpoint", "")):
+            failed_count += 1
+            logger.warning("Web Push delivery skipped error_type=UnsupportedEndpoint")
+            continue
+        try:
+            webpush(
+                subscription_info={
+                    "endpoint": subscription["endpoint"],
+                    "keys": {
+                        "p256dh": subscription["p256dh"],
+                        "auth": subscription["auth"],
+                    },
+                },
+                data=json.dumps(payload),
+                vapid_private_key=os.environ["VAPID_PRIVATE_KEY"],
+                vapid_claims={"sub": os.environ["VAPID_SUBJECT"]},
+                ttl=86400,
+                timeout=10,
+            )
+            success_count += 1
+        except WebPushException as error:
+            failed_count += 1
+            status_code = getattr(getattr(error, "response", None), "status_code", None)
+            if status_code in (404, 410):
+                expired_count += 1
+                try:
+                    query = supabase.table("push_subscriptions").delete()
+                    if scope_user_id:
+                        query = query.eq("user_id", scope_user_id)
+                    query.eq("id", subscription["id"]).eq(
+                        "updated_at", subscription["updated_at"]
+                    ).execute()
+                except Exception as cleanup_error:
+                    logger.warning(
+                        "Expired Web Push cleanup failed error_type=%s",
+                        type(cleanup_error).__name__,
+                    )
+            status_class = f"{status_code // 100}xx" if isinstance(status_code, int) else "unknown"
+            logger.warning("Web Push delivery failed status_class=%s", status_class)
+        except Exception as error:
+            failed_count += 1
+            logger.warning("Web Push delivery failed error_type=%s", type(error).__name__)
+    logger.info(
+        "Web Push delivery summary success=%d failed=%d expired=%d",
+        success_count,
+        failed_count,
+        expired_count,
+    )
+
+
 def send_background_job_ready(user_id: str, job_id: str) -> None:
     if not push_is_configured():
         return
@@ -118,59 +176,30 @@ def send_background_job_ready(user_id: str, job_id: str) -> None:
         subscriptions = supabase.table("push_subscriptions").select(
             "id,endpoint,p256dh,auth,updated_at"
         ).eq("user_id", user_id).limit(5).execute().data or []
-        success_count = 0
-        failed_count = 0
-        expired_count = 0
-        for subscription in subscriptions:
-            if not is_supported_push_endpoint(subscription.get("endpoint", "")):
-                failed_count += 1
-                logger.warning("Web Push delivery skipped error_type=UnsupportedEndpoint")
-                continue
-            try:
-                webpush(
-                    subscription_info={
-                        "endpoint": subscription["endpoint"],
-                        "keys": {
-                            "p256dh": subscription["p256dh"],
-                            "auth": subscription["auth"],
-                        },
-                    },
-                    data=json.dumps({"type": "audiobook_ready", "job_id": job_id}),
-                    vapid_private_key=os.environ["VAPID_PRIVATE_KEY"],
-                    vapid_claims={"sub": os.environ["VAPID_SUBJECT"]},
-                    ttl=86400,
-                    timeout=10,
-                )
-                success_count += 1
-            except WebPushException as error:
-                failed_count += 1
-                status_code = getattr(getattr(error, "response", None), "status_code", None)
-                if status_code in (404, 410):
-                    expired_count += 1
-                    try:
-                        supabase.table("push_subscriptions").delete().eq(
-                            "user_id", user_id
-                        ).eq(
-                            "id", subscription["id"]
-                        ).eq(
-                            "updated_at", subscription["updated_at"]
-                        ).execute()
-                    except Exception as cleanup_error:
-                        logger.warning(
-                            "Expired Web Push cleanup failed error_type=%s",
-                            type(cleanup_error).__name__,
-                        )
-                status_class = f"{status_code // 100}xx" if isinstance(status_code, int) else "unknown"
-                logger.warning("Web Push delivery failed status_class=%s", status_class)
-            except Exception as error:
-                failed_count += 1
-                logger.warning("Web Push delivery failed error_type=%s", type(error).__name__)
-        logger.info(
-            "Web Push delivery summary success=%d failed=%d expired=%d",
-            success_count,
-            failed_count,
-            expired_count,
-        )
     except Exception as error:
         logger.warning("Web Push subscription lookup failed error_type=%s", type(error).__name__)
         return
+
+    _deliver_to_subscriptions(
+        supabase, subscriptions, {"type": "audiobook_ready", "job_id": job_id}, scope_user_id=user_id
+    )
+
+
+def send_news_ready_broadcast(count: int) -> None:
+    """오늘의 경제 뉴스 등록이 끝나면 구독한 모든 사용자에게 알린다
+    (개인 알림과 달리 user_id로 거르지 않고 전체 구독을 대상으로 한다)."""
+    if not push_is_configured():
+        return
+
+    try:
+        supabase = state._supabase_or_503()
+        subscriptions = supabase.table("push_subscriptions").select(
+            "id,endpoint,p256dh,auth,updated_at"
+        ).execute().data or []
+    except Exception as error:
+        logger.warning("Web Push subscription lookup failed error_type=%s", type(error).__name__)
+        return
+
+    _deliver_to_subscriptions(
+        supabase, subscriptions, {"type": "news_ready", "count": count}, scope_user_id=None
+    )

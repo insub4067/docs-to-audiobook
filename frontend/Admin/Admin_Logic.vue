@@ -61,7 +61,7 @@ export function useAdminLogic(
         }
 
         newsSubmitting.value = true;
-        newsStatus.value = "등록 중입니다...";
+        newsStatus.value = "등록 요청 중입니다...";
         try {
             const response = await fetch("/api/admin/news", {
                 method: "POST",
@@ -73,12 +73,9 @@ export function useAdminLogic(
                 throw new Error(body.detail || "등록에 실패했습니다.");
             }
             const data = await response.json();
-            const createdCount = data.created?.length || 0;
-            const errorCount = data.errors?.length || 0;
-            newsStatus.value = errorCount
-                ? `${createdCount}개 등록, ${errorCount}개 실패 (${data.errors.map((e: { title: string }) => e.title).join(", ")})`
-                : `${createdCount}개 등록 완료`;
-            if (createdCount > 0) newsInputText.value = "";
+            const queuedCount = data.queued || 0;
+            newsStatus.value = `${queuedCount}개 접수됨 — 변환이 끝나면 전체 사용자에게 알림이 발송돼요.`;
+            newsInputText.value = "";
         } catch (error) {
             console.error(error);
             newsStatus.value = (error as Error).message || "등록에 실패했습니다.";

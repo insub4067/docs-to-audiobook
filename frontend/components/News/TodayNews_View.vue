@@ -1,21 +1,14 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted } from "vue";
 import type { ReaderLogic } from "../../Reader/Reader_Logic.vue";
-
-interface NewsItem {
-    id: string;
-    title: string;
-    news_category: string | null;
-    news_source: string | null;
-    created_at: string;
-    audio_url: string;
-    sentences_url: string | null;
-}
+import { useNewsState } from "./News_State.vue";
+import { useNewsLogic } from "./News_Logic.vue";
 
 const props = defineProps<{ logic: ReaderLogic }>();
+const state = useNewsState();
+const newsLogic = useNewsLogic(state, props.logic);
 
-const items = ref<NewsItem[]>([]);
-const loading = ref(true);
+const topItem = computed(() => state.items.value[0] ?? null);
 
 function formatRelativeTime(iso: string): string {
     const diffMin = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
@@ -26,58 +19,32 @@ function formatRelativeTime(iso: string): string {
     return `${Math.floor(diffHour / 24)}일 전`;
 }
 
-async function loadNews(): Promise<void> {
-    try {
-        const response = await fetch("/api/news");
-        if (!response.ok) return;
-        const data = await response.json();
-        items.value = data.news || [];
-    } catch (error) {
-        console.error("오늘의 뉴스를 불러오지 못했습니다:", error);
-    } finally {
-        loading.value = false;
-    }
-}
-
-async function onNewsClick(item: NewsItem): Promise<void> {
-    let sentences = [];
-    if (item.sentences_url) {
-        try {
-            const response = await fetch(item.sentences_url);
-            if (response.ok) sentences = await response.json();
-        } catch (error) {
-            console.error("뉴스 문장 데이터를 불러오지 못했습니다:", error);
-        }
-    }
-    props.logic.openSharedReaderMode(item.title, sentences, item.audio_url, null);
-}
-
-onMounted(loadNews);
+onMounted(() => {
+    if (!state.loaded.value) newsLogic.loadNews();
+});
 </script>
 
 <template>
-    <section v-if="!loading && items.length > 0" class="glass-card library-section">
+    <section v-if="topItem" class="glass-card library-section">
         <div class="card-header">
             <i data-lucide="newspaper" class="header-icon"></i>
-            <h2>오늘의 뉴스</h2>
+            <h2>경제 뉴스</h2>
+            <button type="button" class="news-more-btn" @click="newsLogic.openList">
+                더보기
+                <i data-lucide="chevron-right"></i>
+            </button>
         </div>
         <div class="library-container">
             <div class="audio-list">
-                <button
-                    v-for="item in items"
-                    :key="item.id"
-                    type="button"
-                    class="audio-item audio-item-news"
-                    @click="onNewsClick(item)"
-                >
+                <button type="button" class="audio-item audio-item-news" @click="newsLogic.openNewsItem(topItem)">
                     <div class="audio-item-front">
                         <div class="audio-title-group">
                             <i data-lucide="play-circle"></i>
                             <div class="audio-title-col">
-                                <span class="audio-title">{{ item.title }}</span>
+                                <span class="audio-title">{{ topItem.title }}</span>
                                 <span class="audio-subtitle">
-                                    <template v-if="item.news_category">{{ item.news_category }} · </template>
-                                    <template v-if="item.news_source">{{ item.news_source }} · </template>{{ formatRelativeTime(item.created_at) }}
+                                    <template v-if="topItem.news_category">{{ topItem.news_category }} · </template>
+                                    <template v-if="topItem.news_source">{{ topItem.news_source }} · </template>{{ formatRelativeTime(topItem.created_at) }}
                                 </span>
                             </div>
                         </div>

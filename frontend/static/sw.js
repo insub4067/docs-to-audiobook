@@ -1,4 +1,4 @@
-const CACHE_NAME = "2026.08.06.7";
+const CACHE_NAME = "2026.08.06.8";
 
 const ASSETS_TO_CACHE = [
   "/",
@@ -54,6 +54,20 @@ self.addEventListener("push", (event) => {
   try {
     payload = event.data ? event.data.json() : {};
   } catch (_) {}
+
+  if (payload.type === "news_ready") {
+    event.waitUntil(
+      self.registration.showNotification("TextAudio", {
+        body: "새로운 경제 뉴스가 도착했어요.",
+        icon: "/static/textaudio-icon.png",
+        badge: "/static/textaudio-icon.png",
+        tag: "news-ready",
+        data: { url: "/" },
+      })
+    );
+    return;
+  }
+
   if (payload.type !== "audiobook_ready") return;
 
   event.waitUntil(

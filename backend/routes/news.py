@@ -1,4 +1,4 @@
-"""오늘의 뉴스: 관리자가 붙여넣은 JSON 뉴스 목록을 오디오북으로 변환해 저장.
+"""경제 뉴스: 관리자가 붙여넣은 JSON 뉴스 목록을 오디오북으로 변환해 저장.
 
 뉴스 항목도 결국 "제목 + 본문 + 음성"이라 별도 테이블 없이 기존
 audiobooks 테이블·Storage 버킷을 그대로 쓰고 is_news 플래그로만 구분한다.
@@ -7,14 +7,16 @@ audiobooks 테이블·Storage 버킷을 그대로 쓰고 is_news 플래그로만
 """
 import json
 import logging
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Header, HTTPException
 
 from state import _supabase_or_503, require_admin_user, AUDIOBOOK_BUCKET, _object_paths
 from routes.audiobooks import audiobook_items_with_urls
 from routes.tts import synthesize_document
 from tts_providers.voice_catalog import DEFAULT_VOICE_KEY
+from push_notifications import send_news_ready_broadcast
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -23,6 +25,19 @@ logger = logging.getLogger(__name__)
 # "게시 시각" 파싱은 신뢰하기 어려워(GPT가 자유 형식으로 줌) 아예 안 쓴다.
 NEWS_VISIBLE_DAYS = 3
 NEWS_LIST_LIMIT = 10
+
+# ChatGPT가 웹검색 결과를 인용할 때 본문에 [oaicitation:8‡Reuters] 같은
+# 마커를 그대로 남겨두는 경우가 있다 — 걸러내지 않으면 이게 TTS로 그대로
+# 읽히고 화면에도 깨진 문장처럼 보인다.
+_CITATION_ARTIFACT_RE = re.compile(r"\[oaicitation:[^\]]*\]", re.IGNORECASE)
+
+
+def _strip_citation_artifacts(text: str) -> str:
+    cleaned = _CITATION_ARTIFACT_RE.sub("", text)
+    cleaned = re.sub(r"\s+([.,!?])", r"\1", cleaned)
+    cleaned = re.sub(r"([.!?]){2,}", r"\1", cleaned)
+    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
+    return cleaned.strip()
 
 
 def _parse_news_payload(raw_text: str) -> list[dict]:
@@ -46,7 +61,7 @@ def _parse_news_payload(raw_text: str) -> list[dict]:
         if not isinstance(item, dict):
             continue
         title = (item.get("title") or "").strip()
-        content = (item.get("content") or "").strip()
+        content = _strip_citation_artifacts((item.get("content") or "").strip())
         if not title or not content:
             continue
         parsed.append({
@@ -95,28 +110,38 @@ async def _store_news_item(supabase, admin_user_id: str, item: dict) -> str:
     return audiobook_id
 
 
-@router.post("/api/admin/news")
-async def add_news(payload: dict, authorization: str = Header(None)):
-    admin_user_id = require_admin_user(authorization)
-    items = _parse_news_payload(payload.get("text") or "")
-
+async def _process_news_batch(admin_user_id: str, items: list[dict]) -> None:
+    """항목마다 TTS 합성이 걸려 전체가 수십 초~수 분 걸릴 수 있다.
+    관리자가 응답을 기다리지 않도록 백그라운드로 돌리고, 다 끝나면
+    구독한 모든 사용자에게 새 뉴스가 왔다고 한 번만 알린다."""
     supabase = _supabase_or_503()
     created = []
-    errors = []
-    for item in items[:NEWS_LIST_LIMIT]:
+    for item in items:
         try:
             audiobook_id = await _store_news_item(supabase, admin_user_id, item)
             created.append({"id": audiobook_id, "title": item["title"]})
-        except Exception as e:
+        except Exception:
             logger.exception("뉴스 항목 등록 실패 title=%s", item["title"])
-            errors.append({"title": item["title"], "error": str(e)})
 
-    return {"created": created, "errors": errors}
+    if created:
+        try:
+            send_news_ready_broadcast(len(created))
+        except Exception:
+            logger.exception("경제 뉴스 등록 완료 알림 발송 실패")
+
+
+@router.post("/api/admin/news")
+async def add_news(payload: dict, background_tasks: BackgroundTasks, authorization: str = Header(None)):
+    admin_user_id = require_admin_user(authorization)
+    items = _parse_news_payload(payload.get("text") or "")[:NEWS_LIST_LIMIT]
+
+    background_tasks.add_task(_process_news_batch, admin_user_id, items)
+    return {"queued": len(items)}
 
 
 @router.get("/api/news")
 async def list_news():
-    """오늘의 뉴스 공개 목록. 로그인 여부와 무관하게 누구나 볼 수 있다."""
+    """경제 뉴스 공개 목록. 로그인 여부와 무관하게 누구나 볼 수 있다."""
     supabase = _supabase_or_503()
     cutoff = (datetime.now(timezone.utc) - timedelta(days=NEWS_VISIBLE_DAYS)).isoformat()
     try:

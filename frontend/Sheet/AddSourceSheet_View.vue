@@ -6,6 +6,8 @@ import { useSwipeToDismiss } from "../utils/swipeToDismiss";
 import { useAuthStore } from "../stores/auth";
 import { usePromptSheetLogic } from "./PromptSheet_Logic.vue";
 import { usePromptSheetState } from "./PromptSheet_State.vue";
+import { useNewsUploadSheetLogic } from "./NewsUploadSheet_Logic.vue";
+import { useNewsUploadSheetState } from "./NewsUploadSheet_State.vue";
 
 const props = defineProps<{
     state: GenerationState;
@@ -16,6 +18,7 @@ const props = defineProps<{
 
 const authStore = useAuthStore();
 const promptSheetLogic = usePromptSheetLogic(usePromptSheetState());
+const newsUploadSheetLogic = useNewsUploadSheetLogic(useNewsUploadSheetState());
 
 // Generation_Logic.vue의 getUploadLimitBytes()와 같은 값 — 안내 문구용으로만
 // 쓰므로 별도 API 호출 없이 그대로 미러링한다. 관리자는 사실상 여유로워
@@ -59,6 +62,11 @@ function onScanTextClick(): void {
 function onHighQualityPdfClick(): void {
     props.logic.closeAddSourceSheet();
     props.onSelectHighQualityPdf();
+}
+
+function onNewsUploadClick(): void {
+    props.logic.closeAddSourceSheet();
+    newsUploadSheetLogic.open();
 }
 </script>
 
@@ -126,6 +134,13 @@ function onHighQualityPdfClick(): void {
                     <span class="action-sheet-btn-text">
                         <span class="action-sheet-btn-title">고성능 PDF</span>
                         <span class="action-sheet-btn-desc">일반 방식으로 읽지 못한 PDF를 처리합니다</span>
+                    </span>
+                </button>
+                <button class="action-sheet-btn action-sheet-btn-detailed" type="button" @click="onNewsUploadClick">
+                    <i data-lucide="newspaper"></i>
+                    <span class="action-sheet-btn-text">
+                        <span class="action-sheet-btn-title">경제 뉴스 추가</span>
+                        <span class="action-sheet-btn-desc">JSON 배열을 붙여넣어 홈 뉴스 목록에 등록합니다</span>
                     </span>
                 </button>
             </template>

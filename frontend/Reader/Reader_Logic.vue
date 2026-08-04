@@ -12,7 +12,7 @@ import { useToastState } from "../components/Toast/Toast_State.vue";
 export interface ReaderLogic {
     open(audio: AudiobookRecord): void;
     restoreLastSession(audio: AudiobookRecord): void;
-    openSharedReaderMode(title: string, sentences: ReaderSentence[], audioUrl: string, shareId?: string | null): void;
+    openSharedReaderMode(title: string, sentences: ReaderSentence[], audioUrl: string, shareId?: string | null, onEnded?: () => void): void;
     closeReader(): void;
     reopenReader(): void;
     checkSharedLink(): Promise<void>;
@@ -70,6 +70,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         el.ontimeupdate = null;
         el.onloadedmetadata = null;
         el.onerror = null;
+        el.onended = null;
     }
 
     function isElementInView(container: HTMLElement, element: HTMLElement): boolean {
@@ -208,7 +209,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         open(audio, { autoplay: false, openReaderUI: false });
     }
 
-    function openSharedReaderMode(title: string, sharedSentences: ReaderSentence[], audioUrl: string, shareId: string | null = null): void {
+    function openSharedReaderMode(title: string, sharedSentences: ReaderSentence[], audioUrl: string, shareId: string | null = null, onEnded?: () => void): void {
         const el = state.audioEl.value;
         if (!el) return;
         isSharedMode = true;
@@ -250,6 +251,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
             if (duration > 0) state.progressPercent.value = (currentSec / duration) * 100;
             updateHighlight(currentSec * 1000);
         };
+        el.onended = onEnded || null;
         el.src = audioUrl;
         el.load();
 

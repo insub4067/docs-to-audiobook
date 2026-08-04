@@ -87,8 +87,8 @@ onMounted(loadMetrics);
 
             <section class="metric-section" aria-labelledby="newsHeading">
                 <div class="section-heading">
-                    <p class="section-kicker">HOME · TODAY'S NEWS</p>
-                    <h2 id="newsHeading">오늘의 뉴스 추가</h2>
+                    <p class="section-kicker">HOME · ECONOMIC NEWS</p>
+                    <h2 id="newsHeading">경제 뉴스 추가</h2>
                 </div>
                 <p class="dashboard-subtitle">
                     [{"title": "...", "content": "...", "category": "...", "source": "..."}] 형식의 JSON 배열을 붙여넣으세요.

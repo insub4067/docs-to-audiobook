@@ -92,7 +92,7 @@ async def list_audiobooks(authorization: str = Header(None)):
     supabase = _supabase_or_503()
 
     try:
-        # is_news=true 항목은 "오늘의 뉴스"용으로 관리자 계정에 심어둔 공용
+        # is_news=true 항목은 "경제 뉴스"용으로 관리자 계정에 심어둔 공용
         # 콘텐츠라 개인 보관함에는 섞이면 안 된다.
         rows = supabase.table("audiobooks").select("*").eq("user_id", user_id) \
             .eq("is_news", False).order("created_at", desc=True).execute().data or []

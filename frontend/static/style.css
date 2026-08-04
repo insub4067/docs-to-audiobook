@@ -1209,6 +1209,55 @@ input[type="range"]::-webkit-slider-thumb:active {
     text-align: left;
 }
 
+.news-more-btn {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: auto;
+    border: none;
+    background: none;
+    padding: 4px;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+.news-more-btn i { width: 16px; height: 16px; }
+
+.news-play-all-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: calc(100% - 40px);
+    margin: 4px 20px 16px;
+    padding: 12px 16px;
+    border: none;
+    border-radius: 14px;
+    background: var(--primary-color);
+    color: #fff;
+    font: inherit;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.news-play-all-btn i { width: 18px; height: 18px; }
+
+/* .action-sheet 기본값은 시트 전체가 스크롤되는데, 여기서는 "전체 듣기"
+   버튼이 목록 스크롤과 무관하게 항상 보여야 해서 이 시트만 안쪽 목록
+   영역에만 스크롤을 두고 나머지(헤더·버튼·닫기)는 고정한다. */
+.action-sheet.news-list-sheet {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.news-list-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
 .audio-item-bg {
     position: absolute;
     top: 0;
