@@ -9,6 +9,7 @@ export interface ReaderState {
     displayItems: Ref<ReaderDisplayItem[]>;
     headings: Ref<HeadingRef[]>;
     activeIndex: Ref<number>;
+    isScrolledAway: Ref<boolean>;
     currentTimeLabel: Ref<string>;
     durationLabel: Ref<string>;
     progressPercent: Ref<number>;
@@ -31,6 +32,7 @@ export function useReaderState(): ReaderState {
         displayItems: ref([]),
         headings: ref([]),
         activeIndex: ref(-1),
+        isScrolledAway: ref(false),
         currentTimeLabel: ref("00:00"),
         durationLabel: ref("00:00"),
         progressPercent: ref(0),

@@ -82,6 +82,7 @@ useSwipeToDismiss(props.state.containerEl, () => props.logic.closeReader(), head
                     '--reader-font-scale': controlsState.fontSize.value,
                     '--reader-line-height': controlsState.lineHeight.value,
                 }"
+                @scroll="logic.onReaderContentScroll"
             >
                 <template v-for="(item, itemIdx) in state.displayItems.value" :key="itemIdx">
                     <component v-if="item.kind === 'heading'" :is="'h' + item.level" class="reader-heading" :class="`h${item.level}`">
@@ -121,6 +122,16 @@ useSwipeToDismiss(props.state.containerEl, () => props.logic.closeReader(), head
                     </table>
                 </template>
             </div>
+
+            <button
+                v-if="state.isScrolledAway.value"
+                type="button"
+                class="reader-back-to-current"
+                @click="logic.jumpToCurrentSentence"
+            >
+                <i data-lucide="chevron-up"></i>
+                현재 위치로
+            </button>
 
             <footer class="reader-controls">
                 <audio :ref="setAudioEl"></audio>

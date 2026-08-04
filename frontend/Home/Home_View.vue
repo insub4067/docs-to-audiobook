@@ -20,7 +20,7 @@ import { useVoiceState } from "../Voices/Voice_State.vue";
 import { useVoiceLogic } from "../Voices/Voice_Logic.vue";
 import { useAudioListState } from "../components/Library/AudioList_State.vue";
 import { useAudioListLogic } from "../components/Library/AudioList_Logic.vue";
-import type { AudiobookRecord } from "../services/indexedDb";
+import { getAllAudiobooksFromDB, type AudiobookRecord } from "../services/indexedDb";
 import { useReaderState } from "../Reader/Reader_State.vue";
 import { useReaderLogic } from "../Reader/Reader_Logic.vue";
 import { useReaderControlsState } from "../Reader/ReaderControls/ReaderControls_State.vue";
@@ -144,10 +144,40 @@ function onPdfInputChange(event: Event): void {
     (event.target as HTMLInputElement).value = "";
 }
 
+// 미니 플레이어를 탭바 바로 위에 빈틈없이 붙이려면 탭바의 실제 렌더 높이가
+// 필요하다 — 76px 같은 상수는 safe-area가 얼마나 이미 포함됐는지 기기마다
+// 달라 미니 플레이어와 탭바 사이에 틈이 생겼다. 실제 높이를 재서 CSS
+// 변수로 넘긴다(Reader의 --reader-header-h와 같은 방식). 폰트·아이콘이
+// 늦게 로드되며 높이가 미세하게 바뀔 수 있어 ResizeObserver로 계속 맞춘다.
+let tabBarResizeObserver: ResizeObserver | null = null;
+function watchTabBarHeight(): void {
+    const tabBar = document.querySelector<HTMLElement>(".tab-bar");
+    if (!tabBar) return;
+    document.documentElement.style.setProperty("--tab-bar-h", `${tabBar.offsetHeight}px`);
+    tabBarResizeObserver = new ResizeObserver(() => {
+        document.documentElement.style.setProperty("--tab-bar-h", `${tabBar.offsetHeight}px`);
+    });
+    tabBarResizeObserver.observe(tabBar);
+}
+
+// 마지막으로 듣던 오디오북이 있으면, 리더 화면을 펼치지 않고도 그 정보를
+// 오디오 엘리먼트에 미리 실어 둔다 — PWA를 새로 열자마자 미니 플레이어에
+// 제목/진행 상황이 바로 보이게 하기 위해서다(재생은 하지 않는다).
+const CONTINUE_LISTENING_MIN_SECONDS = 5;
+async function restoreLastPlayedSession(): Promise<void> {
+    const audiobooks = await getAllAudiobooksFromDB();
+    const lastPlayed = audiobooks
+        .filter((a) => (a.lastPosition || 0) > CONTINUE_LISTENING_MIN_SECONDS && a.playbackUpdatedAt && a.audioData)
+        .sort((a, b) => (b.playbackUpdatedAt || 0) - (a.playbackUpdatedAt || 0))[0];
+    if (lastPlayed) readerLogic.restoreLastSession(lastPlayed);
+}
+
 onMounted(async () => {
     document.addEventListener("keydown", onEscape);
+    watchTabBarHeight();
     await voiceLogic.loadVoices();
     readerLogic.checkSharedLink();
+    restoreLastPlayedSession();
 });
 </script>
 

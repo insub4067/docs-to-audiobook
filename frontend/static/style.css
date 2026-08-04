@@ -2104,6 +2104,33 @@ input[type="range"]::-webkit-slider-thumb:active {
     display: inline;
 }
 
+/* 재생 중인 문장이 위로 스크롤해서 화면 밖으로 벗어나면 뜬다 — 눌러서
+   현재 읽고 있는 위치로 바로 돌아간다. */
+.reader-back-to-current {
+    position: absolute;
+    left: 50%;
+    bottom: calc(var(--reader-controls-h, 120px) + 16px);
+    transform: translateX(-50%);
+    z-index: 15;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 18px;
+    border: none;
+    border-radius: 30px;
+    background-color: var(--reader-accent);
+    color: #ffffff;
+    font-size: 0.85rem;
+    font-weight: 600;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+    cursor: pointer;
+}
+
+.reader-back-to-current i {
+    width: 16px;
+    height: 16px;
+}
+
 /* 하단 바는 접혀도 사라지지 않고 재생 컨트롤만 남는 컴팩트 상태가 된다.
    오디오북에서 일시정지와 재생 위치는 읽는 중 가장 자주 쓰는 컨트롤이라
    완전히 숨기면 매번 스크롤을 되돌려야 한다. */
@@ -2611,12 +2638,15 @@ input[type="range"]::-webkit-slider-thumb:active {
 }
 
 /* 읽기 화면을 닫아도 재생은 계속되는 경우, 탭바 바로 위에 떠서 제목/
-   진행 상황을 보여주고 누르면 다시 읽기 화면으로 돌아간다. */
+   진행 상황을 보여주고 누르면 다시 읽기 화면으로 돌아간다.
+   --tab-bar-h는 Home_View가 탭바의 실제 렌더 높이를 재서 넣어준다 —
+   safe-area가 기기마다 다르게 포함돼 있어 고정 상수(예: 76px)를 쓰면
+   탭바와의 사이에 틈이 생긴다. */
 .mini-player {
     position: fixed;
     left: 0;
     right: 0;
-    bottom: calc(76px + env(safe-area-inset-bottom));
+    bottom: var(--tab-bar-h, calc(76px + env(safe-area-inset-bottom)));
     z-index: 14;
     display: flex;
     flex-direction: column;

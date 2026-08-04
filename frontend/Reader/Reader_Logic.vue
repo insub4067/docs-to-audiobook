@@ -11,6 +11,7 @@ import { useToastState } from "../components/Toast/Toast_State.vue";
 
 export interface ReaderLogic {
     open(audio: AudiobookRecord): void;
+    restoreLastSession(audio: AudiobookRecord): void;
     openSharedReaderMode(title: string, sentences: ReaderSentence[], audioUrl: string, shareId?: string | null): void;
     closeReader(): void;
     reopenReader(): void;
@@ -19,6 +20,8 @@ export interface ReaderLogic {
     seekTo(fraction: number): void;
     onSentenceClick(index: number): void;
     onHeadingClick(heading: { sentIndex: number; startMs: number }): void;
+    onReaderContentScroll(): void;
+    jumpToCurrentSentence(): void;
     openIndexSheet(): void;
     closeIndexSheet(): void;
     closeIndexSheetIfOpen(): boolean;
@@ -46,6 +49,9 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
     let lastPositionSaveSecond = -1;
     let lastPlaybackSyncTime = 0;
     let lastToggleTime = 0;
+    // 우리가 직접 부른 scrollTo(smooth)가 끝나기 전에 scroll 이벤트가
+    // 튀어서 "사용자가 스크롤해서 벗어났다"로 오인하지 않도록 잠깐 무시한다.
+    let suppressScrollAwayUntil = 0;
 
     function measureReaderBars(): void {
         const container = state.containerEl.value;
@@ -66,19 +72,48 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         el.onerror = null;
     }
 
+    function isElementInView(container: HTMLElement, element: HTMLElement): boolean {
+        const containerRect = container.getBoundingClientRect();
+        const elementRect = element.getBoundingClientRect();
+        return elementRect.bottom > containerRect.top && elementRect.top < containerRect.bottom;
+    }
+
+    function scrollToSentence(index: number): void {
+        const content = state.contentEl.value;
+        if (!content) return;
+        const activeSpan = document.getElementById(`sent-${index}`);
+        if (!activeSpan) return;
+        suppressScrollAwayUntil = Date.now() + 500;
+        content.scrollTo({ top: getReaderScrollTarget(content, activeSpan), behavior: "smooth" });
+    }
+
     function updateHighlight(currentMs: number): void {
         const activeIndex = findActiveSentenceIndex(sentences, currentMs);
         if (activeIndex !== state.activeIndex.value) {
             state.activeIndex.value = activeIndex;
-            requestAnimationFrame(() => {
-                const content = state.contentEl.value;
-                if (!content) return;
-                const activeSpan = document.getElementById(`sent-${activeIndex}`);
-                if (activeSpan) {
-                    content.scrollTo({ top: getReaderScrollTarget(content, activeSpan), behavior: "smooth" });
-                }
-            });
+            // 사용자가 위로 스크롤해 다른 부분을 읽고 있으면(isScrolledAway),
+            // 문장이 넘어갈 때마다 강제로 도로 끌고 오지 않는다 — "현재
+            // 위치로" 버튼으로 본인이 원할 때 돌아오게 한다.
+            if (!state.isScrolledAway.value) {
+                requestAnimationFrame(() => scrollToSentence(activeIndex));
+            }
         }
+    }
+
+    // .reader-content의 @scroll에 연결한다. 활성 문장이 보이는 영역을
+    // 벗어나면 "현재 위치로" 버튼을 띄운다.
+    function onReaderContentScroll(): void {
+        if (Date.now() < suppressScrollAwayUntil) return;
+        const content = state.contentEl.value;
+        if (!content || state.activeIndex.value < 0) return;
+        const activeSpan = document.getElementById(`sent-${state.activeIndex.value}`);
+        if (!activeSpan) return;
+        state.isScrolledAway.value = !isElementInView(content, activeSpan);
+    }
+
+    function jumpToCurrentSentence(): void {
+        if (state.activeIndex.value >= 0) scrollToSentence(state.activeIndex.value);
+        state.isScrolledAway.value = false;
     }
 
     function bindLocalTimeUpdate(): void {
@@ -108,7 +143,11 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         };
     }
 
-    function open(audio: AudiobookRecord): void {
+    // openReaderUI=false + autoplay=false는 PWA를 새로 열었을 때 마지막 세션을
+    // 미니 플레이어에 표시만 하기 위한 용도(restoreLastSession)다 — 리더 화면을
+    // 펼치지 않고 재생도 하지 않은 채로 오디오/문장/제목 상태만 채워 넣는다.
+    function open(audio: AudiobookRecord, options: { autoplay?: boolean; openReaderUI?: boolean } = {}): void {
+        const { autoplay = true, openReaderUI = true } = options;
         if (currentObjectUrl) {
             URL.revokeObjectURL(currentObjectUrl);
             currentObjectUrl = null;
@@ -128,7 +167,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         state.isPlaying.value = false;
         state.showShareBtn.value = true;
         state.showSaveSharedBtn.value = false;
-        state.currentTimeLabel.value = "00:00";
+        state.currentTimeLabel.value = formatTime(audio.lastPosition || 0);
         state.durationLabel.value = "00:00";
         state.progressPercent.value = 0;
         state.activeIndex.value = -1;
@@ -146,19 +185,27 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
             if (el.duration && !isNaN(el.duration)) state.durationLabel.value = formatTime(el.duration);
             if (audio.lastPosition && audio.lastPosition > 0) el.currentTime = audio.lastPosition;
             el.playbackRate = readerControls.getPlaybackSettings().playbackSpeed;
-            el.play().catch((error) => console.log("Autoplay blocked:", error));
-            state.isPlaying.value = true;
+            if (autoplay) {
+                el.play().catch((error) => console.log("Autoplay blocked:", error));
+                state.isPlaying.value = true;
+            }
         };
         el.onplay = () => { state.isPlaying.value = true; };
         el.onpause = () => { state.isPlaying.value = false; };
         bindLocalTimeUpdate();
         el.src = localUrl;
         el.load();
-        el.play().catch(() => {});
+        if (autoplay) el.play().catch(() => {});
 
-        state.isOpen.value = true;
-        setReaderOpenForToast(true);
-        requestAnimationFrame(measureReaderBars);
+        if (openReaderUI) {
+            state.isOpen.value = true;
+            setReaderOpenForToast(true);
+            requestAnimationFrame(measureReaderBars);
+        }
+    }
+
+    function restoreLastSession(audio: AudiobookRecord): void {
+        open(audio, { autoplay: false, openReaderUI: false });
     }
 
     function openSharedReaderMode(title: string, sharedSentences: ReaderSentence[], audioUrl: string, shareId: string | null = null): void {
@@ -250,6 +297,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         if (!el || !sentence) return;
         el.currentTime = sentence.start / 1000;
         el.play().catch((error) => console.log("Play failed:", error));
+        state.isScrolledAway.value = false;
     }
 
     function onHeadingClick(heading: { sentIndex: number; startMs: number }): void {
@@ -258,11 +306,8 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         if (!el) return;
         el.currentTime = heading.startMs / 1000;
         el.play().catch((error) => console.log("Play failed:", error));
-        requestAnimationFrame(() => {
-            const content = state.contentEl.value;
-            const targetSpan = document.getElementById(`sent-${heading.sentIndex}`);
-            if (content && targetSpan) content.scrollTo({ top: getReaderScrollTarget(content, targetSpan), behavior: "smooth" });
-        });
+        state.isScrolledAway.value = false;
+        requestAnimationFrame(() => scrollToSentence(heading.sentIndex));
     }
 
     function openIndexSheet(): void {
@@ -412,8 +457,9 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
     (window as any).__openReaderMode = open;
 
     return {
-        open, openSharedReaderMode, closeReader, reopenReader, checkSharedLink,
+        open, restoreLastSession, openSharedReaderMode, closeReader, reopenReader, checkSharedLink,
         togglePlayPause, seekTo, onSentenceClick, onHeadingClick,
+        onReaderContentScroll, jumpToCurrentSentence,
         openIndexSheet, closeIndexSheet, closeIndexSheetIfOpen,
         openMoreSheet, closeMoreSheet, closeMoreSheetIfOpen,
         openSettingsSheet, closeSettingsSheet, closeSettingsSheetIfOpen,
