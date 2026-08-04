@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import type { AudiobookRecord } from "../../services/indexedDb";
 import type { AudioListLogic } from "./AudioList_Logic.vue";
 import { getAudiobookDisplayTitle } from "../../utils/format";
@@ -27,6 +27,18 @@ let isSwipe = false;
 const hasSentences = !!(props.audio.sentences && props.audio.sentences.length > 0);
 const needsDownload = !props.audio.audioData && !!props.audio.audioUrl;
 const isOpenable = hasSentences || needsDownload;
+
+// 목록에서 파일을 구분하기 쉽도록 생성 날짜를 짧게 보여준다. 재생 시간은
+// 오디오 데이터를 실제로 디코딩해야 알 수 있어(저장돼 있지 않음) 목록
+// 전체에서 매번 계산하기엔 비용이 커 넣지 않았다.
+const subtitleLabel = computed(() => {
+    if (!props.audio.timestamp) return "";
+    const date = new Date(props.audio.timestamp);
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
+    if (isToday) return "오늘 생성";
+    return `${date.getMonth() + 1}월 ${date.getDate()}일 생성`;
+});
 
 function resetTransform(): void {
     if (front.value) front.value.style.transform = "";
@@ -127,7 +139,10 @@ onUnmounted(() => document.removeEventListener("touchstart", onDocumentTouchStar
         >
             <div class="audio-title-group">
                 <i data-lucide="play-circle"></i>
-                <span class="audio-title" :title="getAudiobookDisplayTitle(audio.title)">{{ getAudiobookDisplayTitle(audio.title) }}</span>
+                <div class="audio-title-col">
+                    <span class="audio-title" :title="getAudiobookDisplayTitle(audio.title)">{{ getAudiobookDisplayTitle(audio.title) }}</span>
+                    <span v-if="subtitleLabel" class="audio-subtitle">{{ subtitleLabel }}</span>
+                </div>
                 <span v-if="audio.isDefault" class="default-badge" title="기본 제공 오디오북">기본 제공</span>
                 <svg v-if="audio.isBookmarked" class="bookmark-star" width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none" title="즐겨찾기"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
             </div>

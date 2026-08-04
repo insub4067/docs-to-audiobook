@@ -68,8 +68,10 @@ function onDropzoneTouchEnd(event: TouchEvent): void {
         >
             <div v-show="!state.isDropzoneLoading.value && !state.isComposerBusy.value">
                 <i data-lucide="upload-cloud" class="dropzone-icon"></i>
-                <p class="dropzone-text">{{ isMobileDevice ? "이곳을 터치하여 문서를 추가하세요" : "파일을 끌어다 놓거나 터치하여 추가 방법을 선택하세요" }}</p>
-                <p class="dropzone-hint">파일 업로드 · 링크 · 텍스트 붙여넣기 지원</p>
+                <p class="dropzone-text">
+                    {{ isMobileDevice ? "이곳을 터치하여 문서를 추가하세요" : "파일을 끌어다 놓거나 터치하여 추가 방법을 선택하세요" }}
+                    <span class="dropzone-hint">· 파일·링크·텍스트 지원</span>
+                </p>
             </div>
 
             <div v-show="state.isDropzoneLoading.value || state.isComposerBusy.value" style="text-align: center; color: var(--text-muted);">

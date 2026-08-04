@@ -27,6 +27,7 @@ import { useThemeState } from "../Theme/Theme_State.vue";
 import { useThemeLogic } from "../Theme/Theme_Logic.vue";
 import { useMyFilesState } from "../Files/MyFiles_State.vue";
 import { useMyFilesLogic } from "../Files/MyFiles_Logic.vue";
+import { formatTime, getAudiobookDisplayTitle } from "../utils/format";
 
 const pwaState = usePwaState();
 const themeState = useThemeState();
@@ -65,6 +66,21 @@ const bookmarkedItems = computed(() =>
         .sort((a, b) => recencyScore(b) - recencyScore(a))
         .slice(0, BOOKMARKED_ITEMS_LIMIT)
 );
+
+// 재방문 사용자는 새 문서 추가보다 듣던 걸 이어 듣는 경우가 많아, 최근
+// 재생한(그리고 충분히 진행된) 오디오북이 있으면 맨 위에 띄운다.
+// 재생 시간(총 길이)은 저장돼 있지 않아 진행률(%)까진 못 보여주고,
+// 지금까지 들은 위치만 보여준다.
+const CONTINUE_LISTENING_MIN_SECONDS = 5;
+const continueListeningItem = computed(() =>
+    [...audioListState.savedAudiobooks.value]
+        .filter((a) => (a.lastPosition || 0) > CONTINUE_LISTENING_MIN_SECONDS && a.playbackUpdatedAt)
+        .sort((a, b) => (b.playbackUpdatedAt || 0) - (a.playbackUpdatedAt || 0))[0] ?? null
+);
+
+async function resumeListening(): Promise<void> {
+    if (continueListeningItem.value) await audioListLogic.openItem(continueListeningItem.value);
+}
 
 function onEscape(event: KeyboardEvent): void {
     if (event.key !== "Escape") return;
@@ -135,6 +151,20 @@ onMounted(async () => {
 <template>
     <HeaderView :theme-logic="themeLogic" :active-tab="activeTab" />
     <main class="app-main" id="appMain" v-show="activeTab === 'home'">
+        <button
+            v-if="continueListeningItem"
+            type="button"
+            class="glass-card continue-listening-card"
+            @click="resumeListening"
+        >
+            <div class="continue-listening-icon"><i data-lucide="play"></i></div>
+            <div class="continue-listening-info">
+                <p class="continue-listening-label">이어 듣기</p>
+                <p class="continue-listening-title">{{ getAudiobookDisplayTitle(continueListeningItem.title) }}</p>
+                <p class="continue-listening-position">{{ formatTime(continueListeningItem.lastPosition || 0) }}부터</p>
+            </div>
+            <i data-lucide="chevron-right" class="continue-listening-chevron"></i>
+        </button>
         <UploadView :state="generationState" :logic="generationLogic" />
         <AudioListView
             :state="audioListState"
