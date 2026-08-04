@@ -158,16 +158,22 @@ export function useAuthLogic(): AuthLogic {
      * 로그인에 반응해야 하는 다른 기능들이 전부 처음부터 다시 초기화되어
      * 맞물리게 하는 가장 확실한 방법이라 SPA라도 그대로 유지한다. */
     async function completeSocialLogin(provider: string, token: string): Promise<void> {
-        const res = await fetch(`/api/auth/social/${provider}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ token }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || "로그인 실패");
+        store.setBusy("로그인하고 있어요");
+        try {
+            const res = await fetch(`/api/auth/social/${provider}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ token }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || "로그인 실패");
 
-        localStorage.setItem(AUTH_TOKEN_KEY, data.access_token);
-        setTimeout(() => location.reload(), 500);
+            localStorage.setItem(AUTH_TOKEN_KEY, data.access_token);
+            setTimeout(() => location.reload(), 500);
+        } catch (error) {
+            store.clearBusy();
+            throw error;
+        }
     }
 
     async function logout(): Promise<void> {
@@ -179,6 +185,8 @@ export function useAuthLogic(): AuthLogic {
             "계속하시겠습니까?"
         );
         if (!confirmed) return;
+
+        store.setBusy("로그아웃하고 있어요");
 
         // 지우기 전에 아직 안 올라간 것을 먼저 올린다. 이 단계를 건너뛰면
         // 복구할 방법이 없다. Library 기능이 포팅되면 window.__syncAudiobooksToCloud를
@@ -201,7 +209,10 @@ export function useAuthLogic(): AuthLogic {
                     "그래도 로그아웃할까요?\n" +
                     "(취소를 누르고 잠시 후 다시 시도하는 것을 권합니다)"
                 );
-                if (!proceed) return;
+                if (!proceed) {
+                    store.clearBusy();
+                    return;
+                }
             }
         }
 
@@ -211,6 +222,7 @@ export function useAuthLogic(): AuthLogic {
             // 삭제에 실패했는데 로그아웃만 되면 데이터가 남은 채 방치된다.
             console.error("기기 데이터 삭제 실패:", error);
             window.alert("기기 데이터를 삭제하지 못했습니다. 로그아웃을 취소합니다.");
+            store.clearBusy();
             return;
         }
 

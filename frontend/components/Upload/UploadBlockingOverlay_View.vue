@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import type { GenerationState } from "../../Generation/Generation_State.vue";
+import type { GenerationLogic } from "../../Generation/Generation_Logic.vue";
 
 const props = defineProps<{
     state: GenerationState;
+    logic: GenerationLogic;
 }>();
 
 // 고성능 PDF(페이지별 OCR)처럼 오래 걸리는 처리 중에 화면이 멈춘 것처럼
@@ -44,6 +46,7 @@ watch(isLoading, (loading) => {
             <h3>업로드하고 있어요</h3>
             <p>{{ LOADING_MESSAGES[loadingMessageIndex] }}</p>
             <p class="loading-overlay-warning">완료될 때까지 화면을 벗어나지 마세요</p>
+            <button class="loading-cancel-btn" type="button" @click="logic.cancelUpload">취소</button>
         </div>
     </div>
 </template>

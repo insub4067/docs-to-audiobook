@@ -12,6 +12,8 @@ export interface AuthUser {
 export interface AuthStoreState {
     user: AuthUser | null;
     token: string | null;
+    isBusy: boolean;
+    busyMessage: string;
 }
 
 // static/js/auth.js의 currentAuthenticatedUserId + localStorage("authToken")를
@@ -21,6 +23,8 @@ export const useAuthStore = defineStore("auth", {
     state: (): AuthStoreState => ({
         user: null,
         token: null,
+        isBusy: false,
+        busyMessage: "",
     }),
     getters: {
         isLoggedIn: (state) => !!(state.user && state.token),
@@ -34,6 +38,14 @@ export const useAuthStore = defineStore("auth", {
         clearSession() {
             this.user = null;
             this.token = null;
+        },
+        setBusy(message: string) {
+            this.isBusy = true;
+            this.busyMessage = message;
+        },
+        clearBusy() {
+            this.isBusy = false;
+            this.busyMessage = "";
         },
     },
 });

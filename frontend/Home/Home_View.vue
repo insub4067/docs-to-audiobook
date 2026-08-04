@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import HeaderView from "../components/Header/Header_View.vue";
 import UploadView from "../components/Upload/Upload_View.vue";
 import UploadBlockingOverlayView from "../components/Upload/UploadBlockingOverlay_View.vue";
+import AuthLoadingOverlayView from "../Auth/AuthLoadingOverlay_View.vue";
 import AddSourceSheetView from "../Sheet/AddSourceSheet_View.vue";
 import TextInputSheetView from "../Sheet/TextInputSheet_View.vue";
 import ScanTextSheetView from "../Sheet/ScanTextSheet_View.vue";
@@ -249,7 +250,8 @@ onMounted(async () => {
         :on-select-high-quality-pdf="openPdfInput"
     />
     <TextInputSheetView :state="generationState" :logic="generationLogic" />
-    <UploadBlockingOverlayView :state="generationState" />
+    <UploadBlockingOverlayView :state="generationState" :logic="generationLogic" />
+    <AuthLoadingOverlayView />
     <ScanTextSheetView :state="generationState" :logic="generationLogic" :on-add-photo="openImageInput" />
     <GenerationModalView :state="generationState" :logic="generationLogic" :voice-state="voiceState" :voice-logic="voiceLogic" />
     <LoginPromptSheetView :state="generationState" :logic="generationLogic" />

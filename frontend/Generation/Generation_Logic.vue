@@ -37,6 +37,7 @@ export interface GenerationLogic {
     removeScannedImage(index: number): void;
     submitScannedImages(): Promise<void>;
     scanHighQualityPdf(file: File): Promise<void>;
+    cancelUpload(): void;
     onGenerateClick(): Promise<void>;
     onLoginPromptConfirm(): void;
     closeModal(): void;
@@ -79,6 +80,18 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
         return value > 0 ? `높음 (+${value}Hz)` : `낮음 (${value}Hz)`;
     }
 
+    // 업로드/추출은 한 번에 하나만 진행되므로(대기 오버레이가 통째로 화면을
+    // 막는다) 컨트롤러 하나만 돌려써도 된다 — "취소" 버튼이 이걸 abort한다.
+    let currentUploadController: AbortController | null = null;
+
+    function cancelUpload(): void {
+        currentUploadController?.abort();
+    }
+
+    function isAbortError(error: unknown): boolean {
+        return error instanceof DOMException && error.name === "AbortError";
+    }
+
     async function extractText(file: File) {
         const formData = new FormData();
         formData.append("file", file);
@@ -86,10 +99,12 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
         formData.append("rate", getFormattedSpeed(state.speed.value));
         formData.append("pitch", getFormattedPitch(state.pitch.value));
 
+        currentUploadController = new AbortController();
         const response = await fetch("/api/upload", {
             method: "POST",
             headers: authLogic.authHeaders(),
             body: formData,
+            signal: currentUploadController.signal,
         });
         if (!response.ok) {
             const errorData = await response.json();
@@ -99,10 +114,12 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
     }
 
     async function extractTextFromUrl(url: string) {
+        currentUploadController = new AbortController();
         const response = await fetch("/api/extract-url", {
             method: "POST",
             headers: { ...authLogic.authHeaders(), "Content-Type": "application/json" },
             body: JSON.stringify({ url }),
+            signal: currentUploadController.signal,
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || "링크에서 텍스트를 가져오지 못했습니다.");
@@ -110,10 +127,12 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
     }
 
     async function extractTextFromYoutube(url: string) {
+        currentUploadController = new AbortController();
         const response = await fetch("/api/extract-youtube", {
             method: "POST",
             headers: { ...authLogic.authHeaders(), "Content-Type": "application/json" },
             body: JSON.stringify({ url }),
+            signal: currentUploadController.signal,
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || "유튜브에서 자막을 가져오지 못했습니다.");
@@ -121,10 +140,12 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
     }
 
     async function extractPastedText(text: string) {
+        currentUploadController = new AbortController();
         const response = await fetch("/api/paste-text", {
             method: "POST",
             headers: { ...authLogic.authHeaders(), "Content-Type": "application/json" },
             body: JSON.stringify({ text }),
+            signal: currentUploadController.signal,
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || "붙여넣은 텍스트를 처리하지 못했습니다.");
@@ -161,8 +182,12 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
         try {
             applyExtractedText(await extractText(file));
         } catch (error) {
-            console.error(error);
-            showToast((error as Error).message, "error");
+            if (isAbortError(error)) {
+                showToast("업로드를 취소했어요", "info");
+            } else {
+                console.error(error);
+                showToast((error as Error).message, "error");
+            }
             resetSelection();
         } finally {
             state.isDropzoneLoading.value = false;
@@ -265,8 +290,12 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
             applyExtractedText(data);
             closeAddSourceSheet();
         } catch (error) {
-            console.error(error);
-            showToast((error as Error).message, "error");
+            if (isAbortError(error)) {
+                showToast("업로드를 취소했어요", "info");
+            } else {
+                console.error(error);
+                showToast((error as Error).message, "error");
+            }
         } finally {
             state.isComposerBusy.value = false;
         }
@@ -317,10 +346,12 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
     }
 
     async function extractDriveFile(fileId: string, accessToken: string) {
+        currentUploadController = new AbortController();
         const response = await fetch("/api/import-drive-file", {
             method: "POST",
             headers: { ...authLogic.authHeaders(), "Content-Type": "application/json" },
             body: JSON.stringify({ file_id: fileId, access_token: accessToken }),
+            signal: currentUploadController.signal,
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || "구글 드라이브에서 파일을 가져오지 못했습니다.");
@@ -343,8 +374,12 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
             if (!picked) return; // 사용자가 선택창을 취소함
             applyExtractedText(await extractDriveFile(picked.fileId, picked.accessToken));
         } catch (error) {
-            console.error(error);
-            showToast((error as Error).message, "error");
+            if (isAbortError(error)) {
+                showToast("업로드를 취소했어요", "info");
+            } else {
+                console.error(error);
+                showToast((error as Error).message, "error");
+            }
         } finally {
             state.isComposerBusy.value = false;
         }
@@ -353,10 +388,12 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
     async function extractScannedImages(files: File[]) {
         const formData = new FormData();
         for (const file of files) formData.append("files", file);
+        currentUploadController = new AbortController();
         const response = await fetch("/api/scan-text", {
             method: "POST",
             headers: authLogic.authHeaders(),
             body: formData,
+            signal: currentUploadController.signal,
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || "이미지에서 텍스트를 추출하지 못했습니다.");
@@ -389,8 +426,12 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
             state.scannedImages.value = [];
             state.isScanSheetOpen.value = false;
         } catch (error) {
-            console.error(error);
-            showToast((error as Error).message, "error");
+            if (isAbortError(error)) {
+                showToast("업로드를 취소했어요", "info");
+            } else {
+                console.error(error);
+                showToast((error as Error).message, "error");
+            }
         } finally {
             state.isComposerBusy.value = false;
         }
@@ -399,10 +440,12 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
     async function extractHighQualityPdf(file: File) {
         const formData = new FormData();
         formData.append("file", file);
+        currentUploadController = new AbortController();
         const response = await fetch("/api/scan-pdf", {
             method: "POST",
             headers: authLogic.authHeaders(),
             body: formData,
+            signal: currentUploadController.signal,
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || "PDF에서 텍스트를 추출하지 못했습니다.");
@@ -415,8 +458,12 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
         try {
             applyExtractedText(await extractHighQualityPdf(file));
         } catch (error) {
-            console.error(error);
-            showToast((error as Error).message, "error");
+            if (isAbortError(error)) {
+                showToast("업로드를 취소했어요", "info");
+            } else {
+                console.error(error);
+                showToast((error as Error).message, "error");
+            }
         } finally {
             state.isComposerBusy.value = false;
         }
@@ -613,6 +660,7 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
         removeScannedImage,
         submitScannedImages,
         scanHighQualityPdf,
+        cancelUpload,
         onGenerateClick,
         onLoginPromptConfirm,
         closeModal,

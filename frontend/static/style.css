@@ -120,6 +120,9 @@
 :root[data-app-theme] .action-sheet-divider {
     background-color: rgba(0, 0, 0, 0.06);
 }
+:root[data-app-theme] .loading-cancel-btn:active {
+    background: rgba(0, 0, 0, 0.04);
+}
 
 :root[data-app-theme="dark"] .upload-dropzone {
     background-color: #3a332f;
@@ -1569,6 +1572,22 @@ input[type="range"]::-webkit-slider-thumb:active {
     font-weight: 600;
     color: var(--primary-color);
     margin-bottom: 0;
+}
+
+.loading-cancel-btn {
+    margin-top: 20px;
+    padding: 10px 20px;
+    border: 1px solid var(--border-color);
+    border-radius: 30px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.loading-cancel-btn:active {
+    background: rgba(0, 0, 0, 0.04);
 }
 
 .progress-bar-container {
