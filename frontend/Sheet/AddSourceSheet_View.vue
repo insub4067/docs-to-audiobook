@@ -9,6 +9,7 @@ const props = defineProps<{
     state: GenerationState;
     logic: GenerationLogic;
     onSelectFile: () => void;
+    onSelectHighQualityPdf: () => void;
 }>();
 
 const authStore = useAuthStore();
@@ -59,6 +60,12 @@ function onDriveImportClick(): void {
 function onScanTextClick(): void {
     props.logic.closeAddSourceSheet();
     props.logic.openScanSheet();
+}
+
+function onHighQualityPdfClick(): void {
+    props.logic.closeFileSourceMenu();
+    props.logic.closeAddSourceSheet();
+    props.onSelectHighQualityPdf();
 }
 
 function onComposerKeydown(event: KeyboardEvent): void {
@@ -135,6 +142,10 @@ function onComposerKeydown(event: KeyboardEvent): void {
             <button v-if="authStore.isAdmin" class="action-sheet-btn" type="button" @click="onScanTextClick">
                 <i data-lucide="scan-text"></i>
                 텍스트 스캔 (관리자 전용)
+            </button>
+            <button v-if="authStore.isAdmin" class="action-sheet-btn" type="button" @click="onHighQualityPdfClick">
+                <i data-lucide="file-search"></i>
+                고성능 PDF (관리자 전용)
             </button>
             <button class="action-sheet-btn action-sheet-btn-cancel" type="button" @click="logic.closeFileSourceMenu">닫기</button>
         </div>

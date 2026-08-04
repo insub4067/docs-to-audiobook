@@ -11,12 +11,13 @@ import uuid
 import asyncio
 from fastapi import APIRouter, Request, UploadFile, File, Header, HTTPException
 
-from state import synth_limit_for, upload_limit_for, text_storage, enforce_rate_limit, require_admin_user
+from state import UPLOAD_DIR, synth_limit_for, upload_limit_for, save_upload_limited, text_storage, enforce_rate_limit, require_admin_user
 
 router = APIRouter()
 
 MAX_IMAGE_BYTES = 15 * 1024 * 1024  # Vision API 자체 제한(20MB)보다 여유를 둔다
 MAX_IMAGE_COUNT = 30  # 한 번에 연속 촬영해서 올릴 수 있는 최대 장수
+MAX_PDF_BYTES = 50 * 1024 * 1024
 
 _vision_client = None
 
@@ -126,6 +127,60 @@ async def scan_text(request: Request, files: list[UploadFile] = File(...), autho
     return {
         "text_id": text_id,
         "filename": filename,
+        "char_count": len(text),
+        "preview": text[:preview_len] + ("..." if len(text) > preview_len else ""),
+        "text_access_token": text_storage[text_id]["access_token"],
+    }
+
+
+@router.post("/api/scan-pdf")
+async def scan_pdf(request: Request, file: UploadFile = File(...), authorization: str = Header(None)):
+    """"고성능 PDF" — pypdf를 거치지 않고 처음부터 PDF 전체를 Vision
+    OCR로 처리한다(관리자 전용). 스캔본이 아니어도 pypdf보다 인식
+    품질이 필요한 PDF를 위한 명시적 선택지."""
+    require_admin_user(authorization)
+    enforce_rate_limit(request, "scan_pdf", limit=30, window_sec=600)
+
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="PDF 파일만 업로드할 수 있습니다.")
+
+    safe_name = os.path.basename(file.filename)
+    temp_path = os.path.join(UPLOAD_DIR, f"{uuid.uuid4()}_{safe_name}")
+    try:
+        await save_upload_limited(file, temp_path, MAX_PDF_BYTES)
+        try:
+            text = await asyncio.to_thread(detect_pdf_text_via_ocr, temp_path)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"텍스트 인식에 실패했습니다: {e}")
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+    if not text:
+        raise HTTPException(status_code=400, detail="PDF에서 텍스트를 찾지 못했습니다.")
+
+    max_upload_bytes = upload_limit_for(authorization)
+    max_synth_chars = synth_limit_for(max_upload_bytes)
+    if len(text) > max_synth_chars:
+        raise HTTPException(
+            status_code=413,
+            detail=f"텍스트가 너무 깁니다. 최대 {max_synth_chars:,}자까지 지원합니다.",
+        )
+
+    text_id = str(uuid.uuid4())
+    text_storage[text_id] = {
+        "filename": safe_name,
+        "text": text,
+        "char_count": len(text),
+        "max_synth_chars": max_synth_chars,
+        "created_at": time.time(),
+        "access_token": uuid.uuid4().hex,
+    }
+
+    preview_len = min(500, len(text))
+    return {
+        "text_id": text_id,
+        "filename": safe_name,
         "char_count": len(text),
         "preview": text[:preview_len] + ("..." if len(text) > preview_len else ""),
         "text_access_token": text_storage[text_id]["access_token"],

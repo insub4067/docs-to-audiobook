@@ -97,8 +97,8 @@ function onFileInputChange(event: Event): void {
     (event.target as HTMLInputElement).value = "";
 }
 
-// 텍스트 스캔(OCR, 관리자 전용) 버튼이 여는 카메라 입력. fileInput과
-// 같은 이유로 최상위에 둔다.
+// 텍스트 스캔(OCR, 관리자 전용) 버튼이 여는 사진첩 입력 — 여러 장을
+// 한 번에 골라 대기열에 담는다. fileInput과 같은 이유로 최상위에 둔다.
 const imageInput = ref<HTMLInputElement | null>(null);
 
 function openImageInput(): void {
@@ -106,8 +106,21 @@ function openImageInput(): void {
 }
 
 function onImageInputChange(event: Event): void {
+    const files = (event.target as HTMLInputElement).files;
+    if (files) for (const file of files) generationLogic.addScannedImage(file);
+    (event.target as HTMLInputElement).value = "";
+}
+
+// "고성능 PDF"(관리자 전용, Vision OCR 강제) 버튼이 여는 PDF 전용 입력.
+const pdfInput = ref<HTMLInputElement | null>(null);
+
+function openPdfInput(): void {
+    pdfInput.value?.click();
+}
+
+function onPdfInputChange(event: Event): void {
     const file = (event.target as HTMLInputElement).files?.[0];
-    if (file) generationLogic.addScannedImage(file);
+    if (file) generationLogic.scanHighQualityPdf(file);
     (event.target as HTMLInputElement).value = "";
 }
 
@@ -174,14 +187,22 @@ onMounted(async () => {
         ref="imageInput"
         type="file"
         accept="image/*"
-        capture="environment"
+        multiple
         style="display: none;"
         @change="onImageInputChange"
+    >
+    <input
+        ref="pdfInput"
+        type="file"
+        accept=".pdf"
+        style="display: none;"
+        @change="onPdfInputChange"
     >
     <AddSourceSheetView
         :state="generationState"
         :logic="generationLogic"
         :on-select-file="openFileInput"
+        :on-select-high-quality-pdf="openPdfInput"
     />
     <ScanTextSheetView :state="generationState" :logic="generationLogic" :on-add-photo="openImageInput" />
     <GenerationModalView :state="generationState" :logic="generationLogic" :voice-state="voiceState" :voice-logic="voiceLogic" />

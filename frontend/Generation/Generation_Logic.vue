@@ -34,6 +34,7 @@ export interface GenerationLogic {
     addScannedImage(file: File): void;
     removeScannedImage(index: number): void;
     submitScannedImages(): Promise<void>;
+    scanHighQualityPdf(file: File): Promise<void>;
     onGenerateClick(): Promise<void>;
     onLoginPromptConfirm(): void;
     closeModal(): void;
@@ -376,6 +377,33 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
         }
     }
 
+    async function extractHighQualityPdf(file: File) {
+        const formData = new FormData();
+        formData.append("file", file);
+        const response = await fetch("/api/scan-pdf", {
+            method: "POST",
+            headers: authLogic.authHeaders(),
+            body: formData,
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "PDF에서 텍스트를 추출하지 못했습니다.");
+        return data;
+    }
+
+    async function scanHighQualityPdf(file: File): Promise<void> {
+        closeFileSourceMenu();
+        state.isComposerBusy.value = true;
+        try {
+            applyExtractedText(await extractHighQualityPdf(file));
+            state.addSourceMode.value = null;
+        } catch (error) {
+            console.error(error);
+            showToast((error as Error).message, "error");
+        } finally {
+            state.isComposerBusy.value = false;
+        }
+    }
+
     function generationArguments(): GenerationArguments {
         return {
             textId: state.currentTextId.value!,
@@ -564,6 +592,7 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
         addScannedImage,
         removeScannedImage,
         submitScannedImages,
+        scanHighQualityPdf,
         onGenerateClick,
         onLoginPromptConfirm,
         closeModal,

@@ -120,3 +120,61 @@ async def test_scan_text_reports_vision_failure():
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post("/api/scan-text", files=_fake_images(), headers=_auth_headers())
     assert response.status_code == 502
+
+
+def _fake_pdf():
+    return {"file": ("document.pdf", io.BytesIO(b"%PDF-1.4 fake bytes"), "application/pdf")}
+
+
+@pytest.mark.asyncio
+async def test_scan_pdf_requires_auth():
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/api/scan-pdf", files=_fake_pdf())
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_scan_pdf_rejects_non_pdf_extension():
+    with patch("routes.scan_text.require_admin_user", return_value="admin-user"):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/scan-pdf",
+                files={"file": ("notes.txt", io.BytesIO(b"not a pdf"), "text/plain")},
+                headers=_auth_headers(),
+            )
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_scan_pdf_success_skips_pypdf_and_uses_ocr():
+    with patch("routes.scan_text.require_admin_user", return_value="admin-user"), \
+         patch("routes.scan_text.detect_pdf_text_via_ocr", return_value="OCR로 추출된 충분히 긴 본문입니다. " * 10) as mock_ocr:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post("/api/scan-pdf", files=_fake_pdf(), headers=_auth_headers())
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["filename"] == "document.pdf"
+    assert data["char_count"] > 0
+    mock_ocr.assert_called_once()
+
+    from state import text_storage
+    text_storage.pop(data["text_id"], None)
+
+
+@pytest.mark.asyncio
+async def test_scan_pdf_reports_no_text_found():
+    with patch("routes.scan_text.require_admin_user", return_value="admin-user"), \
+         patch("routes.scan_text.detect_pdf_text_via_ocr", return_value=""):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post("/api/scan-pdf", files=_fake_pdf(), headers=_auth_headers())
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_scan_pdf_reports_ocr_failure():
+    with patch("routes.scan_text.require_admin_user", return_value="admin-user"), \
+         patch("routes.scan_text.detect_pdf_text_via_ocr", side_effect=RuntimeError("vision down")):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post("/api/scan-pdf", files=_fake_pdf(), headers=_auth_headers())
+    assert response.status_code == 502

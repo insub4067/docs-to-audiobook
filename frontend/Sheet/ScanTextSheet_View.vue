@@ -61,18 +61,18 @@ function onBackdropClick(event: MouseEvent): void {
             <div class="index-sheet-header">
                 <h3>텍스트 스캔</h3>
             </div>
-            <p class="action-sheet-hint">여러 장을 순서대로 촬영해서 한 번에 추출할 수 있어요</p>
+            <p class="action-sheet-hint">사진첩에서 여러 장을 골라 순서대로 한 번에 추출할 수 있어요</p>
 
             <div class="scan-photo-grid">
                 <div v-for="(image, index) in state.scannedImages.value" :key="index" class="scan-photo-thumb">
-                    <img :src="urlFor(image)" :alt="`촬영한 사진 ${index + 1}`">
+                    <img :src="urlFor(image)" :alt="`고른 사진 ${index + 1}`">
                     <button type="button" class="scan-photo-remove" aria-label="삭제" @click="logic.removeScannedImage(index)">
                         <i data-lucide="x"></i>
                     </button>
                     <span class="scan-photo-index">{{ index + 1 }}</span>
                 </div>
-                <button type="button" class="scan-photo-add" aria-label="사진 추가" @click="onAddPhoto">
-                    <i data-lucide="camera"></i>
+                <button type="button" class="scan-photo-add" aria-label="사진첩에서 추가" @click="onAddPhoto">
+                    <i data-lucide="image-plus"></i>
                 </button>
             </div>
 
