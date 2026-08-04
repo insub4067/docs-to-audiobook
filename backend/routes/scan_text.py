@@ -54,6 +54,9 @@ def _detect_document_text(content: bytes) -> str:
     return (response.full_text_annotation.text or "").strip()
 
 
+PDF_OCR_RENDER_DPI = 300  # 200dpi는 작은 글자에서 인식률이 떨어져 300으로 올림
+
+
 def detect_pdf_text_via_ocr(pdf_path: str) -> str:
     """스캔본 PDF(텍스트 레이어 없음) 폴백 — pypdf가 텍스트를 못 뽑을 때
     upload.py가 관리자 요청에 한해 호출한다. 페이지를 이미지로 렌더링해
@@ -64,7 +67,7 @@ def detect_pdf_text_via_ocr(pdf_path: str) -> str:
     try:
         pages_text = []
         for page in doc:
-            pixmap = page.get_pixmap(dpi=200)
+            pixmap = page.get_pixmap(dpi=PDF_OCR_RENDER_DPI)
             pages_text.append(_detect_document_text(pixmap.tobytes("png")))
         return "\n\n".join(t for t in pages_text if t)
     finally:
