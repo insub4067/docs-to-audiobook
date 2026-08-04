@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useAuthStore } from "../stores/auth";
 import type { GenerationState } from "../Generation/Generation_State.vue";
 import type { GenerationLogic } from "../Generation/Generation_Logic.vue";
@@ -16,6 +16,15 @@ const props = defineProps<{
 
 const authStore = useAuthStore();
 const modalContent = ref<HTMLElement | null>(null);
+
+// state.py의 MAX_SYNTH_CHARS와 같은 값 — 관리자는 사실상 무제한(5천만 자)이라
+// 굳이 분모로 보여줄 필요가 없다.
+const MAX_SYNTH_CHARS = 100_000;
+const charBadgeLabel = computed(() => {
+    const count = props.state.charCount.value.toLocaleString();
+    if (authStore.isAdmin) return `${count}자`;
+    return `${count} / ${MAX_SYNTH_CHARS.toLocaleString()}자`;
+});
 
 useSwipeToDismiss(modalContent, () => props.logic.closeModal());
 
@@ -44,7 +53,7 @@ function onVoiceChange(event: Event): void {
                 <div class="modal-section">
                     <div class="section-title">
                         <i data-lucide="eye" class="header-icon"></i> 텍스트 확인
-                        <span class="char-badge" v-show="state.isCharBadgeVisible.value">{{ state.charCount.value.toLocaleString() }} 자</span>
+                        <span class="char-badge" v-show="state.isCharBadgeVisible.value">{{ charBadgeLabel }}</span>
                     </div>
                     <div class="preview-text" v-show="state.isPreviewVisible.value">{{ state.previewText.value }}</div>
                 </div>
