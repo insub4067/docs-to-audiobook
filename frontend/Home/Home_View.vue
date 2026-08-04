@@ -208,10 +208,10 @@ onMounted(async () => {
             :hide-action-sheet="true"
             :generating-items="[]"
         />
+        <footer class="app-version-footer">
+            <span>{{ pwaState.versionLabel.value }}</span>
+        </footer>
     </main>
-    <footer class="app-version-footer" v-show="activeTab === 'home'">
-        <span>{{ pwaState.versionLabel.value }}</span>
-    </footer>
 
     <MyFilesView
         v-show="activeTab === 'files'"
