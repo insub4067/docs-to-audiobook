@@ -21,13 +21,31 @@ export function preventPullToRefresh(): void {
     document.addEventListener("touchstart", (event) => {
         startY = event.touches[0].clientY;
         scrollableAncestor = findScrollableAncestor(event.target as HTMLElement);
+        // eslint-disable-next-line no-console
+        console.log("[PTR] touchstart", {
+            startY,
+            target: (event.target as HTMLElement)?.className,
+            scrollableAncestor: scrollableAncestor?.className ?? null,
+        });
     }, { passive: true });
 
     document.addEventListener("touchmove", (event) => {
-        const pullingDown = event.touches[0].clientY > startY;
-        const documentAtTop = (window.scrollY || document.documentElement.scrollTop) <= 0;
-        if (!pullingDown || !documentAtTop) return;
-        if (scrollableAncestor && scrollableAncestor.scrollTop > 0) return;
+        const currentY = event.touches[0].clientY;
+        const pullingDown = currentY > startY;
+        const scrollY = window.scrollY || document.documentElement.scrollTop;
+        const documentAtTop = scrollY <= 0;
+        const blockedByAncestor = !!(scrollableAncestor && scrollableAncestor.scrollTop > 0);
+        const willPrevent = pullingDown && documentAtTop && !blockedByAncestor;
+        // eslint-disable-next-line no-console
+        console.log("[PTR] touchmove", {
+            currentY, startY, pullingDown, scrollY, documentAtTop,
+            scrollableAncestor: scrollableAncestor?.className ?? null,
+            ancestorScrollTop: scrollableAncestor?.scrollTop ?? null,
+            blockedByAncestor, willPrevent, cancelable: event.cancelable,
+        });
+        if (!willPrevent) return;
         event.preventDefault();
+        // eslint-disable-next-line no-console
+        console.log("[PTR] preventDefault called, defaultPrevented =", event.defaultPrevented);
     }, { passive: false });
 }
