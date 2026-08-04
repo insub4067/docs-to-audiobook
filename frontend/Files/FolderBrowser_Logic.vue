@@ -44,12 +44,18 @@ export function useFolderBrowserLogic(state: FolderBrowserState): FolderBrowserL
     async function openFolder(folder: FolderNode): Promise<void> {
         state.currentFolderId.value = folder.id;
         state.breadcrumb.value = [...state.breadcrumb.value, { id: folder.id, name: folder.name }];
+        // /api/folders 응답이 오기 전까지 이전 폴더의 하위 폴더 목록이
+        // 화면에 그대로 남아 있던 버그 — 오디오북 목록은 이미 불러온
+        // IndexedDB 데이터를 즉시 필터링해 맞게 보이는데, 폴더 목록만
+        // 네트워크 응답을 기다리는 동안 stale 상태로 남았다.
+        state.subfolders.value = [];
         await loadCurrentFolder();
     }
 
     async function goToBreadcrumb(index: number): Promise<void> {
         state.breadcrumb.value = state.breadcrumb.value.slice(0, index + 1);
         state.currentFolderId.value = state.breadcrumb.value[state.breadcrumb.value.length - 1].id;
+        state.subfolders.value = [];
         await loadCurrentFolder();
     }
 

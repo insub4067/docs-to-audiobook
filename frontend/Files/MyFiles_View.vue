@@ -47,7 +47,8 @@ const currentFolderBackgroundJobItems = computed(() =>
 );
 
 const isEmpty = computed(() =>
-    browserState.subfolders.value.length === 0
+    !browserState.isLoading.value
+    && browserState.subfolders.value.length === 0
     && currentFolderAudiobooks.value.length === 0
     && currentFolderGeneratingItems.value.length === 0
     && currentFolderBackgroundJobItems.value.length === 0
