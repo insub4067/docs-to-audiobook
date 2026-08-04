@@ -1707,9 +1707,7 @@ input[type="range"]::-webkit-slider-thumb:active {
     --reader-text-muted: #7A6559;
     --reader-accent: #A67C52;
     --reader-border: rgba(120, 90, 60, 0.1);
-    --reader-highlight-bg: rgba(198, 154, 88, 0.22);
-    --reader-highlight-text: #5C3317;
-    --reader-highlight-shadow: rgba(198, 154, 88, 0.5);
+    --reader-highlight-bg: rgba(198, 154, 88, 0.15);
 }
 
 .reader-container {
@@ -1734,9 +1732,7 @@ input[type="range"]::-webkit-slider-thumb:active {
     --reader-text-muted: #6b6b6b;
     --reader-accent: #8a6d3b;
     --reader-border: rgba(0, 0, 0, 0.1);
-    --reader-highlight-bg: rgba(138, 109, 59, 0.15);
-    --reader-highlight-text: #5c4520;
-    --reader-highlight-shadow: rgba(138, 109, 59, 0.4);
+    --reader-highlight-bg: rgba(138, 109, 59, 0.10);
 }
 
 :root[data-app-theme="dark"] .reader-container,
@@ -1747,9 +1743,7 @@ input[type="range"]::-webkit-slider-thumb:active {
     --reader-text-muted: #a3a3a3;
     --reader-accent: #d9a66f;
     --reader-border: rgba(255, 255, 255, 0.12);
-    --reader-highlight-bg: rgba(217, 166, 111, 0.25);
-    --reader-highlight-text: #f0d9b8;
-    --reader-highlight-shadow: rgba(217, 166, 111, 0.5);
+    --reader-highlight-bg: rgba(217, 166, 111, 0.16);
 }
 
 :root[data-app-theme="gray"] .reader-container,
@@ -1760,9 +1754,7 @@ input[type="range"]::-webkit-slider-thumb:active {
     --reader-text-muted: #98989d;
     --reader-accent: #a8a8ad;
     --reader-border: rgba(255, 255, 255, 0.14);
-    --reader-highlight-bg: rgba(168, 168, 173, 0.18);
-    --reader-highlight-text: #f0f0f2;
-    --reader-highlight-shadow: rgba(168, 168, 173, 0.4);
+    --reader-highlight-bg: rgba(168, 168, 173, 0.12);
 }
 
 /* OS 다크모드(@media prefers-color-scheme: dark) 쪽에 있는 예전
@@ -1797,9 +1789,8 @@ input[type="range"]::-webkit-slider-thumb:active {
 }
 
 :root[data-app-theme] .reader-sentence.highlight {
-    color: var(--reader-highlight-text);
     background-color: var(--reader-highlight-bg);
-    box-shadow: inset 0 -2px 0 var(--reader-highlight-shadow);
+    box-shadow: inset 3px 0 0 var(--reader-accent);
 }
 
 /* 상단 안전영역 고정 블러 스트립. 헤더가 접혀도 본문이 다이나믹
@@ -2018,7 +2009,7 @@ input[type="range"]::-webkit-slider-thumb:active {
 }
 
 .action-sheet-hint {
-    padding: 0 20px 12px;
+    padding: 10px 20px 12px;
     font-size: 0.82rem;
     color: var(--text-muted);
     text-align: center;
@@ -2091,13 +2082,13 @@ input[type="range"]::-webkit-slider-thumb:active {
     background-color: color-mix(in srgb, var(--reader-accent) 10%, transparent);
 }
 
-/* Synced Highlighter: 재생 중인 문장 강조. 색상은 리더 테마를 따른다. */
+/* Synced Highlighter: 재생 중인 문장 강조. 색상은 리더 테마를 따른다.
+   은은한 배경 틴트 + 왼쪽 포인트 라인으로만 강조하고, 굵기/글자색은
+   바꾸지 않는다 — 문장 전체가 너무 튀어 보이지 않게 하기 위함. */
 .reader-sentence.highlight {
-    font-weight: 700;
-    color: var(--reader-highlight-text);
     background-color: var(--reader-highlight-bg);
     border-radius: 5px;
-    box-shadow: inset 0 -2px 0 var(--reader-highlight-shadow);
+    box-shadow: inset 3px 0 0 var(--reader-accent);
 }
 
 .reader-table {
@@ -2455,6 +2446,12 @@ input[type="range"]::-webkit-slider-thumb:active {
     background: var(--card-bg-solid);
     border-radius: 20px 20px 0 0;
     padding: 8px 0 max(12px, env(safe-area-inset-bottom));
+    /* 항목이 많은 시트(문서 추가 등)가 iPhone SE처럼 짧은 화면에서
+       위쪽이 화면 밖으로 밀려 안 보이고 스크롤도 안 되던 문제 —
+       뷰포트 높이를 넘지 않게 하고 넘치면 내부 스크롤로 처리한다. */
+    max-height: 85vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     transform: translateY(100%);
     transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1);
 }
