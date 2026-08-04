@@ -24,6 +24,9 @@ export interface ReaderLogic {
     openMoreSheet(): void;
     closeMoreSheet(): void;
     closeMoreSheetIfOpen(): boolean;
+    openSettingsSheet(): void;
+    closeSettingsSheet(): void;
+    closeSettingsSheetIfOpen(): boolean;
     importSharedLink(url: string): Promise<void>;
     saveSharedAudiobook(): Promise<void>;
     attachReaderResizeHandler(): () => void;
@@ -289,6 +292,20 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         return true;
     }
 
+    function openSettingsSheet(): void {
+        state.isSettingsSheetOpen.value = true;
+    }
+
+    function closeSettingsSheet(): void {
+        state.isSettingsSheetOpen.value = false;
+    }
+
+    function closeSettingsSheetIfOpen(): boolean {
+        if (!state.isSettingsSheetOpen.value) return false;
+        closeSettingsSheet();
+        return true;
+    }
+
     function closeReader(): void {
         const el = state.audioEl.value;
         const audioObject = state.currentAudioObject.value;
@@ -391,6 +408,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         togglePlayPause, seekTo, onSentenceClick, onHeadingClick,
         openIndexSheet, closeIndexSheet, closeIndexSheetIfOpen,
         openMoreSheet, closeMoreSheet, closeMoreSheetIfOpen,
+        openSettingsSheet, closeSettingsSheet, closeSettingsSheetIfOpen,
         importSharedLink, saveSharedAudiobook, attachReaderResizeHandler,
     };
 }

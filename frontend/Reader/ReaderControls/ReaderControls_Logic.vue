@@ -20,13 +20,14 @@ export interface ReaderControlsLogic {
     selectTimerMinutes(minutes: number): void;
     selectFontFamily(value: ReaderFontFamily): void;
     selectFontSize(value: number): void;
+    selectLineHeight(value: number): void;
     skipBack(): void;
     skipForward(): void;
     onEnded(): void;
 }
 
 export const REPEAT_MODES: RepeatMode[] = ["off", "all", "one"];
-export const REPEAT_LABELS: Record<RepeatMode, string> = { off: "반복 안 함", all: "전체 반복", one: "한 곡 반복" };
+export const REPEAT_LABELS: Record<RepeatMode, string> = { off: "반복 안 함", all: "전체 문서 반복", one: "현재 오디오 반복" };
 export const SPEED_OPTIONS = [0.75, 1.0, 1.25, 1.5, 2.0];
 export const TIMER_OPTIONS_MIN = [0, 15, 30, 60];
 export const TIMER_LABELS: Record<number, string> = { 0: "해제", 15: "15분", 30: "30분", 60: "60분" };
@@ -34,6 +35,8 @@ export const FONT_FAMILY_OPTIONS: ReaderFontFamily[] = ["serif", "sans"];
 export const FONT_FAMILY_LABELS: Record<ReaderFontFamily, string> = { serif: "명조체", sans: "고딕체" };
 export const FONT_SIZE_OPTIONS = [0.9, 1.0, 1.15, 1.3, 1.5];
 export const FONT_SIZE_LABELS: Record<number, string> = { 0.9: "작게", 1.0: "보통", 1.15: "크게", 1.3: "매우 크게", 1.5: "최대" };
+export const LINE_HEIGHT_OPTIONS = [1.7, 2.0, 2.3];
+export const LINE_HEIGHT_LABELS: Record<number, string> = { 1.7: "좁게", 2.0: "보통", 2.3: "넓게" };
 
 // static/js/reader-controls.js를 옮긴 것. 원본은 아이콘을 탭할 때마다
 // 다음 값으로 순환했는데, 이번에 시트를 열어 옵션을 직접 선택하는
@@ -53,6 +56,8 @@ export function useReaderControlsLogic(state: ReaderControlsState, audioEl: Ref<
     if (savedFontFamily && FONT_FAMILY_OPTIONS.includes(savedFontFamily)) state.fontFamily.value = savedFontFamily;
     const savedFontSize = Number.parseFloat(localStorage.getItem("textAudio_readerFontSize") || "");
     if (FONT_SIZE_OPTIONS.includes(savedFontSize)) state.fontSize.value = savedFontSize;
+    const savedLineHeight = Number.parseFloat(localStorage.getItem("textAudio_readerLineHeight") || "");
+    if (LINE_HEIGHT_OPTIONS.includes(savedLineHeight)) state.lineHeight.value = savedLineHeight;
 
     function getPlaybackSettings(): PlaybackSettings {
         return { playbackSpeed: state.playbackSpeed.value, repeatMode: state.repeatMode.value };
@@ -142,6 +147,13 @@ export function useReaderControlsLogic(state: ReaderControlsState, audioEl: Ref<
         closeSheet();
     }
 
+    function selectLineHeight(value: number): void {
+        state.lineHeight.value = value;
+        localStorage.setItem("textAudio_readerLineHeight", String(value));
+        showToast(`줄 간격: ${LINE_HEIGHT_LABELS[value]}`, "info");
+        closeSheet();
+    }
+
     function skipBack(): void {
         if (audioEl.value && !Number.isNaN(audioEl.value.currentTime)) {
             audioEl.value.currentTime = Math.max(0, audioEl.value.currentTime - 10);
@@ -166,7 +178,7 @@ export function useReaderControlsLogic(state: ReaderControlsState, audioEl: Ref<
     return {
         getPlaybackSettings, applyPlaybackSettings, clearSleepTimer,
         openSheet, closeSheet, selectRepeatMode, selectSpeed, selectTimerMinutes,
-        selectFontFamily, selectFontSize,
+        selectFontFamily, selectFontSize, selectLineHeight,
         skipBack, skipForward, onEnded,
     };
 }

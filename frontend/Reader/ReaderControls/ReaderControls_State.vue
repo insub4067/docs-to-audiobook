@@ -3,7 +3,7 @@ import { ref, type Ref } from "vue";
 
 export type RepeatMode = "off" | "all" | "one";
 export type ReaderFontFamily = "serif" | "sans";
-export type ReaderOptionSheetKind = "repeat" | "speed" | "timer" | "fontFamily" | "fontSize" | null;
+export type ReaderOptionSheetKind = "repeat" | "speed" | "timer" | "fontFamily" | "fontSize" | "lineHeight" | null;
 
 export interface ReaderControlsState {
     repeatMode: Ref<RepeatMode>;
@@ -13,6 +13,7 @@ export interface ReaderControlsState {
     activeSheet: Ref<ReaderOptionSheetKind>;
     fontFamily: Ref<ReaderFontFamily>;
     fontSize: Ref<number>;
+    lineHeight: Ref<number>;
 }
 
 export function useReaderControlsState(): ReaderControlsState {
@@ -24,6 +25,7 @@ export function useReaderControlsState(): ReaderControlsState {
         activeSheet: ref(null),
         fontFamily: ref("serif"),
         fontSize: ref(1.0),
+        lineHeight: ref(2.0),
     };
 }
 

@@ -2,15 +2,11 @@
 import { ref, watch } from "vue";
 import type { ReaderState } from "../Reader/Reader_State.vue";
 import type { ReaderLogic } from "../Reader/Reader_Logic.vue";
-import type { ReaderControlsLogic } from "../Reader/ReaderControls/ReaderControls_Logic.vue";
-import type { ThemeLogic } from "../Theme/Theme_Logic.vue";
 import { useSwipeToDismiss } from "../utils/swipeToDismiss";
 
 const props = defineProps<{
     state: ReaderState;
     logic: ReaderLogic;
-    controlsLogic: ReaderControlsLogic;
-    themeLogic: ThemeLogic;
     onShareClick: () => void;
 }>();
 
@@ -25,19 +21,9 @@ function onBackdropClick(event: MouseEvent): void {
     if (event.target === event.currentTarget) props.logic.closeMoreSheet();
 }
 
-function onThemeClick(): void {
+function onSettingsClick(): void {
     props.logic.closeMoreSheet();
-    props.themeLogic.openSheet();
-}
-
-function onFontFamilyClick(): void {
-    props.logic.closeMoreSheet();
-    props.controlsLogic.openSheet("fontFamily");
-}
-
-function onFontSizeClick(): void {
-    props.logic.closeMoreSheet();
-    props.controlsLogic.openSheet("fontSize");
+    props.logic.openSettingsSheet();
 }
 
 function onIndexClick(): void {
@@ -79,17 +65,9 @@ function onSaveSharedClick(): void {
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                 내 오디오북에 저장
             </button>
-            <button class="action-sheet-btn" type="button" @click="onThemeClick">
-                <i data-lucide="palette"></i>
-                읽기 화면 테마
-            </button>
-            <button class="action-sheet-btn" type="button" @click="onFontFamilyClick">
-                <i data-lucide="type"></i>
-                글꼴
-            </button>
-            <button class="action-sheet-btn" type="button" @click="onFontSizeClick">
-                <i data-lucide="case-sensitive"></i>
-                글자 크기
+            <button class="action-sheet-btn" type="button" @click="onSettingsClick">
+                <i data-lucide="settings-2"></i>
+                읽기 설정
             </button>
             <button class="action-sheet-btn action-sheet-btn-cancel" type="button" @click="logic.closeMoreSheet">닫기</button>
         </div>

@@ -5,6 +5,7 @@ import type { ReaderControlsLogic } from "../Reader/ReaderControls/ReaderControl
 import {
     REPEAT_MODES, REPEAT_LABELS, SPEED_OPTIONS, TIMER_OPTIONS_MIN, TIMER_LABELS,
     FONT_FAMILY_OPTIONS, FONT_FAMILY_LABELS, FONT_SIZE_OPTIONS, FONT_SIZE_LABELS,
+    LINE_HEIGHT_OPTIONS, LINE_HEIGHT_LABELS,
 } from "../Reader/ReaderControls/ReaderControls_Logic.vue";
 import { useSwipeToDismiss } from "../utils/swipeToDismiss";
 
@@ -26,6 +27,7 @@ const title = computed(() => {
     if (props.state.activeSheet.value === "timer") return "취침 타이머";
     if (props.state.activeSheet.value === "fontFamily") return "글꼴";
     if (props.state.activeSheet.value === "fontSize") return "글자 크기";
+    if (props.state.activeSheet.value === "lineHeight") return "줄 간격";
     return "";
 });
 
@@ -55,12 +57,18 @@ const options = computed<OptionRow[]>(() => {
         }));
     }
     if (kind === "timer") {
-        return TIMER_OPTIONS_MIN.map((minutes) => ({
+        const presets: OptionRow[] = TIMER_OPTIONS_MIN.map((minutes) => ({
             key: String(minutes),
             label: TIMER_LABELS[minutes],
             isSelected: minutes === 0 ? !props.state.isTimerActive.value : false,
             select: () => props.logic.selectTimerMinutes(minutes),
         }));
+        return [...presets, {
+            key: "custom",
+            label: "사용자 지정",
+            isSelected: false,
+            select: onCustomTimerClick,
+        }];
     }
     if (kind === "fontFamily") {
         return FONT_FAMILY_OPTIONS.map((value) => ({
@@ -78,11 +86,27 @@ const options = computed<OptionRow[]>(() => {
             select: () => props.logic.selectFontSize(value),
         }));
     }
+    if (kind === "lineHeight") {
+        return LINE_HEIGHT_OPTIONS.map((value) => ({
+            key: String(value),
+            label: LINE_HEIGHT_LABELS[value],
+            isSelected: props.state.lineHeight.value === value,
+            select: () => props.logic.selectLineHeight(value),
+        }));
+    }
     return [];
 });
 
 function onBackdropClick(event: MouseEvent): void {
     if (event.target === event.currentTarget) props.logic.closeSheet();
+}
+
+function onCustomTimerClick(): void {
+    const raw = window.prompt("몇 분 후에 재생을 멈출까요? (1~180)");
+    if (raw === null) return;
+    const minutes = Number.parseInt(raw, 10);
+    if (!Number.isFinite(minutes) || minutes < 1 || minutes > 180) return;
+    props.logic.selectTimerMinutes(minutes);
 }
 </script>
 
