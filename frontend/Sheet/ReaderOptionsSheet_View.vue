@@ -8,11 +8,15 @@ import {
     LINE_HEIGHT_OPTIONS, LINE_HEIGHT_LABELS,
 } from "../Reader/ReaderControls/ReaderControls_Logic.vue";
 import { useSwipeToDismiss } from "../utils/swipeToDismiss";
+import { usePromptSheetLogic } from "./PromptSheet_Logic.vue";
+import { usePromptSheetState } from "./PromptSheet_State.vue";
 
 const props = defineProps<{
     state: ReaderControlsState;
     logic: ReaderControlsLogic;
 }>();
+
+const promptSheetLogic = usePromptSheetLogic(usePromptSheetState());
 
 const sheet = ref<HTMLElement | null>(null);
 useSwipeToDismiss(sheet, () => props.logic.closeSheet());
@@ -101,8 +105,8 @@ function onBackdropClick(event: MouseEvent): void {
     if (event.target === event.currentTarget) props.logic.closeSheet();
 }
 
-function onCustomTimerClick(): void {
-    const raw = window.prompt("몇 분 후에 재생을 멈출까요? (1~180)");
+async function onCustomTimerClick(): Promise<void> {
+    const raw = await promptSheetLogic.showPrompt("몇 분 후에 재생을 멈출까요?", { subtitle: "1~180분 사이로 입력해 주세요", numeric: true });
     if (raw === null) return;
     const minutes = Number.parseInt(raw, 10);
     if (!Number.isFinite(minutes) || minutes < 1 || minutes > 180) return;

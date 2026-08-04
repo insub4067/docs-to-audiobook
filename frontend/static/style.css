@@ -473,6 +473,24 @@ html {
     border-color: var(--primary-color);
 }
 
+.prompt-sheet-input {
+    display: block;
+    width: calc(100% - 40px);
+    margin: 4px 20px 16px;
+    padding: 12px 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    background: var(--card-bg);
+    color: var(--text-color);
+    font-family: var(--font-sans);
+    font-size: 16px; /* iOS 자동 확대 방지 */
+}
+
+.prompt-sheet-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
 /* App Header Styling (Literary Bookshop vibe) */
 .app-header {
     display: flex;

@@ -9,6 +9,9 @@ import TextInputSheetView from "../Sheet/TextInputSheet_View.vue";
 import ScanTextSheetView from "../Sheet/ScanTextSheet_View.vue";
 import GenerationModalView from "../Sheet/GenerationModal_View.vue";
 import LoginPromptSheetView from "../Sheet/LoginPromptSheet_View.vue";
+import PromptSheetView from "../Sheet/PromptSheet_View.vue";
+import { usePromptSheetState } from "../Sheet/PromptSheet_State.vue";
+import { usePromptSheetLogic } from "../Sheet/PromptSheet_Logic.vue";
 import AudioListView from "../components/Library/AudioList_View.vue";
 import ReaderView from "../Reader/Reader_View.vue";
 import TabBarView from "../components/TabBar/TabBar_View.vue";
@@ -50,6 +53,8 @@ const readerState = useReaderState();
 const readerControlsState = useReaderControlsState();
 const readerControlsLogic = useReaderControlsLogic(readerControlsState, readerState.audioEl);
 const readerLogic = useReaderLogic(readerState, readerControlsLogic, audioListLogic);
+const promptSheetState = usePromptSheetState();
+const promptSheetLogic = usePromptSheetLogic(promptSheetState);
 
 const activeTab = ref<"home" | "files">("home");
 
@@ -88,8 +93,8 @@ function onEscape(event: KeyboardEvent): void {
     } else if (generationState.isModalOpen.value) generationLogic.closeModal();
 }
 
-function onImportLink(): void {
-    const url = window.prompt("공유받은 링크를 붙여넣어 주세요:\n(예: https://.../share/...)");
+async function onImportLink(): Promise<void> {
+    const url = await promptSheetLogic.showPrompt("공유받은 링크를 붙여넣어 주세요", { subtitle: "예: https://.../share/..." });
     if (url) readerLogic.importSharedLink(url);
 }
 
@@ -271,4 +276,5 @@ onMounted(async () => {
         :theme-logic="themeLogic"
     />
     <ThemeSheetView :state="themeState" :logic="themeLogic" />
+    <PromptSheetView />
 </template>

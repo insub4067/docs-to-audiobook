@@ -4,12 +4,16 @@ import type { MyFilesState } from "../Files/MyFiles_State.vue";
 import type { MyFilesLogic } from "../Files/MyFiles_Logic.vue";
 import type { FolderBrowserLogic } from "../Files/FolderBrowser_Logic.vue";
 import { useSwipeToDismiss } from "../utils/swipeToDismiss";
+import { usePromptSheetLogic } from "./PromptSheet_Logic.vue";
+import { usePromptSheetState } from "./PromptSheet_State.vue";
 
 const props = defineProps<{
     state: MyFilesState;
     logic: MyFilesLogic;
     folderBrowserLogic: FolderBrowserLogic;
 }>();
+
+const promptSheetLogic = usePromptSheetLogic(usePromptSheetState());
 
 const sheet = ref<HTMLElement | null>(null);
 useSwipeToDismiss(sheet, () => props.logic.closeFolderActionSheet());
@@ -26,7 +30,7 @@ async function onRename(): Promise<void> {
     const target = props.state.folderActionTarget.value;
     if (!target) return;
     props.logic.closeFolderActionSheet();
-    const name = window.prompt("폴더 이름", target.name);
+    const name = await promptSheetLogic.showPrompt("폴더 이름", { defaultValue: target.name });
     if (name === null) return;
     await props.folderBrowserLogic.renameFolder(target, name);
 }

@@ -4,6 +4,8 @@ import type { GenerationState } from "../Generation/Generation_State.vue";
 import type { GenerationLogic } from "../Generation/Generation_Logic.vue";
 import { useSwipeToDismiss } from "../utils/swipeToDismiss";
 import { useAuthStore } from "../stores/auth";
+import { usePromptSheetLogic } from "./PromptSheet_Logic.vue";
+import { usePromptSheetState } from "./PromptSheet_State.vue";
 
 const props = defineProps<{
     state: GenerationState;
@@ -13,6 +15,7 @@ const props = defineProps<{
 }>();
 
 const authStore = useAuthStore();
+const promptSheetLogic = usePromptSheetLogic(usePromptSheetState());
 
 // Generation_Logic.vue의 getUploadLimitBytes()와 같은 값 — 안내 문구용으로만
 // 쓰므로 별도 API 호출 없이 그대로 미러링한다. 관리자는 사실상 여유로워
@@ -43,9 +46,9 @@ function onTextInputClick(): void {
     props.logic.openTextInputSheet();
 }
 
-function onLinkInputClick(): void {
+async function onLinkInputClick(): Promise<void> {
     props.logic.closeAddSourceSheet();
-    const raw = window.prompt("링크를 붙여넣어 주세요:\n(예: https://example.com/article)");
+    const raw = await promptSheetLogic.showPrompt("링크를 붙여넣어 주세요", { subtitle: "예: https://example.com/article" });
     if (raw) props.logic.submitPastedLink(raw);
 }
 

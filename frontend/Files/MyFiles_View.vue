@@ -15,6 +15,8 @@ import ActionSheetView from "../Sheet/ActionSheet_View.vue";
 import FolderActionSheetView from "../Sheet/FolderActionSheet_View.vue";
 import MoveToFolderSheetView from "../Sheet/MoveToFolderSheet_View.vue";
 import AddMenuSheetView from "../Sheet/AddMenuSheet_View.vue";
+import { usePromptSheetLogic } from "../Sheet/PromptSheet_Logic.vue";
+import { usePromptSheetState } from "../Sheet/PromptSheet_State.vue";
 
 const props = defineProps<{
     audioListState: AudioListState;
@@ -28,6 +30,7 @@ const props = defineProps<{
 
 const browserState = useFolderBrowserState("내 파일");
 const browserLogic = useFolderBrowserLogic(browserState);
+const promptSheetLogic = usePromptSheetLogic(usePromptSheetState());
 
 const currentFolderAudiobooks = computed(() =>
     props.audioListState.savedAudiobooks.value.filter(
@@ -68,8 +71,8 @@ function goUpOneLevel(): void {
     browserLogic.goToBreadcrumb(browserState.breadcrumb.value.length - 2);
 }
 
-function onNewFolder(): void {
-    const name = window.prompt("새 폴더 이름");
+async function onNewFolder(): Promise<void> {
+    const name = await promptSheetLogic.showPrompt("새 폴더 이름");
     if (name) browserLogic.createFolder(name);
 }
 

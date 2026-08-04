@@ -10,6 +10,8 @@ import { getAudiobookDisplayTitle } from "../../utils/format";
 import { useAuthLogic } from "../../Auth/Auth_Logic.vue";
 import { useToastLogic } from "../Toast/Toast_Logic.vue";
 import { useToastState } from "../Toast/Toast_State.vue";
+import { usePromptSheetLogic } from "../../Sheet/PromptSheet_Logic.vue";
+import { usePromptSheetState } from "../../Sheet/PromptSheet_State.vue";
 import type { AudioListState, BackgroundJobItem } from "./AudioList_State.vue";
 
 export interface SyncResult {
@@ -48,6 +50,7 @@ let syncing = false;
 export function useAudioListLogic(state: AudioListState): AudioListLogic {
     const authLogic = useAuthLogic();
     const { showToast } = useToastLogic(useToastState());
+    const { showPrompt } = usePromptSheetLogic(usePromptSheetState());
 
     async function refresh(): Promise<void> {
         try {
@@ -352,7 +355,7 @@ export function useAudioListLogic(state: AudioListState): AudioListLogic {
                     await navigator.clipboard.writeText(shareUrl);
                     showToast("공유 링크가 복사되었습니다! (24시간 유효)", "success");
                 } catch {
-                    window.prompt("브라우저 보안 설정으로 자동 복사가 제한되었습니다. 아래 링크를 복사하세요:", shareUrl);
+                    showPrompt("아래 링크를 복사하세요", { subtitle: "브라우저 보안 설정으로 자동 복사가 제한되었습니다", defaultValue: shareUrl });
                 }
             }
         } catch (error) {
@@ -393,7 +396,7 @@ export function useAudioListLogic(state: AudioListState): AudioListLogic {
     }
 
     async function editAudiobookTitle(target: AudiobookRecord): Promise<void> {
-        const title = window.prompt("오디오북 제목", getAudiobookDisplayTitle(target.title));
+        const title = await showPrompt("오디오북 제목", { defaultValue: getAudiobookDisplayTitle(target.title) });
         if (title === null) return;
         const nextTitle = title.trim();
         if (!nextTitle) {
