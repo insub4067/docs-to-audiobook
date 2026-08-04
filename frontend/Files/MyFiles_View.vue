@@ -114,6 +114,11 @@ function resetDragState(): void {
 }
 
 function onDragTouchStart(event: TouchEvent, audio: AudiobookRecord): void {
+    // "더보기" 버튼을 살짝 오래 누르기만 해도 450ms 롱프레스로 오인해
+    // 드래그 고스트가 뜨고, 액션시트가 열린 뒤에도 그 위에 남아 있던
+    // 버그 — AudioListItem_View.vue 자체 스와이프 제스처가 이미 같은
+    // 방식으로 막아둔 것과 동일하게 여기서도 제외한다.
+    if ((event.target as HTMLElement).closest(".btn-more")) return;
     dragCandidate = audio;
     dragStartX = event.touches[0].clientX;
     dragStartY = event.touches[0].clientY;
