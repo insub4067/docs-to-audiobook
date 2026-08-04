@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import HeaderView from "../components/Header/Header_View.vue";
 import UploadView from "../components/Upload/Upload_View.vue";
 import AddSourceSheetView from "../Sheet/AddSourceSheet_View.vue";
+import TextInputSheetView from "../Sheet/TextInputSheet_View.vue";
 import ScanTextSheetView from "../Sheet/ScanTextSheet_View.vue";
 import GenerationModalView from "../Sheet/GenerationModal_View.vue";
 import LoginPromptSheetView from "../Sheet/LoginPromptSheet_View.vue";
@@ -28,7 +29,9 @@ import { useThemeLogic } from "../Theme/Theme_Logic.vue";
 import { useMyFilesState } from "../Files/MyFiles_State.vue";
 import { useMyFilesLogic } from "../Files/MyFiles_Logic.vue";
 import { formatTime, getAudiobookDisplayTitle } from "../utils/format";
+import { useAuthStore } from "../stores/auth";
 
+const authStore = useAuthStore();
 const pwaState = usePwaState();
 const themeState = useThemeState();
 const themeLogic = useThemeLogic(themeState);
@@ -103,6 +106,13 @@ function onImportLink(): void {
 // 최상위에 둔다 — 조상 요소가 display:none이면 숨겨진 input을 눌러도
 // 파일 선택 창이 안 열리는 브라우저가 있다.
 const fileInput = ref<HTMLInputElement | null>(null);
+
+// 관리자는 PDF를 "고성능 PDF" 전용 메뉴(Vision OCR 강제)로만 받는다 —
+// 일반 파일 업로드에서 빼서 헷갈리지 않게 한다. 관리자 전용 메뉴가 없는
+// 일반 사용자는 그대로 파일 업로드로 PDF를 올릴 수 있어야 한다.
+const fileInputAccept = computed(() =>
+    authStore.isAdmin ? ".docx,.txt,.md,.markdown,.hwp" : ".docx,.pdf,.txt,.md,.markdown,.hwp"
+);
 
 function openFileInput(): void {
     fileInput.value?.click();
@@ -209,7 +219,7 @@ onMounted(async () => {
     <input
         ref="fileInput"
         type="file"
-        accept=".docx,.pdf,.txt,.md,.markdown,.hwp"
+        :accept="fileInputAccept"
         multiple
         style="display: none;"
         @change="onFileInputChange"
@@ -235,6 +245,7 @@ onMounted(async () => {
         :on-select-file="openFileInput"
         :on-select-high-quality-pdf="openPdfInput"
     />
+    <TextInputSheetView :state="generationState" :logic="generationLogic" />
     <ScanTextSheetView :state="generationState" :logic="generationLogic" :on-add-photo="openImageInput" />
     <GenerationModalView :state="generationState" :logic="generationLogic" :voice-state="voiceState" :voice-logic="voiceLogic" />
     <LoginPromptSheetView :state="generationState" :logic="generationLogic" />

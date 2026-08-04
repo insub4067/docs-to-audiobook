@@ -24,6 +24,9 @@ export interface GenerationLogic {
     resetSelection(): void;
     submitPastedText(raw: string): Promise<void>;
     submitPastedLink(raw: string): Promise<void>;
+    openTextInputSheet(): void;
+    closeTextInputSheet(): void;
+    submitTextInputSheet(): Promise<void>;
     openAddSourceMenu(): void;
     openAddSourceMenuForFolder(folderId: string | null): void;
     closeAddSourceSheet(): void;
@@ -278,6 +281,22 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
 
     async function submitPastedLink(raw: string): Promise<void> {
         await submitPastedInput(raw);
+    }
+
+    function openTextInputSheet(): void {
+        closeAddSourceSheet();
+        state.textInputValue.value = "";
+        state.isTextInputSheetOpen.value = true;
+    }
+
+    function closeTextInputSheet(): void {
+        state.isTextInputSheetOpen.value = false;
+    }
+
+    async function submitTextInputSheet(): Promise<void> {
+        const raw = state.textInputValue.value;
+        closeTextInputSheet();
+        await submitPastedText(raw);
     }
 
     function openAddSourceMenu(): void {
@@ -581,6 +600,9 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
         resetSelection,
         submitPastedText,
         submitPastedLink,
+        openTextInputSheet,
+        closeTextInputSheet,
+        submitTextInputSheet,
         openAddSourceMenu,
         openAddSourceMenuForFolder,
         closeAddSourceSheet,

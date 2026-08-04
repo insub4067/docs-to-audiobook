@@ -435,6 +435,28 @@ html {
     font-weight: 700;
 }
 
+.text-input-textarea {
+    display: block;
+    width: calc(100% - 40px);
+    margin: 4px 20px 16px;
+    min-height: 38vh;
+    max-height: 55vh;
+    padding: 14px 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    background: var(--card-bg);
+    color: var(--text-color);
+    font-family: var(--font-sans);
+    font-size: 16px; /* iOS 자동 확대 방지 */
+    line-height: 1.6;
+    resize: none;
+}
+
+.text-input-textarea:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
 /* App Header Styling (Literary Bookshop vibe) */
 .app-header {
     display: flex;
@@ -794,6 +816,8 @@ html {
 }
 
 .dropzone-hint {
+    display: block;
+    margin-top: 2px;
     font-size: 0.8rem;
     font-weight: 400;
     color: var(--text-muted);
@@ -1267,8 +1291,13 @@ input[type="range"]::-webkit-slider-thumb:active {
     background-color: #f0f0f0;
 }
 
-/* Inline Generating Progress Item */
+/* Inline Generating Progress Item — .audio-item-front(다른 행의 패딩을
+   담당하는 래퍼)을 안 쓰고 .audio-item에 바로 이 클래스를 붙이므로,
+   같은 좌우/상하 패딩을 여기서 직접 줘야 다른 행과 높이·여백이 맞는다. */
 .audio-item-generating {
+    display: flex;
+    align-items: center;
+    padding: 16px 20px;
     cursor: default;
     background: linear-gradient(135deg, rgba(198, 154, 88, 0.04), rgba(198, 154, 88, 0.08));
     animation: generatingPulse 2s ease-in-out infinite;
@@ -1982,11 +2011,52 @@ input[type="range"]::-webkit-slider-thumb:active {
     margin: 0;
 }
 
+.action-sheet-subtitle {
+    margin: 4px 0 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
 .action-sheet-hint {
     padding: 0 20px 12px;
     font-size: 0.82rem;
     color: var(--text-muted);
     text-align: center;
+}
+
+.action-sheet-section-label {
+    padding: 12px 20px 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.action-sheet-btn-detailed {
+    align-items: flex-start;
+    padding-top: 12px;
+    padding-bottom: 12px;
+}
+
+.action-sheet-btn-detailed svg {
+    margin-top: 2px;
+}
+
+.action-sheet-btn-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    text-align: left;
+}
+
+.action-sheet-btn-title {
+    font-size: 1.05rem;
+    color: var(--text-color);
+}
+
+.action-sheet-btn-desc {
+    font-size: 0.78rem;
+    font-weight: 400;
+    color: var(--text-muted);
 }
 
 .index-sheet-list {
@@ -2746,20 +2816,20 @@ input[type="range"]::-webkit-slider-thumb:active {
        이 규칙(모바일/태블릿)과 아래 min-width:768 규칙이다. 앞쪽 76행의
        safe-area 처리가 여기에 덮여 죽어 있어 헤더가 노치와 겹쳤다. */
     padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
-    /* 애플 네이티브 앱처럼 스크롤을 내리면 큰 타이틀이 있던 자리에 배경/
-       경계선이 자연스럽게 나타나도록 sticky + 트랜지션(.scrolled는 JS가
-       토글). */
+    /* 애플 네이티브 앱처럼 배경은 항상 페이지 배경색과 같아 평소엔 안
+       보이다가, 스크롤을 내리면 경계선/블러가 나타나 카드와 분리된다
+       (.scrolled는 JS가 토글) — 배경 자체를 transparent로 두면 제목/
+       프로필이 카드 위에 그냥 떠 있는 것처럼 보여서 페이지 배경색으로
+       바꿈. */
     position: sticky;
     top: 0;
     z-index: 5;
-    background-color: transparent;
+    background-color: var(--bg-color);
     border-bottom: 1px solid transparent;
-    transition: background-color 0.25s ease, border-color 0.25s ease;
+    transition: border-color 0.25s ease, backdrop-filter 0.25s ease;
 }
 
 .app-header.scrolled {
-    /* .tab-bar와 같은 이유로 --card-bg-solid 대신 페이지 배경색을 쓴다 */
-    background-color: var(--bg-color);
     border-bottom-color: var(--border-color);
     backdrop-filter: blur(24px) saturate(160%);
     -webkit-backdrop-filter: blur(24px) saturate(160%);

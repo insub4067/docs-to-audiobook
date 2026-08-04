@@ -36,6 +36,10 @@ export interface GenerationState {
     // 한 번에 추출한다. 아직 서버로 보내지 않은 대기열.
     isScanSheetOpen: Ref<boolean>;
     scannedImages: Ref<File[]>;
+    // "텍스트 입력" — window.prompt는 한 줄짜리라 긴 글 붙여넣기에 안 맞아
+    // 큰 textarea가 있는 전용 시트를 쓴다.
+    isTextInputSheetOpen: Ref<boolean>;
+    textInputValue: Ref<string>;
     speed: Ref<number>;
     pitch: Ref<number>;
     generatingItems: Ref<GeneratingItem[]>;
@@ -65,6 +69,8 @@ export function useGenerationState(): GenerationState {
         isFileSourceMenuOpen: ref(false),
         isScanSheetOpen: ref(false),
         scannedImages: ref([]),
+        isTextInputSheetOpen: ref(false),
+        textInputValue: ref(""),
         speed: ref(5),
         pitch: ref(0),
         generatingItems: ref([]),
