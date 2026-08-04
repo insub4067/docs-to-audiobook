@@ -3136,7 +3136,12 @@ input[type="range"]::-webkit-slider-thumb:active {
    그래서 실제 콘텐츠 요소만 골라서 움직인다. */
 /* 당기는 동안에만 transform을 건다. 평상시에도 걸어두면 불필요한 스택
    컨텍스트와 GPU 레이어가 계속 남는다. */
-.pull-active .app-header,
+/* .app-header(sticky)는 여기서 뺀다 — position: sticky 요소에 transform을
+   같이 걸면 iOS Safari가 당기는 도중 "고정된" 판정을 잃고 문서 맨 위
+   기준으로 다시 배치해버려, 헤더가 본문(예: 이어 듣기 카드)보다 아래로
+   밀려나 상단바를 침범하는 것처럼 보이는 버그가 있었다. 헤더는 항상
+   제자리에 고정하고, 그 아래 실제 콘텐츠만 당긴 만큼 내려온다 — 다른
+   앱들의 표준적인 풀투리프레시 모양과도 같다. */
 .pull-active .app-main,
 .pull-active .auth-container,
 .pull-active .app-version-footer,
@@ -3146,7 +3151,6 @@ input[type="range"]::-webkit-slider-thumb:active {
 
 /* 손을 뗀 뒤 되돌아갈 때만 애니메이션한다. 당기는 중에는 손가락을 그대로
    따라와야 하므로 transition이 없어야 한다. */
-.pull-settling .app-header,
 .pull-settling .app-main,
 .pull-settling .auth-container,
 .pull-settling .app-version-footer,
@@ -3164,8 +3168,10 @@ input[type="range"]::-webkit-slider-thumb:active {
     pointer-events: none;
     z-index: 900;
     opacity: 0;
-    /* --pull-y: 당긴 거리, --pull-p: 0~1 진행도. JS가 갱신한다. */
-    transform: translateY(calc(var(--pull-y, 0px) - 40px));
+    /* --pull-y: 당긴 거리, --pull-p: 0~1 진행도. JS가 갱신한다. 40px 미만일
+       땐 0으로 고정해 top(safe-area 기준 앵커)보다 위로 — 즉 상단바 쪽으로
+       — 올라가지 않게 한다. */
+    transform: translateY(max(0px, calc(var(--pull-y, 0px) - 40px)));
 }
 
 /* 손을 뗀 뒤 되돌아가거나 자리를 잡을 때만 애니메이션한다.

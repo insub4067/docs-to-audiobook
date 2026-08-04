@@ -3,9 +3,6 @@ import { createPinia } from "pinia";
 import router from "./router";
 import App from "./App.vue";
 import { initDB } from "./services/indexedDb";
-import { preventPullToRefresh } from "./utils/preventPullToRefresh";
-
-preventPullToRefresh();
 
 const app = createApp(App);
 app.use(createPinia());
