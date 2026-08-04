@@ -582,73 +582,6 @@ html {
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
 }
 
-.continue-listening-card {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    width: 100%;
-    padding: 16px 18px;
-    text-align: left;
-    border: none;
-    cursor: pointer;
-    font: inherit;
-    color: inherit;
-}
-
-.continue-listening-icon {
-    flex-shrink: 0;
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    background: var(--primary-color);
-    color: var(--bg-color);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.continue-listening-icon svg {
-    width: 20px;
-    height: 20px;
-}
-
-.continue-listening-info {
-    flex: 1;
-    min-width: 0;
-}
-
-.continue-listening-label {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--primary-color);
-    text-transform: uppercase;
-    letter-spacing: 0.02em;
-    margin-bottom: 2px;
-}
-
-.continue-listening-title {
-    font-family: var(--font-serif);
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--text-color);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.continue-listening-position {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    margin-top: 2px;
-}
-
-.continue-listening-chevron {
-    flex-shrink: 0;
-    width: 20px;
-    height: 20px;
-    color: var(--text-muted);
-}
-
 /* Card Headers */
 .card-header {
     display: flex;
@@ -2675,6 +2608,101 @@ input[type="range"]::-webkit-slider-thumb:active {
 .scan-photo-add svg {
     width: 22px;
     height: 22px;
+}
+
+/* 읽기 화면을 닫아도 재생은 계속되는 경우, 탭바 바로 위에 떠서 제목/
+   진행 상황을 보여주고 누르면 다시 읽기 화면으로 돌아간다. */
+.mini-player {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    z-index: 14;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+    max-width: 500px;
+    margin: 0 auto;
+    padding: 10px 20px;
+    background-color: var(--card-bg-solid);
+    border: none;
+    border-top: 1px solid var(--border-color);
+    text-align: left;
+    font-family: inherit;
+    cursor: pointer;
+    transform: translateY(100%);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.mini-player.show {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.mini-player-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.mini-player-title {
+    flex: 1;
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--text-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mini-player-play-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: none;
+    background-color: var(--primary-color);
+    color: #ffffff;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.mini-player-time {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    min-width: 32px;
+    flex-shrink: 0;
+}
+
+.mini-player-progress-bar {
+    flex: 1;
+    height: 3px;
+    border-radius: 2px;
+    background-color: var(--border-color);
+    position: relative;
+    cursor: pointer;
+}
+
+.mini-player-progress-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    border-radius: 2px;
+    background-color: var(--primary-color);
+}
+
+/* 미니 플레이어가 떠 있는 동안 목록 마지막 줄이 그 밑에 가리지 않게
+   스크롤 영역에 여유를 더 준다. */
+.app-main.has-mini-player,
+.myfiles-root.has-mini-player {
+    padding-bottom: 70px;
 }
 
 .app-version-footer {

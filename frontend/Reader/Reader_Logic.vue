@@ -13,6 +13,7 @@ export interface ReaderLogic {
     open(audio: AudiobookRecord): void;
     openSharedReaderMode(title: string, sentences: ReaderSentence[], audioUrl: string, shareId?: string | null): void;
     closeReader(): void;
+    reopenReader(): void;
     checkSharedLink(): Promise<void>;
     togglePlayPause(): void;
     seekTo(fraction: number): void;
@@ -306,6 +307,11 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         return true;
     }
 
+    // "닫기"는 재생 세션을 끝내지 않는다 — 화면만 접고(미니 플레이어로),
+    // 재생 중이면 계속 재생, 일시정지면 그대로 유지한다. 그래서 오디오
+    // 핸들러(ontimeupdate 등)도 그대로 두어야 미니 플레이어가 실시간으로
+    // 갱신된다. 다른 오디오북을 열면 open()이 알아서 처음부터 다시
+    // 초기화하므로 여기서 따로 정리할 필요가 없다.
     function closeReader(): void {
         const el = state.audioEl.value;
         const audioObject = state.currentAudioObject.value;
@@ -318,14 +324,16 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
             audioListLogic.savePlaybackState(audioObject, el.currentTime, settings).catch((error) => console.error("재생 상태 저장 실패:", error));
         }
         lastPositionSaveSecond = -1;
-        el?.pause();
-        readerControls.clearSleepTimer();
-        resetAudioHandlers();
         state.isOpen.value = false;
         setReaderOpenForToast(false);
-        state.isPlaying.value = false;
-        state.activeIndex.value = -1;
-        state.showSaveSharedBtn.value = false;
+    }
+
+    // 미니 플레이어를 눌러 같은 재생 세션으로 되돌아간다 — open()과 달리
+    // 오디오/문장/스크롤 상태를 그대로 두고 화면만 다시 펼친다.
+    function reopenReader(): void {
+        state.isOpen.value = true;
+        setReaderOpenForToast(true);
+        requestAnimationFrame(measureReaderBars);
     }
 
     // 헤더/컨트롤 높이가 바뀔 수 있는 뷰포트 리사이즈(회전, 가상 키보드 등)에서
@@ -404,7 +412,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
     (window as any).__openReaderMode = open;
 
     return {
-        open, openSharedReaderMode, closeReader, checkSharedLink,
+        open, openSharedReaderMode, closeReader, reopenReader, checkSharedLink,
         togglePlayPause, seekTo, onSentenceClick, onHeadingClick,
         openIndexSheet, closeIndexSheet, closeIndexSheetIfOpen,
         openMoreSheet, closeMoreSheet, closeMoreSheetIfOpen,

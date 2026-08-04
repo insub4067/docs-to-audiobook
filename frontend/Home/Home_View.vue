@@ -12,6 +12,7 @@ import LoginPromptSheetView from "../Sheet/LoginPromptSheet_View.vue";
 import AudioListView from "../components/Library/AudioList_View.vue";
 import ReaderView from "../Reader/Reader_View.vue";
 import TabBarView from "../components/TabBar/TabBar_View.vue";
+import MiniPlayerView from "../components/MiniPlayer/MiniPlayer_View.vue";
 import MyFilesView from "../Files/MyFiles_View.vue";
 import { useGenerationState } from "../Generation/Generation_State.vue";
 import { useGenerationLogic } from "../Generation/Generation_Logic.vue";
@@ -30,7 +31,6 @@ import { useThemeState } from "../Theme/Theme_State.vue";
 import { useThemeLogic } from "../Theme/Theme_Logic.vue";
 import { useMyFilesState } from "../Files/MyFiles_State.vue";
 import { useMyFilesLogic } from "../Files/MyFiles_Logic.vue";
-import { formatTime, getAudiobookDisplayTitle } from "../utils/format";
 import { useAuthStore } from "../stores/auth";
 
 const authStore = useAuthStore();
@@ -72,20 +72,9 @@ const bookmarkedItems = computed(() =>
         .slice(0, BOOKMARKED_ITEMS_LIMIT)
 );
 
-// 재방문 사용자는 새 문서 추가보다 듣던 걸 이어 듣는 경우가 많아, 최근
-// 재생한(그리고 충분히 진행된) 오디오북이 있으면 맨 위에 띄운다.
-// 재생 시간(총 길이)은 저장돼 있지 않아 진행률(%)까진 못 보여주고,
-// 지금까지 들은 위치만 보여준다.
-const CONTINUE_LISTENING_MIN_SECONDS = 5;
-const continueListeningItem = computed(() =>
-    [...audioListState.savedAudiobooks.value]
-        .filter((a) => (a.lastPosition || 0) > CONTINUE_LISTENING_MIN_SECONDS && a.playbackUpdatedAt)
-        .sort((a, b) => (b.playbackUpdatedAt || 0) - (a.playbackUpdatedAt || 0))[0] ?? null
-);
-
-async function resumeListening(): Promise<void> {
-    if (continueListeningItem.value) await audioListLogic.openItem(continueListeningItem.value);
-}
+// 읽기 화면을 닫아도(뒤로 가기) 재생이 계속되면 탭바 위에 미니 플레이어를
+// 띄운다 — 목록 마지막 줄이 그 밑에 가리지 않게 스크롤 영역에 여유를 준다.
+const hasMiniPlayer = computed(() => !readerState.isOpen.value && !!readerState.title.value);
 
 function onEscape(event: KeyboardEvent): void {
     if (event.key !== "Escape") return;
@@ -164,21 +153,7 @@ onMounted(async () => {
 
 <template>
     <HeaderView :theme-logic="themeLogic" :active-tab="activeTab" />
-    <main class="app-main" id="appMain" v-show="activeTab === 'home'">
-        <button
-            v-if="continueListeningItem"
-            type="button"
-            class="glass-card continue-listening-card"
-            @click="resumeListening"
-        >
-            <div class="continue-listening-icon"><i data-lucide="play"></i></div>
-            <div class="continue-listening-info">
-                <p class="continue-listening-label">이어 듣기</p>
-                <p class="continue-listening-title">{{ getAudiobookDisplayTitle(continueListeningItem.title) }}</p>
-                <p class="continue-listening-position">{{ formatTime(continueListeningItem.lastPosition || 0) }}부터</p>
-            </div>
-            <i data-lucide="chevron-right" class="continue-listening-chevron"></i>
-        </button>
+    <main class="app-main" id="appMain" :class="{ 'has-mini-player': hasMiniPlayer }" v-show="activeTab === 'home'">
         <UploadView :state="generationState" :logic="generationLogic" />
         <AudioListView
             :state="audioListState"
@@ -216,9 +191,11 @@ onMounted(async () => {
         :my-files-logic="myFilesLogic"
         :generation-logic="generationLogic"
         :generating-items="generationState.generatingItems.value"
+        :has-mini-player="hasMiniPlayer"
     />
 
     <TabBarView v-show="!readerState.isOpen.value" :active-tab="activeTab" @select="(tab) => (activeTab = tab)" />
+    <MiniPlayerView :state="readerState" :logic="readerLogic" />
 
     <input
         ref="fileInput"

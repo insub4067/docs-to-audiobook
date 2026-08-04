@@ -23,6 +23,7 @@ const props = defineProps<{
     myFilesLogic: MyFilesLogic;
     generationLogic: GenerationLogic;
     generatingItems: GeneratingItem[];
+    hasMiniPlayer: boolean;
 }>();
 
 const browserState = useFolderBrowserState("내 파일");
@@ -188,7 +189,7 @@ onUnmounted(() => {
          루트 노드를 여러 개 가지면(fragment) 그 v-show를 어디에도 붙이지
          못하고 조용히 무시한다 — 그래서 반드시 이 화면 전체를 루트
          하나로 감싸야 한다(안의 시트들까지 포함해서). -->
-    <div class="myfiles-root">
+    <div class="myfiles-root" :class="{ 'has-mini-player': hasMiniPlayer }">
         <div class="myfiles-toolbar">
             <div class="folder-breadcrumb" v-if="!isAtRoot">
                 <template v-for="(crumb, i) in browserState.breadcrumb.value" :key="crumb.id ?? 'root'">
