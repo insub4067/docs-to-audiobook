@@ -2585,7 +2585,10 @@ input[type="range"]::-webkit-slider-thumb:active {
 }
 
 .action-sheet-btn:disabled {
-    opacity: 0.4;
+    /* 0.4는 골드 계열 primary 색과 겹치면 배경과 거의 구분이 안 돼
+       기능이 아예 없는 것처럼 보였다 — 버튼이라는 형태는 분명히
+       보이면서 비활성 상태만 드러나도록 덜 흐리게 한다. */
+    opacity: 0.55;
     pointer-events: none;
 }
 
