@@ -1498,7 +1498,7 @@ input[type="range"]::-webkit-slider-thumb:active {
     background-color: rgba(44, 37, 32, 0.35);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
-    z-index: 1000;
+    z-index: 2100;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1563,6 +1563,12 @@ input[type="range"]::-webkit-slider-thumb:active {
     font-size: 0.85rem;
     color: var(--text-muted);
     margin-bottom: 20px;
+}
+
+.loading-card p.loading-overlay-warning {
+    font-weight: 600;
+    color: var(--primary-color);
+    margin-bottom: 0;
 }
 
 .progress-bar-container {
