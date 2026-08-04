@@ -22,12 +22,11 @@ export interface GenerationArguments {
 export interface GenerationLogic {
     handleBatchFileSelect(files: FileList | File[]): Promise<void>;
     resetSelection(): void;
-    submitComposerInput(): Promise<void>;
+    submitPastedText(raw: string): Promise<void>;
+    submitPastedLink(raw: string): Promise<void>;
     openAddSourceMenu(): void;
     openAddSourceMenuForFolder(folderId: string | null): void;
     closeAddSourceSheet(): void;
-    openFileSourceMenu(): void;
-    closeFileSourceMenu(): void;
     importFromGoogleDrive(): Promise<void>;
     openScanSheet(): void;
     closeScanSheet(): void;
@@ -244,11 +243,11 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
         }
     }
 
-    async function submitComposerInput(): Promise<void> {
-        const raw = state.composerInputValue.value.trim();
-        if (!raw) return;
+    async function submitPastedInput(raw: string): Promise<void> {
+        const trimmed = raw.trim();
+        if (!trimmed) return;
 
-        const isLink = looksLikeUrl(raw);
+        const isLink = looksLikeUrl(trimmed);
         if (isLink && !authLogic.isLoggedIn()) {
             showToast("링크 가져오기는 로그인 후 이용할 수 있습니다.", "info");
             document.getElementById("headerLoginSlot")?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -258,11 +257,10 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
         state.isComposerBusy.value = true;
         try {
             const data = !isLink
-                ? await extractPastedText(raw)
-                : isYoutubeUrl(raw) ? await extractTextFromYoutube(raw) : await extractTextFromUrl(raw);
+                ? await extractPastedText(trimmed)
+                : isYoutubeUrl(trimmed) ? await extractTextFromYoutube(trimmed) : await extractTextFromUrl(trimmed);
             applyExtractedText(data);
-            state.composerInputValue.value = "";
-            state.addSourceMode.value = null;
+            closeAddSourceSheet();
         } catch (error) {
             console.error(error);
             showToast((error as Error).message, "error");
@@ -271,27 +269,31 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
         }
     }
 
+    // "텍스트 입력"/"링크 입력" 둘 다 같은 자동 판별 로직으로 처리한다 —
+    // 사용자가 어느 쪽에 붙여넣든(예: 텍스트 입력에 링크를 붙여넣어도)
+    // 내용을 보고 올바르게 처리된다. 메뉴는 발견 편의를 위해 나눴을 뿐이다.
+    async function submitPastedText(raw: string): Promise<void> {
+        await submitPastedInput(raw);
+    }
+
+    async function submitPastedLink(raw: string): Promise<void> {
+        await submitPastedInput(raw);
+    }
+
     function openAddSourceMenu(): void {
         // 홈 화면 드롭존에서 시작한 추가는 항상 루트에 들어가야 한다.
         state.targetFolderId.value = null;
-        state.addSourceMode.value = "menu";
-    }
-
-    function openAddSourceMenuForFolder(folderId: string | null): void {
-        state.targetFolderId.value = folderId;
-        state.addSourceMode.value = "menu";
-    }
-
-    function closeAddSourceSheet(): void {
-        state.addSourceMode.value = null;
-    }
-
-    function openFileSourceMenu(): void {
         state.isFileSourceMenuOpen.value = true;
         preloadGoogleDrivePicker();
     }
 
-    function closeFileSourceMenu(): void {
+    function openAddSourceMenuForFolder(folderId: string | null): void {
+        state.targetFolderId.value = folderId;
+        state.isFileSourceMenuOpen.value = true;
+        preloadGoogleDrivePicker();
+    }
+
+    function closeAddSourceSheet(): void {
         state.isFileSourceMenuOpen.value = false;
     }
 
@@ -307,7 +309,7 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
     }
 
     async function importFromGoogleDrive(): Promise<void> {
-        closeFileSourceMenu();
+        closeAddSourceSheet();
         if (!authLogic.isLoggedIn()) {
             showToast("Google Drive 가져오기는 로그인 후 이용할 수 있습니다.", "info");
             document.getElementById("headerLoginSlot")?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -321,7 +323,6 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
             const picked = await pickGoogleDriveFile(clientId, config.google_api_key || "");
             if (!picked) return; // 사용자가 선택창을 취소함
             applyExtractedText(await extractDriveFile(picked.fileId, picked.accessToken));
-            state.addSourceMode.value = null;
         } catch (error) {
             console.error(error);
             showToast((error as Error).message, "error");
@@ -344,7 +345,7 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
     }
 
     function openScanSheet(): void {
-        closeFileSourceMenu();
+        closeAddSourceSheet();
         state.isScanSheetOpen.value = true;
     }
 
@@ -368,7 +369,6 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
             applyExtractedText(await extractScannedImages(state.scannedImages.value));
             state.scannedImages.value = [];
             state.isScanSheetOpen.value = false;
-            state.addSourceMode.value = null;
         } catch (error) {
             console.error(error);
             showToast((error as Error).message, "error");
@@ -391,11 +391,10 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
     }
 
     async function scanHighQualityPdf(file: File): Promise<void> {
-        closeFileSourceMenu();
+        closeAddSourceSheet();
         state.isComposerBusy.value = true;
         try {
             applyExtractedText(await extractHighQualityPdf(file));
-            state.addSourceMode.value = null;
         } catch (error) {
             console.error(error);
             showToast((error as Error).message, "error");
@@ -580,12 +579,11 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
     return {
         handleBatchFileSelect,
         resetSelection,
-        submitComposerInput,
+        submitPastedText,
+        submitPastedLink,
         openAddSourceMenu,
         openAddSourceMenuForFolder,
         closeAddSourceSheet,
-        openFileSourceMenu,
-        closeFileSourceMenu,
         importFromGoogleDrive,
         openScanSheet,
         closeScanSheet,

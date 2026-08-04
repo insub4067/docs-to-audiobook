@@ -14,126 +14,71 @@ const props = defineProps<{
 
 const authStore = useAuthStore();
 
-const composer = ref<HTMLElement | null>(null);
-useSwipeToDismiss(composer, () => props.logic.closeAddSourceSheet());
+const sheet = ref<HTMLElement | null>(null);
+useSwipeToDismiss(sheet, () => props.logic.closeAddSourceSheet());
 
-const fileSourceSheet = ref<HTMLElement | null>(null);
-useSwipeToDismiss(fileSourceSheet, () => props.logic.closeFileSourceMenu());
-
-const composerPlaceholder = "링크를 붙여넣거나\n텍스트를 입력하세요";
-
-// 진입 애니메이션이 끝나야만 transform을 완전히 없앤다(스타일 쪽 설명
-// 참고) — iOS에서 입력창에 포커스를 줬을 때 커서가 화면 하단에 엉뚱하게
-// 그려지는 버그를 피하기 위함이다.
-const isSettled = ref(false);
-function onComposerTransitionEnd(event: TransitionEvent): void {
-    if (event.propertyName === "transform" && event.target === composer.value) {
-        isSettled.value = !!props.state.addSourceMode.value;
-    }
-}
-
-watch(() => props.state.addSourceMode.value, (mode) => {
-    document.body.style.overflow = mode ? "hidden" : "";
-    if (!mode) isSettled.value = false;
+watch(() => props.state.isFileSourceMenuOpen.value, (open) => {
+    document.body.style.overflow = open ? "hidden" : "";
 });
 
 function onBackdropClick(event: MouseEvent): void {
     if (event.target === event.currentTarget) props.logic.closeAddSourceSheet();
 }
 
-function onFileSourceBackdropClick(event: MouseEvent): void {
-    if (event.target === event.currentTarget) props.logic.closeFileSourceMenu();
-}
-
 function onUploadFileClick(): void {
-    props.logic.closeFileSourceMenu();
     props.logic.closeAddSourceSheet();
     props.onSelectFile();
 }
 
 function onDriveImportClick(): void {
-    props.logic.closeFileSourceMenu();
-    props.logic.closeAddSourceSheet();
     props.logic.importFromGoogleDrive();
 }
 
-function onScanTextClick(): void {
+function onTextInputClick(): void {
     props.logic.closeAddSourceSheet();
+    const raw = window.prompt("오디오북으로 만들 텍스트를 붙여넣어 주세요:");
+    if (raw) props.logic.submitPastedText(raw);
+}
+
+function onLinkInputClick(): void {
+    props.logic.closeAddSourceSheet();
+    const raw = window.prompt("링크를 붙여넣어 주세요:\n(예: https://example.com/article)");
+    if (raw) props.logic.submitPastedLink(raw);
+}
+
+function onScanTextClick(): void {
     props.logic.openScanSheet();
 }
 
 function onHighQualityPdfClick(): void {
-    props.logic.closeFileSourceMenu();
     props.logic.closeAddSourceSheet();
     props.onSelectHighQualityPdf();
-}
-
-function onComposerKeydown(event: KeyboardEvent): void {
-    if (event.key === "Enter" && !event.shiftKey) {
-        event.preventDefault();
-        props.logic.submitComposerInput();
-    }
 }
 </script>
 
 <template>
     <div
-        class="action-sheet-backdrop composer-backdrop"
-        :class="{ show: !!state.addSourceMode.value }"
+        class="action-sheet-backdrop"
+        :class="{ show: state.isFileSourceMenuOpen.value }"
         role="dialog"
         aria-modal="true"
         aria-label="문서 추가"
         @click="onBackdropClick"
     >
-        <div
-            class="add-source-composer"
-            :class="{ settled: isSettled }"
-            ref="composer"
-            @transitionend="onComposerTransitionEnd"
-        >
-            <button
-                type="button"
-                class="composer-attach-btn"
-                aria-label="파일 소스 선택"
-                title="파일 업로드 또는 Google Drive에서 가져오기"
-                @click="logic.openFileSourceMenu"
-            >
-                <i data-lucide="plus"></i>
-            </button>
-            <textarea
-                rows="2"
-                :placeholder="composerPlaceholder"
-                v-model="state.composerInputValue.value"
-                @keydown="onComposerKeydown"
-            ></textarea>
-            <button
-                type="button"
-                class="composer-submit-btn"
-                :class="{ 'is-loading': state.isComposerBusy.value }"
-                :disabled="state.isComposerBusy.value || !state.composerInputValue.value.trim()"
-                aria-label="추가"
-                title="추가"
-                @click="logic.submitComposerInput"
-            >
-                <i data-lucide="arrow-up"></i>
-            </button>
-        </div>
-    </div>
-
-    <div
-        class="action-sheet-backdrop"
-        :class="{ show: state.isFileSourceMenuOpen.value }"
-        role="dialog"
-        aria-modal="true"
-        aria-label="파일 소스 선택"
-        @click="onFileSourceBackdropClick"
-    >
-        <div class="action-sheet" ref="fileSourceSheet">
+        <div class="action-sheet" ref="sheet">
             <div class="action-sheet-handle"></div>
             <p class="action-sheet-hint">지원 형식: MD · PDF · TXT · DOCX · HWP</p>
             <button class="action-sheet-btn" type="button" @click="onUploadFileClick">
                 <i data-lucide="file-up"></i>
                 파일 업로드
+            </button>
+            <button class="action-sheet-btn" type="button" @click="onTextInputClick">
+                <i data-lucide="type"></i>
+                텍스트 입력
+            </button>
+            <button class="action-sheet-btn" type="button" @click="onLinkInputClick">
+                <i data-lucide="link"></i>
+                링크 입력
             </button>
             <button class="action-sheet-btn" type="button" @click="onDriveImportClick">
                 <i data-lucide="hard-drive"></i>
@@ -147,7 +92,7 @@ function onComposerKeydown(event: KeyboardEvent): void {
                 <i data-lucide="file-search"></i>
                 고성능 PDF (관리자 전용)
             </button>
-            <button class="action-sheet-btn action-sheet-btn-cancel" type="button" @click="logic.closeFileSourceMenu">닫기</button>
+            <button class="action-sheet-btn action-sheet-btn-cancel" type="button" @click="logic.closeAddSourceSheet">닫기</button>
         </div>
     </div>
 </template>

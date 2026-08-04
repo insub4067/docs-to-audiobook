@@ -13,8 +13,6 @@ export interface GeneratingItem {
     folderId: string | null;
 }
 
-export type AddSourceMode = "menu" | null;
-
 export interface GenerationState {
     currentTextId: Ref<string | null>;
     currentTextAccessToken: Ref<string | null>;
@@ -30,13 +28,9 @@ export interface GenerationState {
     isGenerateDisabled: Ref<boolean>;
     isModalOpen: Ref<boolean>;
     isLoginPromptOpen: Ref<boolean>;
-    // 문서 추가 시트의 통합 입력창(링크 붙여넣기/텍스트 붙여넣기 겸용) —
-    // 무엇을 붙여넣었는지는 Generation_Logic.vue가 판단한다.
-    composerInputValue: Ref<string>;
     isComposerBusy: Ref<boolean>;
-    addSourceMode: Ref<AddSourceMode>;
-    // "+" 버튼을 누르면 파일 업로드/구글 드라이브 중 어디서 가져올지
-    // 고르는 작은 시트 — 문서 추가 컴포저 위에 겹쳐 뜬다.
+    // 파일 업로드/구글 드라이브/텍스트 입력/링크 입력 등 문서 소스를
+    // 고르는 시트("문서 추가").
     isFileSourceMenuOpen: Ref<boolean>;
     // 텍스트 스캔(OCR, 관리자 전용) — 여러 장을 연속 촬영해서 모아뒀다가
     // 한 번에 추출한다. 아직 서버로 보내지 않은 대기열.
@@ -67,9 +61,7 @@ export function useGenerationState(): GenerationState {
         isGenerateDisabled: ref(true),
         isModalOpen: ref(false),
         isLoginPromptOpen: ref(false),
-        composerInputValue: ref(""),
         isComposerBusy: ref(false),
-        addSourceMode: ref(null),
         isFileSourceMenuOpen: ref(false),
         isScanSheetOpen: ref(false),
         scannedImages: ref([]),
