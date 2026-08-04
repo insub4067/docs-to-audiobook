@@ -117,6 +117,9 @@
 :root[data-app-theme] .action-sheet-btn-cancel {
     border-top-color: rgba(0, 0, 0, 0.06);
 }
+:root[data-app-theme] .action-sheet-divider {
+    background-color: rgba(0, 0, 0, 0.06);
+}
 
 :root[data-app-theme="dark"] .upload-dropzone {
     background-color: #3a332f;
@@ -145,6 +148,9 @@
 :root[data-app-theme="dark"] .action-sheet-btn-cancel {
     border-top-color: rgba(247, 240, 233, 0.12);
 }
+:root[data-app-theme="dark"] .action-sheet-divider {
+    background-color: rgba(247, 240, 233, 0.12);
+}
 
 :root[data-app-theme="gray"] .upload-dropzone {
     background-color: #2c2c2e;
@@ -172,6 +178,9 @@
 }
 :root[data-app-theme="gray"] .action-sheet-btn-cancel {
     border-top-color: rgba(255, 255, 255, 0.12);
+}
+:root[data-app-theme="gray"] .action-sheet-divider {
+    background-color: rgba(255, 255, 255, 0.12);
 }
 
 /* Reset & General Styles */
@@ -208,6 +217,10 @@ html {
        그대로 적용되도록 끈다. */
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
+    /* iOS WebKit은 실제 스크롤 요소를 html로 취급할 때가 있어, body에만
+       걸어둔 overscroll-behavior로는 풀투리프레시(당겨서 새로고침)가
+       안 막힐 수 있다 — html에도 동일하게 걸어야 확실히 막힌다. */
+    overscroll-behavior-y: none;
 }
 
 /* Background Decor - Removed for flat iOS look */
@@ -2020,6 +2033,12 @@ input[type="range"]::-webkit-slider-thumb:active {
     font-size: 0.75rem;
     font-weight: 600;
     color: var(--text-muted);
+}
+
+.action-sheet-divider {
+    height: 1px;
+    margin: 8px 20px 0;
+    background-color: rgba(0, 0, 0, 0.06);
 }
 
 .action-sheet-btn-detailed {

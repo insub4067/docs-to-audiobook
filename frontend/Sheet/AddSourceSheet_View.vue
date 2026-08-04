@@ -79,7 +79,6 @@ function onHighQualityPdfClick(): void {
                 <template v-if="maxUploadLabel"> · {{ maxUploadLabel }}</template>
             </p>
 
-            <p class="action-sheet-section-label">일반 입력</p>
             <button class="action-sheet-btn action-sheet-btn-detailed" type="button" @click="onUploadFileClick">
                 <i data-lucide="file-up"></i>
                 <span class="action-sheet-btn-text">
@@ -110,7 +109,8 @@ function onHighQualityPdfClick(): void {
             </button>
 
             <template v-if="authStore.isAdmin">
-                <p class="action-sheet-section-label">관리자 도구</p>
+                <div class="action-sheet-divider"></div>
+                <p class="action-sheet-section-label">개발자 전용</p>
                 <button class="action-sheet-btn action-sheet-btn-detailed" type="button" @click="onScanTextClick">
                     <i data-lucide="scan-text"></i>
                     <span class="action-sheet-btn-text">
