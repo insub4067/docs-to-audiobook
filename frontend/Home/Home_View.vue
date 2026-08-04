@@ -47,22 +47,23 @@ const readerLogic = useReaderLogic(readerState, readerControlsLogic, audioListLo
 
 const activeTab = ref<"home" | "files">("home");
 
-// 홈 화면은 "최근 추가"와 "즐겨찾기" 두 섹션만 최대 5개씩 — 전체 목록은
+// 홈 화면은 "최근 추가"와 "즐겨찾기" 두 섹션만 일부만 — 전체 목록은
 // 내 파일 탭에서 본다. 추가되거나 재생된 시각 중 더 최근인 순으로 정렬.
-const HOME_SUMMARY_LIMIT = 5;
+const RECENT_ITEMS_LIMIT = 3;
+const BOOKMARKED_ITEMS_LIMIT = 5;
 function recencyScore(audio: AudiobookRecord): number {
     return Math.max(audio.timestamp || 0, audio.playbackUpdatedAt || 0);
 }
 const recentItems = computed(() =>
     [...audioListState.savedAudiobooks.value]
         .sort((a, b) => recencyScore(b) - recencyScore(a))
-        .slice(0, HOME_SUMMARY_LIMIT)
+        .slice(0, RECENT_ITEMS_LIMIT)
 );
 const bookmarkedItems = computed(() =>
     audioListState.savedAudiobooks.value
         .filter((a) => a.isBookmarked)
         .sort((a, b) => recencyScore(b) - recencyScore(a))
-        .slice(0, HOME_SUMMARY_LIMIT)
+        .slice(0, BOOKMARKED_ITEMS_LIMIT)
 );
 
 function onEscape(event: KeyboardEvent): void {

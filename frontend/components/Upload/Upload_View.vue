@@ -66,13 +66,13 @@ function onDropzoneTouchEnd(event: TouchEvent): void {
             @dragleave.prevent.stop="state.isDragOver.value = false"
             @drop.prevent.stop="onDrop"
         >
-            <div v-show="!state.isDropzoneLoading.value">
+            <div v-show="!state.isDropzoneLoading.value && !state.isComposerBusy.value">
                 <i data-lucide="upload-cloud" class="dropzone-icon"></i>
                 <p class="dropzone-text">{{ isMobileDevice ? "이곳을 터치하여 문서를 추가하세요" : "파일을 끌어다 놓거나 터치하여 추가 방법을 선택하세요" }}</p>
                 <p class="dropzone-hint">파일 업로드 · 링크 · 텍스트 붙여넣기 지원</p>
             </div>
 
-            <div v-show="state.isDropzoneLoading.value" style="text-align: center; color: var(--text-muted);">
+            <div v-show="state.isDropzoneLoading.value || state.isComposerBusy.value" style="text-align: center; color: var(--text-muted);">
                 <div class="spinner-container" style="width: 32px; height: 32px; margin: 0 auto 12px;">
                     <div class="double-bounce1"></div>
                     <div class="double-bounce2"></div>
