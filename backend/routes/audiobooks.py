@@ -5,9 +5,11 @@ IndexedDB가 재생 원본이고 여기는 백업 및 기기 간 전달 통로�
 파일 본체는 클라이언트가 서명 URL로 Supabase와 직접 주고받는다 —
 서버를 거치면 최대 90MB가 매번 인스턴스 메모리를 지나간다.
 """
+import logging
 import uuid
 from datetime import datetime, timezone
 from fastapi import APIRouter, Request, Header, HTTPException
+from postgrest.exceptions import APIError
 
 from state import (
     AUDIOBOOK_BUCKET, SIGNED_URL_TTL, require_user_id, _supabase_or_503,
@@ -15,6 +17,7 @@ from state import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def audiobook_items_with_urls(supabase, user_id: str, rows: list) -> list:
@@ -165,6 +168,7 @@ async def get_playback_state(audiobook_id: str, authorization: str = Header(None
             "repeat_mode": "off",
         }
     except Exception as e:
+        logger.exception("재생 상태 조회 실패 audiobook_id=%s", audiobook_id)
         raise HTTPException(status_code=500, detail=f"재생 상태를 불러오지 못했습니다: {e}")
 
 
@@ -188,7 +192,18 @@ async def save_playback_state(audiobook_id: str, payload: dict, authorization: s
             state, on_conflict="user_id,audiobook_id"
         ).execute()
         return response.data[0] if response.data else state
+    except APIError as e:
+        # 23503 = foreign_key_violation. 다른 기기에서 이미 삭제된 오디오북을
+        # 아직 동기화 전인 기기가 재생 중일 때 발생한다 — 클라이언트는 이
+        # 실패를 조용히 무시하므로(재생 자체는 계속) 500 대신 404로 명확히
+        # 구분해 로그에 진짜 서버 오류처럼 쌓이지 않게 한다.
+        if e.code == "23503":
+            logger.warning("존재하지 않는 오디오북의 재생 상태 저장 시도 audiobook_id=%s", audiobook_id)
+            raise HTTPException(status_code=404, detail="삭제되었거나 존재하지 않는 오디오북입니다.")
+        logger.exception("재생 상태 저장 실패 audiobook_id=%s", audiobook_id)
+        raise HTTPException(status_code=500, detail=f"재생 상태 저장에 실패했습니다: {e}")
     except Exception as e:
+        logger.exception("재생 상태 저장 실패 audiobook_id=%s", audiobook_id)
         raise HTTPException(status_code=500, detail=f"재생 상태 저장에 실패했습니다: {e}")
 
 
