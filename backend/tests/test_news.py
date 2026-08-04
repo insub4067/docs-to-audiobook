@@ -1,0 +1,151 @@
+"""오늘의 뉴스 /api/admin/news, /api/news 테스트.
+
+관리자 전용 등록 라우트라 require_admin_user를 패치해서 검증한다. 실제
+TTS 호출은 synthesize_document 하나로 모아 패치해 edge-tts/구글 TTS
+실호출 없이 테스트한다.
+"""
+from unittest.mock import MagicMock, patch
+
+import httpx
+import pytest
+from fastapi import HTTPException
+
+from main import app
+
+
+def _auth_headers():
+    from auth import create_access_token
+    token = create_access_token({"sub": "test_user_id"})
+    return {"Authorization": f"Bearer {token}"}
+
+
+async def _fake_synthesize_document(text, voice, rate, pitch, progress_callback=None, provider_name=None):
+    return b"fake-mp3-bytes", [{"text": text, "start": 0, "end": 1000}], []
+
+
+@pytest.fixture
+def mock_supabase():
+    with patch("auth.get_supabase_client") as get_client:
+        client = MagicMock()
+        get_client.return_value = client
+        yield client
+
+
+@pytest.mark.asyncio
+async def test_add_news_rejects_non_admin():
+    def reject(authorization):
+        raise HTTPException(status_code=403, detail="관리자만 접근할 수 있습니다.")
+
+    with patch("routes.news.require_admin_user", side_effect=reject):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post("/api/admin/news", json={"text": "[]"}, headers=_auth_headers())
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_add_news_rejects_malformed_json():
+    with patch("routes.news.require_admin_user", return_value="admin-user"):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post("/api/admin/news", json={"text": "이건 JSON이 아니다"}, headers=_auth_headers())
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_add_news_rejects_empty_array():
+    with patch("routes.news.require_admin_user", return_value="admin-user"):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post("/api/admin/news", json={"text": "[]"}, headers=_auth_headers())
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_add_news_strips_json_code_fence_and_stores_items(mock_supabase):
+    mock_supabase.table().insert().execute.return_value = MagicMock(data=[{"id": "row-1"}])
+    payload_text = (
+        "```json\n"
+        '[{"title": "첫 뉴스", "content": "첫 뉴스 본문입니다.", "category": "국제", "source": "Reuters"},'
+        ' {"title": "둘째 뉴스", "content": "둘째 뉴스 본문입니다."}]'
+        "\n```"
+    )
+
+    with patch("routes.news.require_admin_user", return_value="admin-user"), \
+         patch("routes.news.synthesize_document", side_effect=_fake_synthesize_document):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post("/api/admin/news", json={"text": payload_text}, headers=_auth_headers())
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["created"]) == 2
+    assert data["errors"] == []
+
+    insert_calls = mock_supabase.table().insert.call_args_list
+    inserted_rows = [call.args[0] for call in insert_calls if call.args]
+    assert all(row["is_news"] is True for row in inserted_rows)
+    assert all(row["user_id"] == "admin-user" for row in inserted_rows)
+    assert inserted_rows[0]["news_category"] == "국제"
+    assert inserted_rows[0]["news_source"] == "Reuters"
+    assert inserted_rows[1]["news_category"] is None
+
+
+@pytest.mark.asyncio
+async def test_add_news_skips_items_missing_title_or_content(mock_supabase):
+    mock_supabase.table().insert().execute.return_value = MagicMock(data=[{"id": "row-1"}])
+    payload_text = '[{"title": "제목만 있음"}, {"title": "정상 뉴스", "content": "본문 내용"}]'
+
+    with patch("routes.news.require_admin_user", return_value="admin-user"), \
+         patch("routes.news.synthesize_document", side_effect=_fake_synthesize_document):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post("/api/admin/news", json={"text": payload_text}, headers=_auth_headers())
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["created"]) == 1
+    assert data["created"][0]["title"] == "정상 뉴스"
+
+
+@pytest.mark.asyncio
+async def test_add_news_reports_partial_failure_without_failing_whole_request(mock_supabase):
+    mock_supabase.table().insert().execute.return_value = MagicMock(data=[{"id": "row-1"}])
+    payload_text = '[{"title": "실패할 뉴스", "content": "본문"}, {"title": "성공할 뉴스", "content": "본문"}]'
+
+    calls = {"n": 0}
+
+    async def flaky_synthesize(text, voice, rate, pitch, progress_callback=None, provider_name=None):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("합성 실패")
+        return await _fake_synthesize_document(text, voice, rate, pitch)
+
+    with patch("routes.news.require_admin_user", return_value="admin-user"), \
+         patch("routes.news.synthesize_document", side_effect=flaky_synthesize):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post("/api/admin/news", json={"text": payload_text}, headers=_auth_headers())
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["created"]) == 1
+    assert len(data["errors"]) == 1
+    assert data["errors"][0]["title"] == "실패할 뉴스"
+
+
+@pytest.mark.asyncio
+async def test_list_news_filters_recent_news_items_only(mock_supabase):
+    rows = [{
+        "id": "news-1", "user_id": "admin-user", "title": "오늘 뉴스",
+        "is_news": True, "news_category": "경제", "news_source": "Bloomberg",
+        "created_at": "2026-08-05T00:00:00+00:00",
+    }]
+    mock_supabase.table().select().eq().gte().order().limit().execute.return_value = MagicMock(data=rows)
+    mock_supabase.storage.from_().create_signed_url.return_value = {"signedURL": "https://example.com/signed"}
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/news")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["news"]) == 1
+    assert data["news"][0]["title"] == "오늘 뉴스"
+    assert data["news"][0]["audio_url"] == "https://example.com/signed"
+
+    select_call = mock_supabase.table().select().eq.call_args
+    assert select_call.args == ("is_news", True)

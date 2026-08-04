@@ -6,8 +6,8 @@ import ThemeSheetView from "../Sheet/ThemeSheet_View.vue";
 import { useThemeState } from "../Theme/Theme_State.vue";
 import { useThemeLogic } from "../Theme/Theme_Logic.vue";
 
-const { status, contentVisible, metrics } = useAdminState();
-const { formatMetric, loadMetrics } = useAdminLogic({ status, contentVisible, metrics });
+const { status, contentVisible, metrics, newsInputText, newsStatus, newsSubmitting } = useAdminState();
+const { formatMetric, loadMetrics, submitNews } = useAdminLogic({ status, contentVisible, metrics, newsInputText, newsStatus, newsSubmitting });
 const themeState = useThemeState();
 const themeLogic = useThemeLogic(themeState);
 
@@ -82,6 +82,28 @@ onMounted(loadMetrics);
                         <strong data-metric="total_audiobooks">{{ formatMetric('total_audiobooks', metrics.total_audiobooks) }}</strong>
                         <span><b>{{ formatMetric('generation_failed_30d', metrics.generation_failed_30d) }}</b>건 · 최근 30일 실패</span>
                     </a>
+                </div>
+            </section>
+
+            <section class="metric-section" aria-labelledby="newsHeading">
+                <div class="section-heading">
+                    <p class="section-kicker">HOME · TODAY'S NEWS</p>
+                    <h2 id="newsHeading">오늘의 뉴스 추가</h2>
+                </div>
+                <p class="dashboard-subtitle">
+                    [{"title": "...", "content": "...", "category": "...", "source": "..."}] 형식의 JSON 배열을 붙여넣으세요.
+                </p>
+                <textarea
+                    class="news-input"
+                    rows="10"
+                    placeholder='[{"title": "뉴스 제목", "content": "요약 본문", "category": "국제", "source": "Reuters"}]'
+                    v-model="newsInputText"
+                ></textarea>
+                <div class="news-input-actions">
+                    <button type="button" :disabled="newsSubmitting" @click="submitNews">
+                        {{ newsSubmitting ? "등록 중..." : "등록하기" }}
+                    </button>
+                    <span class="news-status">{{ newsStatus }}</span>
                 </div>
             </section>
         </section>

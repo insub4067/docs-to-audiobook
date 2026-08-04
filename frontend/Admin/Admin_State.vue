@@ -6,6 +6,9 @@ export interface AdminState {
     status: Ref<string>;
     contentVisible: Ref<boolean>;
     metrics: Ref<AdminMetrics>;
+    newsInputText: Ref<string>;
+    newsStatus: Ref<string>;
+    newsSubmitting: Ref<boolean>;
 }
 
 export function useAdminState(): AdminState {
@@ -13,6 +16,9 @@ export function useAdminState(): AdminState {
         status: ref("지표를 불러오는 중입니다."),
         contentVisible: ref(false),
         metrics: ref({}),
+        newsInputText: ref(""),
+        newsStatus: ref(""),
+        newsSubmitting: ref(false),
     };
 }
 

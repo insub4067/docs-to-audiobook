@@ -17,6 +17,7 @@ import ReaderView from "../Reader/Reader_View.vue";
 import TabBarView from "../components/TabBar/TabBar_View.vue";
 import MiniPlayerView from "../components/MiniPlayer/MiniPlayer_View.vue";
 import MyFilesView from "../Files/MyFiles_View.vue";
+import TodayNewsView from "../components/News/TodayNews_View.vue";
 import { useGenerationState } from "../Generation/Generation_State.vue";
 import { useGenerationLogic } from "../Generation/Generation_Logic.vue";
 import { useVoiceState } from "../Voices/Voice_State.vue";
@@ -190,6 +191,7 @@ onMounted(async () => {
     <HeaderView :theme-logic="themeLogic" :active-tab="activeTab" />
     <main class="app-main" id="appMain" :class="{ 'has-mini-player': hasMiniPlayer }" v-show="activeTab === 'home'">
         <UploadView :state="generationState" :logic="generationLogic" />
+        <TodayNewsView :logic="readerLogic" />
         <AudioListView
             :state="audioListState"
             :logic="audioListLogic"

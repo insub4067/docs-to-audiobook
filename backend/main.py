@@ -44,6 +44,7 @@ from routes import folders as folders_routes
 from routes import auth_social as auth_social_routes
 from routes import system as system_routes
 from routes import notifications as notifications_routes
+from routes import news as news_routes
 app.include_router(extract_url_routes.router)
 app.include_router(extract_youtube_routes.router)
 app.include_router(import_drive_routes.router)
@@ -58,6 +59,7 @@ app.include_router(folders_routes.router)
 app.include_router(auth_social_routes.router)
 app.include_router(system_routes.router)
 app.include_router(notifications_routes.router)
+app.include_router(news_routes.router)
 
 # Serve static files (HTML, CSS, JS)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

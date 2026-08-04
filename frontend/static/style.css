@@ -1196,6 +1196,19 @@ input[type="range"]::-webkit-slider-thumb:active {
     border-bottom: none;
 }
 
+/* 뉴스 목록은 <button>으로 렌더돼(스와이프 삭제가 없어 <div>일 이유가
+   없음) 기본 버튼 스타일(테두리·패딩·폰트)만 지워서 .audio-item과
+   똑같이 보이게 한다. */
+.audio-item-news {
+    display: block;
+    width: 100%;
+    border: none;
+    background: none;
+    padding: 0;
+    font: inherit;
+    text-align: left;
+}
+
 .audio-item-bg {
     position: absolute;
     top: 0;
