@@ -86,6 +86,11 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
 
     function cancelUpload(): void {
         currentUploadController?.abort();
+        // abort할 요청이 아직 없는 시점(예: 선택창 대기 중)에 눌러도 오버레이가
+        // 그대로 남아있지 않도록, 로딩 상태는 항상 즉시 꺼서 버튼이 눈에 보이는
+        // 반응을 남기게 한다.
+        state.isDropzoneLoading.value = false;
+        state.isComposerBusy.value = false;
     }
 
     function isAbortError(error: unknown): boolean {
@@ -365,14 +370,22 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
             document.getElementById("headerLoginSlot")?.scrollIntoView({ behavior: "smooth", block: "center" });
             return;
         }
-        state.isComposerBusy.value = true;
         try {
             const config = await fetch("/api/config").then((r) => r.json());
             const clientId = config.providers?.google;
             if (!clientId) throw new Error("Google 설정이 준비되지 않았습니다.");
+            // 로딩 오버레이(취소 버튼 포함)는 실제 업로드/추출 요청이 시작된
+            // 뒤에만 띄운다 — 그 전에 띄우면 사용자가 아직 Google 선택창과
+            // 상호작용해야 하는데 전체화면 오버레이가 가로막고, 취소를 눌러도
+            // 아직 abort할 요청이 없어 아무 반응이 없는 것처럼 보였다.
             const picked = await pickGoogleDriveFile(clientId, config.google_api_key || "");
             if (!picked) return; // 사용자가 선택창을 취소함
-            applyExtractedText(await extractDriveFile(picked.fileId, picked.accessToken));
+            state.isComposerBusy.value = true;
+            try {
+                applyExtractedText(await extractDriveFile(picked.fileId, picked.accessToken));
+            } finally {
+                state.isComposerBusy.value = false;
+            }
         } catch (error) {
             if (isAbortError(error)) {
                 showToast("업로드를 취소했어요", "info");
@@ -380,8 +393,6 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
                 console.error(error);
                 showToast((error as Error).message, "error");
             }
-        } finally {
-            state.isComposerBusy.value = false;
         }
     }
 
