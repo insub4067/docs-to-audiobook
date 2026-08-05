@@ -13,6 +13,8 @@ export interface AdminLogic {
     openStatusMenu(item: LibraryAdminItem): void;
     closeStatusMenu(): void;
     toggleLibraryStatus(item: LibraryAdminItem): Promise<void>;
+    openInputSheet(kind: "news" | "library"): void;
+    closeInputSheet(): void;
 }
 
 // 상태를 인자로 받는다(직접 import하지 않음) — 그래야 이 로직만 따로
@@ -21,7 +23,7 @@ export function useAdminLogic(
     {
         status, contentVisible, metrics, activeAdminTab, newsInputText, newsStatus, newsSubmitting,
         libraryInputText, libraryStatus, librarySubmitting,
-        libraryItems, libraryItemsStatus, libraryTogglingIds, statusMenuItem,
+        libraryItems, libraryItemsStatus, libraryTogglingIds, statusMenuItem, activeInputSheet,
     }: AdminState
 ): AdminLogic {
     function formatMetric(name: AdminMetricName, value: number | null | undefined): string {
@@ -135,6 +137,7 @@ export function useAdminLogic(
             const queuedCount = data.queued || 0;
             newsStatus.value = `${queuedCount}개 접수됨 — 변환이 끝나면 전체 사용자에게 알림이 발송돼요.`;
             newsInputText.value = "";
+            closeInputSheet();
         } catch (error) {
             console.error(error);
             newsStatus.value = (error as Error).message || "등록에 실패했습니다.";
@@ -171,6 +174,7 @@ export function useAdminLogic(
             const queuedCount = data.queued || 0;
             libraryStatus.value = `${queuedCount}개 접수됨 — status를 "published"로 명시하지 않은 작품은 검토 상태로만 저장되고 공개되지 않아요.`;
             libraryInputText.value = "";
+            closeInputSheet();
             loadLibraryItems();
         } catch (error) {
             console.error(error);
@@ -208,6 +212,14 @@ export function useAdminLogic(
         statusMenuItem.value = null;
     }
 
+    function openInputSheet(kind: "news" | "library"): void {
+        activeInputSheet.value = kind;
+    }
+
+    function closeInputSheet(): void {
+        activeInputSheet.value = null;
+    }
+
     async function toggleLibraryStatus(item: LibraryAdminItem): Promise<void> {
         const token = localStorage.getItem("authToken");
         if (!token) return;
@@ -236,6 +248,7 @@ export function useAdminLogic(
     return {
         formatMetric, loadMetrics, selectTab, validateJson, submitNews, submitLibrary,
         loadLibraryItems, openStatusMenu, closeStatusMenu, toggleLibraryStatus,
+        openInputSheet, closeInputSheet,
     };
 }
 

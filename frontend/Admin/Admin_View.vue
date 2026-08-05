@@ -9,15 +9,16 @@ import { useThemeLogic } from "../Theme/Theme_Logic.vue";
 const {
     status, contentVisible, metrics, activeAdminTab, newsInputText, newsStatus, newsSubmitting,
     libraryInputText, libraryStatus, librarySubmitting,
-    libraryItems, libraryItemsStatus, libraryTogglingIds, statusMenuItem,
+    libraryItems, libraryItemsStatus, libraryTogglingIds, statusMenuItem, activeInputSheet,
 } = useAdminState();
 const {
     formatMetric, loadMetrics, selectTab, validateJson, submitNews, submitLibrary,
     loadLibraryItems, openStatusMenu, closeStatusMenu, toggleLibraryStatus,
+    openInputSheet, closeInputSheet,
 } = useAdminLogic({
     status, contentVisible, metrics, activeAdminTab, newsInputText, newsStatus, newsSubmitting,
     libraryInputText, libraryStatus, librarySubmitting,
-    libraryItems, libraryItemsStatus, libraryTogglingIds, statusMenuItem,
+    libraryItems, libraryItemsStatus, libraryTogglingIds, statusMenuItem, activeInputSheet,
 });
 const themeState = useThemeState();
 const themeLogic = useThemeLogic(themeState);
@@ -110,66 +111,27 @@ onMounted(() => {
                 </div>
             </section>
 
-            <section v-show="activeAdminTab === 'create'" class="metric-section" aria-labelledby="newsHeading">
+            <section v-show="activeAdminTab === 'create'" class="metric-section" aria-labelledby="createHeading">
                 <div class="section-heading">
-                    <p class="section-kicker">HOME · ECONOMIC NEWS</p>
-                    <h2 id="newsHeading">경제 뉴스 추가</h2>
+                    <p class="section-kicker">CONTENT</p>
+                    <h2 id="createHeading">콘텐츠 등록</h2>
                 </div>
-                <p class="dashboard-subtitle">
-                    [{"title": "...", "content": "...", "category": "...", "source": "..."}] 형식의 JSON 배열을 붙여넣으세요.
-                </p>
-                <textarea
-                    class="news-input"
-                    rows="10"
-                    placeholder='[{"title": "뉴스 제목", "content": "요약 본문", "category": "국제", "source": "Reuters"}]'
-                    v-model="newsInputText"
-                ></textarea>
-                <ul class="json-errors" v-if="newsValidation.errors.length">
-                    <li v-for="(error, i) in newsValidation.errors" :key="i">{{ error }}</li>
+                <ul class="content-create-list">
+                    <li class="content-create-row" @click="openInputSheet('news')">
+                        <div>
+                            <strong>경제 뉴스 추가</strong>
+                            <span>JSON 배열로 뉴스를 등록합니다</span>
+                        </div>
+                        <span class="content-create-chevron">›</span>
+                    </li>
+                    <li class="content-create-row" @click="openInputSheet('library')">
+                        <div>
+                            <strong>라이브러리 작품 추가</strong>
+                            <span>JSON 배열로 경전·철학·고전 작품을 등록합니다</span>
+                        </div>
+                        <span class="content-create-chevron">›</span>
+                    </li>
                 </ul>
-                <div class="json-preview" v-else-if="newsValidation.itemCount > 0">
-                    <p>{{ newsValidation.itemCount }}개 항목 인식됨</p>
-                    <ul>
-                        <li v-for="(title, i) in newsValidation.previewTitles" :key="i">{{ title }}</li>
-                    </ul>
-                </div>
-                <div class="news-input-actions">
-                    <button type="button" :disabled="!newsCanSubmit" @click="submitNews">{{ newsSubmitLabel }}</button>
-                    <span class="news-status">{{ newsStatus }}</span>
-                </div>
-            </section>
-
-            <section v-show="activeAdminTab === 'create'" class="metric-section" aria-labelledby="libraryHeading">
-                <div class="section-heading">
-                    <p class="section-kicker">LIBRARY · 경전·철학·고전</p>
-                    <h2 id="libraryHeading">라이브러리 작품 추가</h2>
-                </div>
-                <p class="dashboard-subtitle">
-                    작품 배열을 JSON으로 붙여넣으세요. 필드: title(필수) · content(필수, 마크다운 —
-                    "# 장 제목"으로 챕터를 나누면 목차가 자동 생성됨) · category ·
-                    edition(판본) · translator(번역/편저) · source(출처) ·
-                    rights(이용 조건, 자유 텍스트) · description(1~2문장 소개) ·
-                    status("published"로 명시해야 공개됨, 생략 시 "review"로 비공개 저장).
-                </p>
-                <textarea
-                    class="news-input"
-                    rows="10"
-                    placeholder='[{"title": "도덕경", "category": "철학·사상", "edition": "왕필본", "translator": "원문 기반", "source": "중국 고전 《도덕경》", "rights": "원전 공개 이용 가능", "description": "노자가 전하는 도와 덕의 철학...", "status": "published", "content": "# 1장\n도가도 비상도...\n\n# 2장\n..."}]'
-                    v-model="libraryInputText"
-                ></textarea>
-                <ul class="json-errors" v-if="libraryValidation.errors.length">
-                    <li v-for="(error, i) in libraryValidation.errors" :key="i">{{ error }}</li>
-                </ul>
-                <div class="json-preview" v-else-if="libraryValidation.itemCount > 0">
-                    <p>{{ libraryValidation.itemCount }}개 항목 인식됨</p>
-                    <ul>
-                        <li v-for="(title, i) in libraryValidation.previewTitles" :key="i">{{ title }}</li>
-                    </ul>
-                </div>
-                <div class="news-input-actions">
-                    <button type="button" :disabled="!libraryCanSubmit" @click="submitLibrary">{{ librarySubmitLabel }}</button>
-                    <span class="news-status">{{ libraryStatus }}</span>
-                </div>
             </section>
 
             <section v-show="activeAdminTab === 'publishing'" class="metric-section" aria-labelledby="libraryReviewHeading">
@@ -215,6 +177,93 @@ onMounted(() => {
                 {{ statusMenuItem.library_status === "published" ? "비공개로 전환" : "공개로 전환" }}
             </button>
             <button type="button" class="action-sheet-btn action-sheet-btn-cancel" @click="closeStatusMenu">취소</button>
+        </div>
+    </div>
+
+    <div class="action-sheet-backdrop" :class="{ show: activeInputSheet === 'news' }" role="dialog" aria-modal="true" @click="(e) => { if (e.target === e.currentTarget) closeInputSheet(); }">
+        <div class="action-sheet input-sheet">
+            <div class="action-sheet-handle"></div>
+            <div class="index-sheet-header"><h3>경제 뉴스 추가</h3></div>
+            <div class="input-sheet-scroll">
+                <p class="dashboard-subtitle">
+                    [{"title": "...", "content": "...", "category": "...", "source": "..."}] 형식의 JSON 배열을 붙여넣으세요.
+                </p>
+                <textarea
+                    class="news-input"
+                    rows="10"
+                    placeholder='[
+  {
+    "title": "뉴스 제목",
+    "content": "요약 본문",
+    "category": "국제",
+    "source": "Reuters"
+  }
+]'
+                    v-model="newsInputText"
+                ></textarea>
+                <ul class="json-errors" v-if="newsValidation.errors.length">
+                    <li v-for="(error, i) in newsValidation.errors" :key="i">{{ error }}</li>
+                </ul>
+                <div class="json-preview" v-else-if="newsValidation.itemCount > 0">
+                    <p>{{ newsValidation.itemCount }}개 항목 인식됨</p>
+                    <ul>
+                        <li v-for="(title, i) in newsValidation.previewTitles" :key="i">{{ title }}</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="news-input-actions">
+                <button type="button" :disabled="!newsCanSubmit" @click="submitNews">{{ newsSubmitLabel }}</button>
+                <span class="news-status">{{ newsStatus }}</span>
+            </div>
+            <button type="button" class="action-sheet-btn action-sheet-btn-cancel" @click="closeInputSheet">닫기</button>
+        </div>
+    </div>
+
+    <div class="action-sheet-backdrop" :class="{ show: activeInputSheet === 'library' }" role="dialog" aria-modal="true" @click="(e) => { if (e.target === e.currentTarget) closeInputSheet(); }">
+        <div class="action-sheet input-sheet">
+            <div class="action-sheet-handle"></div>
+            <div class="index-sheet-header"><h3>라이브러리 작품 추가</h3></div>
+            <div class="input-sheet-scroll">
+                <p class="dashboard-subtitle">
+                    작품 배열을 JSON으로 붙여넣으세요. 필드: title(필수) · content(필수, 마크다운 —
+                    "# 장 제목"으로 챕터를 나누면 목차가 자동 생성됨) · category ·
+                    edition(판본) · translator(번역/편저) · source(출처) ·
+                    rights(이용 조건, 자유 텍스트) · description(1~2문장 소개) ·
+                    status("published"로 명시해야 공개됨, 생략 시 "review"로 비공개 저장).
+                </p>
+                <textarea
+                    class="news-input"
+                    rows="10"
+                    placeholder='[
+  {
+    "title": "도덕경",
+    "category": "철학·사상",
+    "edition": "왕필본",
+    "translator": "원문 기반",
+    "source": "중국 고전 《도덕경》",
+    "rights": "원전 공개 이용 가능",
+    "description": "노자가 전하는 도와 덕의 철학...",
+    "status": "published",
+    "content": "# 1장\n도가도 비상도...\n\n# 2장\n..."
+  }
+]'
+                    v-model="libraryInputText"
+                ></textarea>
+                <ul class="json-errors" v-if="libraryValidation.errors.length">
+                    <li v-for="(error, i) in libraryValidation.errors" :key="i">{{ error }}</li>
+                </ul>
+                <div class="json-preview" v-else-if="libraryValidation.itemCount > 0">
+                    <p>{{ libraryValidation.itemCount }}개 항목 인식됨</p>
+                    <ul>
+                        <li v-for="(title, i) in libraryValidation.previewTitles" :key="i">{{ title }}</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="news-input-actions">
+                <button type="button" :disabled="!libraryCanSubmit" @click="submitLibrary">{{ librarySubmitLabel }}</button>
+                <span class="news-status">{{ libraryStatus }}</span>
+            </div>
+            <button type="button" class="action-sheet-btn action-sheet-btn-cancel" @click="closeInputSheet">닫기</button>
         </div>
     </div>
 </template>

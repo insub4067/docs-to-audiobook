@@ -250,9 +250,11 @@ onMounted(async () => {
 
     <ProfileView
         v-show="activeTab === 'profile'"
+        :theme-state="themeState"
         :theme-logic="themeLogic"
         :controls-state="readerControlsState"
         :controls-logic="readerControlsLogic"
+        :has-mini-player="hasMiniPlayer"
     />
 
     <TabBarView v-show="!readerState.isOpen.value" :active-tab="activeTab" @select="(tab) => (activeTab = tab)" />

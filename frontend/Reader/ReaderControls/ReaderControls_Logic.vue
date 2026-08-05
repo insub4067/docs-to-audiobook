@@ -73,7 +73,7 @@ export function useReaderControlsLogic(state: ReaderControlsState, audioEl: Ref<
         if (timerInterval) clearInterval(timerInterval);
         timerInterval = null;
         state.isTimerActive.value = false;
-        state.timerLabel.value = "타이머";
+        state.timerLabel.value = "사용 안 함";
     }
 
     function updateTimerDisplay(): void {

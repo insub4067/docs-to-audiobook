@@ -88,7 +88,7 @@ onUnmounted(() => {
             </div>
         </div>
 
-        <div class="user-info" id="userInfo" :style="{ display: authStore.isLoggedIn ? 'flex' : 'none' }">
+        <div class="user-info" id="userInfo" :style="{ display: authStore.isLoggedIn && activeTab !== 'profile' ? 'flex' : 'none' }">
             <button
                 class="profile-trigger"
                 type="button"

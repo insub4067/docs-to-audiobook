@@ -57,26 +57,28 @@ function onBackdropClick(event: MouseEvent): void {
         aria-label="재생목록"
         @click="onBackdropClick"
     >
-        <div class="action-sheet">
+        <div class="action-sheet playlist-sheet">
             <div class="action-sheet-handle"></div>
             <div class="index-sheet-header">
                 <h3>{{ isNewsPlaylist ? "경제 뉴스" : "재생목록" }}</h3>
             </div>
-            <div class="audio-list">
-                <button
-                    v-for="item in playlistItems"
-                    :key="item.id"
-                    type="button"
-                    class="audio-item audio-item-news"
-                    @click="onItemClick(item)"
-                >
-                    <div class="audio-item-front">
-                        <div class="audio-title-group">
-                            <i data-lucide="play-circle"></i>
-                            <span class="audio-title">{{ itemTitle(item) }}</span>
+            <div class="playlist-list-scroll">
+                <div class="audio-list">
+                    <button
+                        v-for="item in playlistItems"
+                        :key="item.id"
+                        type="button"
+                        class="audio-item audio-item-news"
+                        @click="onItemClick(item)"
+                    >
+                        <div class="audio-item-front">
+                            <div class="audio-title-group">
+                                <i data-lucide="play-circle"></i>
+                                <span class="audio-title">{{ itemTitle(item) }}</span>
+                            </div>
                         </div>
-                    </div>
-                </button>
+                    </button>
+                </div>
             </div>
             <button class="action-sheet-btn action-sheet-btn-cancel" type="button" @click="logic.closePlaylistSheet">닫기</button>
         </div>

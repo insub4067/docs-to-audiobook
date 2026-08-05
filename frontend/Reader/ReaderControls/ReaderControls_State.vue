@@ -20,7 +20,7 @@ export function useReaderControlsState(): ReaderControlsState {
     return {
         repeatMode: ref("off"),
         playbackSpeed: ref(1.0),
-        timerLabel: ref("타이머"),
+        timerLabel: ref("사용 안 함"),
         isTimerActive: ref(false),
         activeSheet: ref(null),
         fontFamily: ref("serif"),

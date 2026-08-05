@@ -35,6 +35,7 @@ export interface AdminState {
     libraryItemsStatus: Ref<string>;
     libraryTogglingIds: Ref<Set<string>>;
     statusMenuItem: Ref<LibraryAdminItem | null>;
+    activeInputSheet: Ref<"news" | "library" | null>;
 }
 
 export function useAdminState(): AdminState {
@@ -53,6 +54,7 @@ export function useAdminState(): AdminState {
         libraryItemsStatus: ref(""),
         libraryTogglingIds: ref(new Set()),
         statusMenuItem: ref(null),
+        activeInputSheet: ref(null),
     };
 }
 

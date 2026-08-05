@@ -4,16 +4,10 @@ voice_key(예: "ko_male_warm")는 API 계약·프론트엔드·DB(background_syn
 컬럼)에 저장되는 값이고, 그대로 유지된다.
 
 각 음성은 "provider" 필드로 실제 합성 엔진을 고정한다(음성별 고정 —
-전역 스위치가 아니다). 원래 있던 두 음성(현수/선희)은 edge-tts 태생이라
-그대로 edge_tts에 고정하고, 나중에 추가한 두 음성(카론/코어)은 Google
-Chirp3-HD 전용이라 google에 고정한다 — edge-tts에는 대응하는 음성이
-아예 없어서(카론/코어는 edge-tts 정체성이 없는, 새로 만든 음성) 굳이
-대체 음성을 끼워 맞추지 않는다. 이전에는 TTS_PROVIDER 환경변수 하나로
-모든 음성을 한꺼번에 전환했는데, 그러면 카론/코어에 억지로 끼워 맞춘
-edge-tts 대체 음성(InJoon/SunHi)이 튀어나오는 문제가 있었다.
-
-Google 쪽 음성 ID는 실제 서비스 계정으로 라이브 합성까지 확인했다
-(Neural2-A/C, Chirp3-HD-Charon/Kore).
+전역 스위치가 아니다). 현재는 edge-tts 음성만 선택 가능하게 노출한다.
+Google Chirp3-HD 음성(카론/코어)은 카탈로그에서 제거했다 — 어댑터
+자체(google_tts_adapter.py)는 남겨 두되, 이제 어떤 voice_key도
+"google" provider로 연결되지 않는다.
 """
 
 VOICE_CATALOG = {
@@ -41,30 +35,6 @@ VOICE_CATALOG = {
         "provider_ids": {
             "edge_tts": "ko-KR-SunHiNeural",
             "google": "ko-KR-Neural2-A",
-        },
-    },
-    "ko_male_charon": {
-        "friendly_name": "카론 (Google 프리미엄 낭독 - 남성)",
-        "description": "Google Cloud의 최신 Chirp3 HD 모델 음성입니다.",
-        "gender": "Male",
-        "locale": "ko-KR",
-        "tone": "natural",
-        "use_case": ["novel", "audiobook", "documentation", "long_text"],
-        "provider": "google",
-        "provider_ids": {
-            "google": "ko-KR-Chirp3-HD-Charon",
-        },
-    },
-    "ko_female_kore": {
-        "friendly_name": "코어 (Google 프리미엄 낭독 - 여성)",
-        "description": "Google Cloud의 최신 Chirp3 HD 모델 음성입니다.",
-        "gender": "Female",
-        "locale": "ko-KR",
-        "tone": "natural",
-        "use_case": ["novel", "audiobook", "documentation", "long_text"],
-        "provider": "google",
-        "provider_ids": {
-            "google": "ko-KR-Chirp3-HD-Kore",
         },
     },
 }

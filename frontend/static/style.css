@@ -472,12 +472,18 @@ a.myfiles-row {
     opacity: 0.6;
 }
 
-/* 프로필 탭 계정 정보 */
+/* 프로필 탭 계정 정보 — 헤더 우측 상단 프로필 아바타와 정보가 중복
+   표시되지 않도록(Header_View.vue에서 profile 탭일 때 숨김), 카드
+   자체도 기본 glass-card보다 여백을 좁혀 첫 화면 정보 밀도를 높인다. */
+.profile-account-card {
+    padding: 26px;
+}
+
 .profile-account-row {
     display: flex;
     align-items: center;
-    gap: 14px;
-    padding-bottom: 20px;
+    gap: 12px;
+    padding-bottom: 16px;
     margin-bottom: 4px;
     border-bottom: 1px solid var(--border-color);
 }
@@ -487,13 +493,13 @@ a.myfiles-row {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 56px;
-    height: 56px;
+    width: 48px;
+    height: 48px;
     border-radius: 50%;
     background: color-mix(in srgb, var(--primary-color) 65%, var(--bg-color) 35%);
     color: var(--bg-color);
     font-family: var(--font-sans);
-    font-size: 1.1rem;
+    font-size: 1rem;
     font-weight: 700;
 }
 
@@ -728,11 +734,17 @@ a.myfiles-row {
     border-bottom: 1px solid var(--border-color);
 }
 
+/* 접힌 상태에서 카드 안에 불필요한 빈 공간이 남지 않도록 이 카드만
+   기본 glass-card보다 여백을 좁힌다. */
+.profile-settings-card {
+    padding: 24px 26px;
+}
+
 .profile-settings-toggle {
     width: 100%;
     border: none;
     background: none;
-    padding: 0 0 16px;
+    padding: 0;
     font: inherit;
     text-align: left;
     cursor: pointer;
@@ -744,12 +756,45 @@ a.myfiles-row {
     width: 20px;
     height: 20px;
     color: var(--text-muted);
-    transition: transform 0.2s ease;
 }
 
-.profile-settings-toggle-chevron.is-expanded {
-    transform: rotate(180deg);
+/* grid-template-rows를 0fr↔1fr로 트랜지션하는 방식 — 목록 높이가
+   가변적이어도(옵션 7개) JS로 실제 높이를 재지 않고 순수 CSS만으로
+   자연스러운 펼침/접힘 애니메이션을 만들 수 있다. */
+.profile-settings-collapse {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.25s ease;
 }
+.profile-settings-collapse.is-expanded {
+    grid-template-rows: 1fr;
+}
+.profile-settings-collapse-inner {
+    overflow: hidden;
+    min-height: 0;
+}
+
+/* 로그아웃 — 사용 빈도가 낮은 세션 종료 기능이라 계정 카드가 아닌
+   화면 최하단에 낮은 강조도로 별도 배치한다. */
+.profile-logout-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    margin-top: 20px;
+    padding: 16px;
+    border: none;
+    border-top: 1px solid var(--border-color);
+    background: none;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+.profile-logout-btn i { width: 18px; height: 18px; }
 
 .header-icon {
     width: 20px;
@@ -1409,6 +1454,20 @@ input[type="range"]::-webkit-slider-thumb:active {
 }
 .news-list-footer .action-sheet-btn-cancel {
     padding: 14px 24px;
+}
+
+/* 재생목록 시트(ReaderPlaylistSheet_View.vue) — 같은 이유로 핸들·제목·
+   닫기 버튼은 고정하고 목록만 스크롤한다. */
+.action-sheet.playlist-sheet {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.playlist-list-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .audio-item-bg {
