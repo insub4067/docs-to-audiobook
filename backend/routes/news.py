@@ -115,6 +115,36 @@ async def _store_news_item(supabase, admin_user_id: str, item: dict) -> str:
     return audiobook_id
 
 
+def _cleanup_stale_news(supabase) -> int:
+    """list_news 공개 목록에서 이미 벗어난(3일 초과 또는 최신 10개 밖으로
+    밀려난) 뉴스 오디오북을 실제로 지운다. 안 지우면 화면엔 안 보여도
+    DB 행과 Storage 음성 파일이 계속 쌓인다.
+
+    "보이는" 집합은 list_news와 정확히 같은 조건(같은 gte+order+limit
+    쿼리)으로 DB에 직접 물어서 구한다 — 날짜 문자열을 파이썬에서 직접
+    비교하면 형식 차이로 어긋날 수 있어서다."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=NEWS_VISIBLE_DAYS)).isoformat()
+    visible_rows = supabase.table("audiobooks").select("id") \
+        .eq("is_news", True).gte("created_at", cutoff) \
+        .order("created_at", desc=True).limit(NEWS_LIST_LIMIT).execute().data or []
+    visible_ids = {row["id"] for row in visible_rows}
+
+    all_rows = supabase.table("audiobooks").select("id, user_id") \
+        .eq("is_news", True).execute().data or []
+    stale_rows = [row for row in all_rows if row["id"] not in visible_ids]
+
+    for row in stale_rows:
+        audio_path, sentences_path = _object_paths(row["user_id"], row["id"])
+        try:
+            supabase.storage.from_(AUDIOBOOK_BUCKET).remove([audio_path, sentences_path])
+        except Exception:
+            # 파일이 이미 없어도 행은 정리해야 한다
+            logger.exception("뉴스 정리 중 스토리지 삭제 실패 id=%s", row["id"])
+        supabase.table("audiobooks").delete().eq("id", row["id"]).execute()
+
+    return len(stale_rows)
+
+
 async def _process_news_batch(admin_user_id: str, items: list[dict]) -> None:
     """항목마다 TTS 합성이 걸려 전체가 수십 초~수 분 걸릴 수 있다.
     관리자가 응답을 기다리지 않도록 백그라운드로 돌리고, 다 끝나면
@@ -133,6 +163,11 @@ async def _process_news_batch(admin_user_id: str, items: list[dict]) -> None:
             send_news_ready_broadcast(len(created))
         except Exception:
             logger.exception("경제 뉴스 등록 완료 알림 발송 실패")
+
+    try:
+        _cleanup_stale_news(supabase)
+    except Exception:
+        logger.exception("오래된 뉴스 정리 실패")
 
 
 @router.post("/api/admin/news")

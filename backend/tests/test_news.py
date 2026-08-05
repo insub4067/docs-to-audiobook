@@ -192,6 +192,73 @@ async def test_add_news_skips_broadcast_when_nothing_created(mock_supabase):
 
 
 @pytest.mark.asyncio
+async def test_add_news_deletes_rows_and_storage_that_fell_outside_visible_window(mock_supabase):
+    """새 뉴스를 등록하면, 공개 목록(list_news)에서 이미 벗어난(3일 초과
+    또는 최신 10개 밖으로 밀려난) 오래된 뉴스가 DB 행 + Storage 음성
+    파일까지 함께 삭제되는지 확인한다. 화면에 안 보인다고 실제로 지워지는
+    건 아니었던 문제를 고친 것이라, 두 종류(스토리지/행) 모두 지워지는
+    것을 각각 확인해야 한다."""
+    mock_supabase.table().insert().execute.return_value = MagicMock(data=[{"id": "new-row"}])
+    # list_news와 정확히 같은 쿼리(select→eq→gte→order→limit)로 "보이는" 것만 반환.
+    mock_supabase.table().select().eq().gte().order().limit().execute.return_value = MagicMock(
+        data=[{"id": "visible-1"}, {"id": "visible-2"}]
+    )
+    # 정리 대상을 고르기 위한 전체 목록(select→eq)에는 보이는 것 + 밀려난 것이 섞여 있다.
+    mock_supabase.table().select().eq().execute.return_value = MagicMock(data=[
+        {"id": "visible-1", "user_id": "admin-user"},
+        {"id": "visible-2", "user_id": "admin-user"},
+        {"id": "stale-1", "user_id": "admin-user"},
+        {"id": "stale-2", "user_id": "other-admin"},
+    ])
+
+    with patch("routes.news.require_admin_user", return_value="admin-user"), \
+         patch("routes.news.synthesize_document", side_effect=_fake_synthesize_document):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/admin/news",
+                json={"text": '[{"title": "새 뉴스", "content": "본문"}]'},
+                headers=_auth_headers(),
+            )
+
+    assert response.status_code == 200
+
+    deleted_ids = [call.args for call in mock_supabase.table().delete().eq.call_args_list]
+    assert ("id", "stale-1") in deleted_ids
+    assert ("id", "stale-2") in deleted_ids
+    assert ("id", "visible-1") not in deleted_ids
+    assert ("id", "visible-2") not in deleted_ids
+
+    removed_paths = [call.args[0] for call in mock_supabase.storage.from_().remove.call_args_list]
+    assert ["admin-user/stale-1.mp3", "admin-user/stale-1.sentences.json"] in removed_paths
+    assert ["other-admin/stale-2.mp3", "other-admin/stale-2.sentences.json"] in removed_paths
+
+
+@pytest.mark.asyncio
+async def test_add_news_cleanup_runs_even_when_every_item_fails(mock_supabase):
+    """등록이 전부 실패해도(합성 에러 등) 오래된 뉴스 정리는 별개로 돈다."""
+    mock_supabase.table().select().eq().gte().order().limit().execute.return_value = MagicMock(data=[])
+    mock_supabase.table().select().eq().execute.return_value = MagicMock(
+        data=[{"id": "stale-1", "user_id": "admin-user"}]
+    )
+
+    async def always_fails(text, voice, rate, pitch, progress_callback=None, provider_name=None):
+        raise RuntimeError("합성 실패")
+
+    with patch("routes.news.require_admin_user", return_value="admin-user"), \
+         patch("routes.news.synthesize_document", side_effect=always_fails):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/admin/news",
+                json={"text": '[{"title": "실패할 뉴스", "content": "본문"}]'},
+                headers=_auth_headers(),
+            )
+
+    assert response.status_code == 200
+    deleted_ids = [call.args for call in mock_supabase.table().delete().eq.call_args_list]
+    assert ("id", "stale-1") in deleted_ids
+
+
+@pytest.mark.asyncio
 async def test_list_news_filters_recent_news_items_only(mock_supabase):
     rows = [{
         "id": "news-1", "user_id": "admin-user", "title": "오늘 뉴스",
