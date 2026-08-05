@@ -3,6 +3,14 @@
 // (sessionStorage는 안 가려져서 정상). 테마/재생 설정 로직이 마운트 시점에
 // 바로 localStorage를 읽으므로 최소 구현을 깔아준다 — 저장 동작 자체는 이
 // 테스트의 관심사가 아니다.
+// jsdom은 Blob → object URL 변환을 구현하지 않는다. 리더가 로컬 오디오를
+// 재생할 때 쓰므로 형태만 맞는 최소 구현을 깔아준다.
+if (!URL.createObjectURL) {
+    let counter = 0;
+    URL.createObjectURL = () => `blob:jsdom/${++counter}`;
+    URL.revokeObjectURL = () => {};
+}
+
 if (!window.localStorage) {
     const store = new Map<string, string>();
     const shim: Storage = {

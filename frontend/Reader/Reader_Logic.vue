@@ -22,7 +22,7 @@ export interface SharedReaderModeOptions {
 }
 
 export interface ReaderLogic {
-    open(audio: AudiobookRecord): void;
+    open(audio: AudiobookRecord, options?: { autoplay?: boolean; openReaderUI?: boolean }): void;
     restoreLastSession(audio: AudiobookRecord): void;
     openSharedReaderMode(title: string, sentences: ReaderSentence[], audioUrl: string, options?: SharedReaderModeOptions): void;
     closeReader(): void;
@@ -213,6 +213,10 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         };
         el.onplay = () => { state.isPlaying.value = true; };
         el.onpause = () => { state.isPlaying.value = false; };
+        // 반복 모드 처리. resetAudioHandlers()가 onended를 지우므로 매번 다시
+        // 걸어야 한다 — 이걸 빠뜨려서 "전체 문서 반복"을 골라도 재생이 그냥
+        // 끝나 버렸다.
+        el.onended = readerControls.onEnded;
         bindLocalTimeUpdate();
         el.src = localUrl;
         el.load();
@@ -299,7 +303,16 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
                 saveSharedPlaybackPosition(sharedAudiobookId, currentSec).catch((error) => console.error("재생 상태 저장 실패:", error));
             }
         };
-        el.onended = onEnded || null;
+        // 뉴스 연속 재생(onEnded로 다음 기사로 넘어감)보다 사용자가 고른 반복
+        // 모드가 우선한다. 반복이 꺼져 있을 때만 큐를 진행시킨다 — 예전에는
+        // 이 자리에서 큐 콜백만 걸어 뉴스에서 반복 모드가 통째로 무시됐다.
+        el.onended = () => {
+            if (readerControls.getPlaybackSettings().repeatMode !== "off") {
+                readerControls.onEnded();
+                return;
+            }
+            onEnded?.();
+        };
         el.src = audioUrl;
         el.load();
 
