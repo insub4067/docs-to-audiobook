@@ -1,6 +1,6 @@
 <script lang="ts">
 import { useAuthStore, type AuthUser } from "../stores/auth";
-import { getAllAudiobooksFromDB } from "../services/indexedDb";
+import { getAllAudiobooksFromDB, DEFAULT_BOOK_DISMISSED_KEY } from "../services/indexedDb";
 
 export interface FetchUserError extends Error {
     authFailed?: boolean;
@@ -225,6 +225,9 @@ export function useAuthLogic(): AuthLogic {
             store.clearBusy();
             return;
         }
+        // 로그인 중에 기본 제공 오디오북을 지웠더라도, 위 확인 문구가 약속한
+        // 대로("기본 제공 오디오북만 남습니다") 로그아웃 후에는 다시 보이게 한다.
+        localStorage.removeItem(DEFAULT_BOOK_DISMISSED_KEY);
 
         const unsubscribePush = (window as any).__unsubscribePushNotifications as
             (() => Promise<void>) | undefined;

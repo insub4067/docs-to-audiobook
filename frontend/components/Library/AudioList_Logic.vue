@@ -4,6 +4,8 @@ import {
     saveAudiobookToDB,
     deleteAudiobookFromDB,
     getAudiobookFromDB,
+    DEFAULT_BOOK_ID,
+    DEFAULT_BOOK_DISMISSED_KEY,
     type AudiobookRecord,
 } from "../../services/indexedDb";
 import { getAudiobookDisplayTitle } from "../../utils/format";
@@ -40,7 +42,6 @@ export interface AudioListLogic {
     removeBackgroundJob(jobId: string): void;
 }
 
-const DEFAULT_BOOK_ID = "default-sherlock-holmes";
 let syncing = false;
 
 // static/js/library.js를 옮긴 것. 스와이프/터치 제스처는 각 항목을 맡는
@@ -62,6 +63,10 @@ export function useAudioListLogic(state: AudioListState): AudioListLogic {
     }
 
     async function seedDefaultBookIfNeeded(): Promise<void> {
+        // 로그인 사용자가 서재에서 직접 지운 적이 있으면 다시 채워 넣지
+        // 않는다 — 로그아웃 시(Auth_Logic.vue) 이 표시를 지워서 다음
+        // 방문자에게는 다시 보이게 한다.
+        if (localStorage.getItem(DEFAULT_BOOK_DISMISSED_KEY) === "1") return;
         try {
             const existing = await getAudiobookFromDB(DEFAULT_BOOK_ID);
             let needsUpdate = false;
@@ -473,6 +478,9 @@ export function useAudioListLogic(state: AudioListState): AudioListLogic {
                 }
             }
             await deleteAudiobookFromDB(id);
+            // 다음 load()에서 seedDefaultBookIfNeeded()가 다시 채워 넣지
+            // 않도록 표시해 둔다.
+            if (id === DEFAULT_BOOK_ID) localStorage.setItem(DEFAULT_BOOK_DISMISSED_KEY, "1");
             await refresh();
             showToast("제거되었습니다.", "info");
         } catch (error) {

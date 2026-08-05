@@ -2,6 +2,15 @@
 // 달리, 이건 UI 상태가 없는 순수 데이터 접근 계층이라 3분할하지 않는다.
 import { toRaw } from "vue";
 
+// 기본 제공 오디오북(데미안)의 IndexedDB 레코드 id. AudioList_Logic.vue와
+// Auth_Logic.vue(로그아웃 시 재시딩 허용) 둘 다 참조해서 여기 둔다 —
+// 두 파일이 서로를 import하는 순환 참조를 피하기 위해서다.
+export const DEFAULT_BOOK_ID = "default-sherlock-holmes";
+// 로그인 사용자가 기본 제공 오디오북을 서재에서 직접 지웠다는 표시.
+// 켜져 있으면 seedDefaultBookIfNeeded()가 다시 채워 넣지 않는다.
+// 기기 로컬 상태라 로그인 여부와 무관하게 localStorage에 둔다.
+export const DEFAULT_BOOK_DISMISSED_KEY = "defaultBookDismissed";
+
 export interface AudiobookRecord {
     id: string;
     title: string;

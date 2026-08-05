@@ -3,9 +3,11 @@ import { ref, watch } from "vue";
 import type { AudioListState } from "../components/Library/AudioList_State.vue";
 import type { AudioListLogic } from "../components/Library/AudioList_Logic.vue";
 import type { MyFilesLogic } from "../Files/MyFiles_Logic.vue";
+import type { AudiobookRecord } from "../services/indexedDb";
 import { useSwipeToDismiss } from "../utils/swipeToDismiss";
 import { useToastLogic } from "../components/Toast/Toast_Logic.vue";
 import { useToastState } from "../components/Toast/Toast_State.vue";
+import { useAuthLogic } from "../Auth/Auth_Logic.vue";
 
 const props = defineProps<{
     state: AudioListState;
@@ -14,7 +16,14 @@ const props = defineProps<{
 }>();
 
 const { showToast } = useToastLogic(useToastState());
+const authLogic = useAuthLogic();
 const sheet = ref<HTMLElement | null>(null);
+
+// 기본 제공 오디오북은 로그인한 사용자만 서재에서 지울 수 있다 —
+// 로그아웃 상태(익명 체험)에서는 데모 성격이라 그대로 둔다.
+function canDeleteTarget(target: AudiobookRecord | null): boolean {
+    return !target?.isDefault || authLogic.isLoggedIn();
+}
 
 function close(): void {
     props.logic.closeActionSheet();
@@ -64,9 +73,9 @@ function onMoveToFolder(): void {
 async function onDelete(): Promise<void> {
     const target = props.state.actionSheetTarget.value;
     if (!target) return;
-    if (target.isDefault) {
+    if (!canDeleteTarget(target)) {
         close();
-        showToast("기본 제공 오디오북은 삭제할 수 없습니다.", "error");
+        showToast("로그인하면 기본 제공 오디오북도 지울 수 있어요.", "error");
         return;
     }
     const id = target.id;
@@ -106,7 +115,7 @@ async function onDelete(): Promise<void> {
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                 폴더로 이동
             </button>
-            <button v-if="!state.actionSheetTarget.value?.isDefault" class="action-sheet-btn action-sheet-btn-danger" @click="onDelete">
+            <button v-if="canDeleteTarget(state.actionSheetTarget.value)" class="action-sheet-btn action-sheet-btn-danger" @click="onDelete">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                 삭제
             </button>

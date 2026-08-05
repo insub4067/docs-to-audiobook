@@ -1,3 +1,8 @@
+// jsdom은 IndexedDB를 구현하지 않는다. 서재 데이터가 전부 여기 저장되므로
+// (기본 제공 오디오북 재시딩 등) 실제 IndexedDB와 동작하는 순수 JS 구현으로
+// 채워준다.
+import "fake-indexeddb/auto";
+
 // Node 22+ 는 localStorage를 네이티브 전역으로 갖고 있는데 --localstorage-file
 // 없이 실행하면 undefined를 돌려주고, 이게 jsdom이 깔아둔 것을 가려버린다
 // (sessionStorage는 안 가려져서 정상). 테마/재생 설정 로직이 마운트 시점에
