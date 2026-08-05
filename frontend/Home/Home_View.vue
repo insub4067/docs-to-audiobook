@@ -249,7 +249,7 @@ onMounted(async () => {
     />
 
     <ProfileView
-        v-show="activeTab === 'profile'"
+        :active="activeTab === 'profile'"
         :theme-state="themeState"
         :theme-logic="themeLogic"
         :controls-state="readerControlsState"

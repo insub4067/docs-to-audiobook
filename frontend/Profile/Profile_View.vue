@@ -17,6 +17,7 @@ const props = defineProps<{
     controlsState: ReaderControlsState;
     controlsLogic: ReaderControlsLogic;
     hasMiniPlayer?: boolean;
+    active?: boolean;
 }>();
 
 const authStore = useAuthStore();
@@ -46,7 +47,7 @@ function onLogoutBackdropClick(event: MouseEvent): void {
 </script>
 
 <template>
-    <main class="app-main profile-root" :class="{ 'has-mini-player': hasMiniPlayer }">
+    <main class="app-main profile-root" v-show="active" :class="{ 'has-mini-player': hasMiniPlayer }">
         <div class="glass-card profile-section profile-account-card" v-if="authStore.isLoggedIn">
             <div class="profile-account-row">
                 <span class="profile-avatar" aria-hidden="true">{{ profileInitial }}</span>
