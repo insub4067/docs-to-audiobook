@@ -23,6 +23,7 @@ import TodayNewsView from "../components/News/TodayNews_View.vue";
 import NewsListSheetView from "../components/News/NewsListSheet_View.vue";
 import LibraryView from "../Library/Library_View.vue";
 import LibraryDetailView from "../Library/LibraryDetail_View.vue";
+import ProfileView from "../Profile/Profile_View.vue";
 import { useLibraryState } from "../Library/Library_State.vue";
 import { useLibraryLogic } from "../Library/Library_Logic.vue";
 import { useGenerationState } from "../Generation/Generation_State.vue";
@@ -66,7 +67,7 @@ const promptSheetLogic = usePromptSheetLogic(promptSheetState);
 const libraryState = useLibraryState();
 const libraryLogic = useLibraryLogic(libraryState, readerLogic);
 
-const activeTab = ref<"home" | "library" | "files">("home");
+const activeTab = ref<"home" | "library" | "files" | "profile">("home");
 
 // 홈 화면은 "최근 추가"와 "즐겨찾기" 두 섹션만 일부만 — 전체 목록은
 // 내 파일 탭에서 본다. 추가되거나 재생된 시각 중 더 최근인 순으로 정렬.
@@ -245,6 +246,13 @@ onMounted(async () => {
         :generating-items="generationState.generatingItems.value"
         :has-mini-player="hasMiniPlayer"
         :reader-logic="readerLogic"
+    />
+
+    <ProfileView
+        v-show="activeTab === 'profile'"
+        :theme-logic="themeLogic"
+        :controls-state="readerControlsState"
+        :controls-logic="readerControlsLogic"
     />
 
     <TabBarView v-show="!readerState.isOpen.value" :active-tab="activeTab" @select="(tab) => (activeTab = tab)" />
