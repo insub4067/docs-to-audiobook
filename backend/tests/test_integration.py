@@ -19,7 +19,7 @@ def mock_auth():
 @pytest.mark.asyncio
 async def test_get_audiobooks_success(mock_supabase, mock_auth):
     # Mock supabase response for selecting audiobooks
-    mock_supabase.table().select().eq().eq().order().execute.return_value = MagicMock(
+    mock_supabase.table().select().eq().eq().eq().order().execute.return_value = MagicMock(
         data=[{"id": "book1", "title": "Test Book", "status": "ready"}]
     )
     

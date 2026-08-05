@@ -8,11 +8,23 @@ import { saveAudiobookToDB, updateAudiobookPosition, type AudiobookRecord } from
 import { getAudiobookDisplayTitle, formatTime, getReaderScrollTarget } from "../utils/format";
 import { useToastLogic, setReaderOpenForToast } from "../components/Toast/Toast_Logic.vue";
 import { useToastState } from "../components/Toast/Toast_State.vue";
+import { useAuthLogic } from "../Auth/Auth_Logic.vue";
+
+export interface SharedReaderModeOptions {
+    shareId?: string | null;
+    onEnded?: () => void;
+    playlistKind?: "news" | null;
+    // 라이브러리 작품처럼 실제 audiobooks 행이 있는 콘텐츠는 재생 위치를
+    // 서버에 이어 듣기용으로 저장/복원할 수 있다 — 24시간짜리 임시 공유
+    // 링크(shareId)에는 해당 없다.
+    audiobookId?: string | null;
+    resumeSeconds?: number;
+}
 
 export interface ReaderLogic {
     open(audio: AudiobookRecord): void;
     restoreLastSession(audio: AudiobookRecord): void;
-    openSharedReaderMode(title: string, sentences: ReaderSentence[], audioUrl: string, shareId?: string | null, onEnded?: () => void, playlistKind?: "news" | null): void;
+    openSharedReaderMode(title: string, sentences: ReaderSentence[], audioUrl: string, options?: SharedReaderModeOptions): void;
     closeReader(): void;
     reopenReader(): void;
     checkSharedLink(): Promise<void>;
@@ -49,6 +61,9 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
     let isSharedMode = false;
     let sharedAudioUrl: string | null = null;
     let sharedShareId: string | null = null;
+    let sharedAudiobookId: string | null = null;
+    let lastSharedPositionSaveSecond = -1;
+    const authLogic = useAuthLogic();
     let lastPositionSaveSecond = -1;
     let lastPlaybackSyncTime = 0;
     let lastToggleTime = 0;
@@ -163,6 +178,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         currentObjectUrl = localUrl;
         isSharedMode = false;
         state.sharedPlaylistKind.value = null;
+        sharedAudiobookId = null;
         state.currentAudioObject.value = audio;
         sentences = (audio.sentences || []) as ReaderSentence[];
 
@@ -213,13 +229,33 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         open(audio, { autoplay: false, openReaderUI: false });
     }
 
-    function openSharedReaderMode(title: string, sharedSentences: ReaderSentence[], audioUrl: string, shareId: string | null = null, onEnded?: () => void, playlistKind: "news" | null = null): void {
+    // 라이브러리 작품처럼 실제 audiobooks 행이 있는 공유 모드 콘텐츠의
+    // 재생 위치를 서버에 저장한다 — IndexedDB에 로컬로 들고 있는 게
+    // 아니라(오디오 자체를 로컬에 받아두지 않음) 클라우드 재생 기록에만
+    // 직접 쓴다.
+    async function saveSharedPlaybackPosition(audiobookId: string, position: number): Promise<void> {
+        if (!authLogic.isLoggedIn()) return;
+        const settings = readerControls.getPlaybackSettings();
+        await fetch(`/api/audiobooks/${audiobookId}/playback`, {
+            method: "PUT",
+            headers: { ...authLogic.authHeaders(), "Content-Type": "application/json" },
+            body: JSON.stringify({
+                current_time_seconds: position,
+                playback_speed: settings.playbackSpeed,
+                repeat_mode: settings.repeatMode,
+            }),
+        });
+    }
+
+    function openSharedReaderMode(title: string, sharedSentences: ReaderSentence[], audioUrl: string, options: SharedReaderModeOptions = {}): void {
+        const { shareId = null, onEnded, playlistKind = null, audiobookId = null, resumeSeconds = 0 } = options;
         const el = state.audioEl.value;
         if (!el) return;
         state.sharedPlaylistKind.value = playlistKind;
         isSharedMode = true;
         sharedAudioUrl = audioUrl;
         sharedShareId = shareId;
+        sharedAudiobookId = audiobookId;
         state.currentAudioObject.value = null;
         sentences = sharedSentences;
 
@@ -227,7 +263,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         state.isPlaying.value = false;
         state.showShareBtn.value = false;
         state.showSaveSharedBtn.value = true;
-        state.currentTimeLabel.value = "00:00";
+        state.currentTimeLabel.value = formatTime(resumeSeconds);
         state.durationLabel.value = "00:00";
         state.progressPercent.value = 0;
         state.activeIndex.value = -1;
@@ -243,6 +279,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         };
         el.onloadedmetadata = () => {
             if (el.duration && !isNaN(el.duration)) state.durationLabel.value = formatTime(el.duration);
+            if (resumeSeconds > 0) el.currentTime = resumeSeconds;
             el.playbackRate = readerControls.getPlaybackSettings().playbackSpeed;
             el.play().catch((error) => console.log("Autoplay blocked:", error));
             state.isPlaying.value = true;
@@ -255,6 +292,12 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
             state.currentTimeLabel.value = formatTime(currentSec);
             if (duration > 0) state.progressPercent.value = (currentSec / duration) * 100;
             updateHighlight(currentSec * 1000);
+
+            const currentSecond = Math.floor(currentSec);
+            if (sharedAudiobookId && currentSecond % 30 === 0 && currentSecond > 0 && currentSecond !== lastSharedPositionSaveSecond) {
+                lastSharedPositionSaveSecond = currentSecond;
+                saveSharedPlaybackPosition(sharedAudiobookId, currentSec).catch((error) => console.error("재생 상태 저장 실패:", error));
+            }
         };
         el.onended = onEnded || null;
         el.src = audioUrl;
@@ -388,6 +431,8 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
             audioObject.playbackSpeed = settings.playbackSpeed;
             audioObject.repeatMode = settings.repeatMode;
             audioListLogic.savePlaybackState(audioObject, el.currentTime, settings).catch((error) => console.error("재생 상태 저장 실패:", error));
+        } else if (el && sharedAudiobookId && el.currentTime > 0) {
+            saveSharedPlaybackPosition(sharedAudiobookId, el.currentTime).catch((error) => console.error("재생 상태 저장 실패:", error));
         }
         lastPositionSaveSecond = -1;
         state.isOpen.value = false;
@@ -429,7 +474,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
                 return;
             }
             const data = await response.json();
-            setTimeout(() => openSharedReaderMode(data.title, data.sentences, data.audio_url, shareId), 500);
+            setTimeout(() => openSharedReaderMode(data.title, data.sentences, data.audio_url, { shareId }), 500);
         } catch (error) {
             console.error("Failed to load shared audiobook:", error);
             showToast("공유 오디오북 로드에 실패했습니다.", "error");
@@ -447,7 +492,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
             const response = await fetch(`/api/share/${match[1]}`);
             if (!response.ok) throw new Error("공유 링크가 만료되었거나 존재하지 않습니다.");
             const data = await response.json();
-            openSharedReaderMode(data.title, data.sentences, data.audio_url, match[1]);
+            openSharedReaderMode(data.title, data.sentences, data.audio_url, { shareId: match[1] });
         } catch (error) {
             console.error(error);
             showToast((error as Error).message || "공유 링크 불러오기에 실패했습니다.", "error");

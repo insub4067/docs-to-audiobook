@@ -9,6 +9,9 @@ export interface AdminState {
     newsInputText: Ref<string>;
     newsStatus: Ref<string>;
     newsSubmitting: Ref<boolean>;
+    libraryInputText: Ref<string>;
+    libraryStatus: Ref<string>;
+    librarySubmitting: Ref<boolean>;
 }
 
 export function useAdminState(): AdminState {
@@ -19,6 +22,9 @@ export function useAdminState(): AdminState {
         newsInputText: ref(""),
         newsStatus: ref(""),
         newsSubmitting: ref(false),
+        libraryInputText: ref(""),
+        libraryStatus: ref(""),
+        librarySubmitting: ref(false),
     };
 }
 

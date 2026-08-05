@@ -308,6 +308,29 @@ html {
     flex-direction: column;
 }
 
+.myfiles-library-saves {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+.myfiles-library-saves-label {
+    margin: 4px 0 4px;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+.library-source-badge {
+    flex-shrink: 0;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    color: var(--text-muted);
+    font-size: 0.7rem;
+}
+
 .myfiles-row {
     display: flex;
     align-items: center;
@@ -1743,6 +1766,122 @@ input[type="range"]::-webkit-slider-thumb:active {
 .reader-overlay.show {
     transform: translateY(0);
     pointer-events: auto;
+}
+
+.library-category-chips {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 16px;
+    -webkit-overflow-scrolling: touch;
+}
+.library-chip {
+    flex-shrink: 0;
+    padding: 8px 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    background: none;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.library-chip.active {
+    border-color: var(--primary-color);
+    background: var(--primary-color);
+    color: #fff;
+}
+
+/* 라이브러리 작품 상세는 리더처럼 전체화면으로 뜨지만(판본/목차 등
+   내용이 많아 시트로는 좁음) 리더보다 아래 레이어에 둔다 — 상세에서
+   재생을 누르면 리더가 그 위로 열려야 하므로. */
+.library-detail-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: var(--bg-color);
+    z-index: 1400;
+    display: flex;
+    justify-content: center;
+    transform: translateY(100%);
+    pointer-events: none;
+    transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.library-detail-overlay.show {
+    transform: translateY(0);
+    pointer-events: auto;
+}
+.library-detail-container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 500px;
+    height: 100%;
+}
+.library-detail-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: max(16px, env(safe-area-inset-top)) 16px 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+.library-detail-content {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 20px 20px calc(40px + env(safe-area-inset-bottom));
+}
+.library-detail-meta {
+    margin: 0 0 12px;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+.library-detail-description {
+    margin: 0 0 24px;
+    line-height: 1.7;
+    color: var(--text-color);
+}
+.library-detail-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 32px;
+}
+.library-detail-actions .action-sheet-btn {
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 14px 18px;
+}
+.library-detail-actions .action-sheet-btn-primary {
+    border-color: var(--primary-color);
+}
+.library-detail-section {
+    margin-bottom: 28px;
+}
+.library-detail-section h4 {
+    margin: 0 0 8px;
+    font-family: var(--font-serif);
+    font-size: 1rem;
+    color: var(--primary-color);
+}
+.library-detail-section .index-sheet-list {
+    max-height: none;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+}
+.library-detail-rights p {
+    margin: 0 0 8px;
+    font-size: 0.88rem;
+    line-height: 1.6;
+    color: var(--text-muted);
+}
+.library-detail-rights p b {
+    color: var(--text-color);
+    font-weight: 600;
+    margin-right: 4px;
 }
 
 .reader-container,

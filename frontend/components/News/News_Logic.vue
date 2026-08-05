@@ -53,14 +53,10 @@ export function useNewsLogic(state: NewsState, readerLogic: ReaderLogic): NewsLo
     async function openNewsItem(item: NewsItem, queueIndex = -1): Promise<void> {
         state.queueIndex.value = queueIndex;
         const sentences = await fetchSentences(item);
-        readerLogic.openSharedReaderMode(
-            item.title,
-            sentences as never,
-            item.audio_url,
-            null,
-            queueIndex >= 0 ? onQueueEnded : undefined,
-            "news",
-        );
+        readerLogic.openSharedReaderMode(item.title, sentences as never, item.audio_url, {
+            onEnded: queueIndex >= 0 ? onQueueEnded : undefined,
+            playlistKind: "news",
+        });
         state.isListOpen.value = false;
     }
 

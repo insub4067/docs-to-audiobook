@@ -7,6 +7,7 @@ import AuthLoadingOverlayView from "../Auth/AuthLoadingOverlay_View.vue";
 import AddSourceSheetView from "../Sheet/AddSourceSheet_View.vue";
 import TextInputSheetView from "../Sheet/TextInputSheet_View.vue";
 import NewsUploadSheetView from "../Sheet/NewsUploadSheet_View.vue";
+import LibraryUploadSheetView from "../Sheet/LibraryUploadSheet_View.vue";
 import ScanTextSheetView from "../Sheet/ScanTextSheet_View.vue";
 import GenerationModalView from "../Sheet/GenerationModal_View.vue";
 import LoginPromptSheetView from "../Sheet/LoginPromptSheet_View.vue";
@@ -20,6 +21,10 @@ import MiniPlayerView from "../components/MiniPlayer/MiniPlayer_View.vue";
 import MyFilesView from "../Files/MyFiles_View.vue";
 import TodayNewsView from "../components/News/TodayNews_View.vue";
 import NewsListSheetView from "../components/News/NewsListSheet_View.vue";
+import LibraryView from "../Library/Library_View.vue";
+import LibraryDetailView from "../Library/LibraryDetail_View.vue";
+import { useLibraryState } from "../Library/Library_State.vue";
+import { useLibraryLogic } from "../Library/Library_Logic.vue";
 import { useGenerationState } from "../Generation/Generation_State.vue";
 import { useGenerationLogic } from "../Generation/Generation_Logic.vue";
 import { useVoiceState } from "../Voices/Voice_State.vue";
@@ -58,8 +63,10 @@ const readerControlsLogic = useReaderControlsLogic(readerControlsState, readerSt
 const readerLogic = useReaderLogic(readerState, readerControlsLogic, audioListLogic);
 const promptSheetState = usePromptSheetState();
 const promptSheetLogic = usePromptSheetLogic(promptSheetState);
+const libraryState = useLibraryState();
+const libraryLogic = useLibraryLogic(libraryState, readerLogic);
 
-const activeTab = ref<"home" | "files">("home");
+const activeTab = ref<"home" | "library" | "files">("home");
 
 // 홈 화면은 "최근 추가"와 "즐겨찾기" 두 섹션만 일부만 — 전체 목록은
 // 내 파일 탭에서 본다. 추가되거나 재생된 시각 중 더 최근인 순으로 정렬.
@@ -95,6 +102,8 @@ function onEscape(event: KeyboardEvent): void {
         // 더보기 시트를 닫았다
     } else if (readerLogic.closePlaylistSheetIfOpen()) {
         // 재생목록 시트를 닫았다
+    } else if (libraryState.isDetailOpen.value) {
+        libraryLogic.closeDetail();
     } else if (generationState.isModalOpen.value) generationLogic.closeModal();
 }
 
@@ -224,6 +233,8 @@ onMounted(async () => {
         </footer>
     </main>
 
+    <LibraryView v-show="activeTab === 'library'" :logic="readerLogic" :has-mini-player="hasMiniPlayer" />
+
     <MyFilesView
         v-show="activeTab === 'files'"
         :audio-list-state="audioListState"
@@ -233,6 +244,7 @@ onMounted(async () => {
         :generation-logic="generationLogic"
         :generating-items="generationState.generatingItems.value"
         :has-mini-player="hasMiniPlayer"
+        :reader-logic="readerLogic"
     />
 
     <TabBarView v-show="!readerState.isOpen.value" :active-tab="activeTab" @select="(tab) => (activeTab = tab)" />
@@ -286,4 +298,6 @@ onMounted(async () => {
     <PromptSheetView />
     <NewsListSheetView :logic="readerLogic" />
     <NewsUploadSheetView />
+    <LibraryUploadSheetView />
+    <LibraryDetailView :state="libraryState" :logic="libraryLogic" />
 </template>

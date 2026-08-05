@@ -10,10 +10,14 @@ import type { ThemeLogic } from "../../Theme/Theme_Logic.vue";
 
 const props = defineProps<{
     themeLogic: ThemeLogic;
-    activeTab: "home" | "files";
+    activeTab: "home" | "library" | "files";
 }>();
 
-const tabTitle = computed(() => (props.activeTab === "home" ? "홈" : "내 파일"));
+const tabTitle = computed(() => {
+    if (props.activeTab === "home") return "홈";
+    if (props.activeTab === "library") return "라이브러리";
+    return "내 파일";
+});
 
 const authStore = useAuthStore();
 const authLogic = useAuthLogic();

@@ -1,10 +1,10 @@
 <script setup lang="ts">
 defineProps<{
-    activeTab: "home" | "files";
+    activeTab: "home" | "library" | "files";
 }>();
 
 const emit = defineEmits<{
-    (e: "select", tab: "home" | "files"): void;
+    (e: "select", tab: "home" | "library" | "files"): void;
 }>();
 </script>
 
@@ -20,6 +20,17 @@ const emit = defineEmits<{
         >
             <i data-lucide="home"></i>
             <span>홈</span>
+        </button>
+        <button
+            type="button"
+            class="tab-bar-btn"
+            :class="{ active: activeTab === 'library' }"
+            role="tab"
+            :aria-selected="activeTab === 'library'"
+            @click="emit('select', 'library')"
+        >
+            <i data-lucide="library"></i>
+            <span>라이브러리</span>
         </button>
         <button
             type="button"

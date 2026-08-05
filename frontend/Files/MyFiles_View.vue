@@ -7,8 +7,11 @@ import type { MyFilesState } from "./MyFiles_State.vue";
 import type { MyFilesLogic } from "./MyFiles_Logic.vue";
 import type { GenerationLogic } from "../Generation/Generation_Logic.vue";
 import type { GeneratingItem } from "../Generation/Generation_State.vue";
+import type { ReaderLogic } from "../Reader/Reader_Logic.vue";
 import { useFolderBrowserState } from "./FolderBrowser_State.vue";
 import { useFolderBrowserLogic } from "./FolderBrowser_Logic.vue";
+import { useLibraryState } from "../Library/Library_State.vue";
+import { useLibraryLogic } from "../Library/Library_Logic.vue";
 import { getAudiobookDisplayTitle } from "../utils/format";
 import AudioListItemView from "../components/Library/AudioListItem_View.vue";
 import ActionSheetView from "../Sheet/ActionSheet_View.vue";
@@ -26,11 +29,14 @@ const props = defineProps<{
     generationLogic: GenerationLogic;
     generatingItems: GeneratingItem[];
     hasMiniPlayer: boolean;
+    readerLogic: ReaderLogic;
 }>();
 
 const browserState = useFolderBrowserState("내 파일");
 const browserLogic = useFolderBrowserLogic(browserState);
 const promptSheetLogic = usePromptSheetLogic(usePromptSheetState());
+const libraryState = useLibraryState();
+const libraryLogic = useLibraryLogic(libraryState, props.readerLogic);
 
 const currentFolderAudiobooks = computed(() =>
     props.audioListState.savedAudiobooks.value.filter(
@@ -175,6 +181,7 @@ function onVisibilityChange(): void {
 
 onMounted(() => {
     browserLogic.loadCurrentFolder();
+    libraryLogic.loadSaves();
     window.addEventListener("touchend", resetDragState, { passive: true });
     window.addEventListener("touchcancel", resetDragState, { passive: true });
     document.addEventListener("visibilitychange", onVisibilityChange);
@@ -203,6 +210,28 @@ onUnmounted(() => {
             <span v-else></span>
             <button class="btn-icon-round btn-more" aria-label="추가" title="추가" type="button" @click="myFilesLogic.openAddMenu">
                 <i data-lucide="folder-plus"></i>
+            </button>
+        </div>
+
+        <div v-if="isAtRoot && libraryState.savedItems.value.length > 0" class="myfiles-library-saves">
+            <p class="myfiles-library-saves-label">라이브러리</p>
+            <button
+                v-for="item in libraryState.savedItems.value"
+                :key="item.id"
+                type="button"
+                class="audio-item audio-item-news"
+                @click="libraryLogic.openDetail(item)"
+            >
+                <div class="audio-item-front">
+                    <div class="audio-title-group">
+                        <i data-lucide="book-open"></i>
+                        <div class="audio-title-col">
+                            <span class="audio-title">{{ item.title }}</span>
+                            <span v-if="item.library_category" class="audio-subtitle">{{ item.library_category }}</span>
+                        </div>
+                        <span class="library-source-badge">라이브러리</span>
+                    </div>
+                </div>
             </button>
         </div>
 

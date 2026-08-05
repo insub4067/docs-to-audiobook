@@ -6,8 +6,14 @@ import ThemeSheetView from "../Sheet/ThemeSheet_View.vue";
 import { useThemeState } from "../Theme/Theme_State.vue";
 import { useThemeLogic } from "../Theme/Theme_Logic.vue";
 
-const { status, contentVisible, metrics, newsInputText, newsStatus, newsSubmitting } = useAdminState();
-const { formatMetric, loadMetrics, submitNews } = useAdminLogic({ status, contentVisible, metrics, newsInputText, newsStatus, newsSubmitting });
+const {
+    status, contentVisible, metrics, newsInputText, newsStatus, newsSubmitting,
+    libraryInputText, libraryStatus, librarySubmitting,
+} = useAdminState();
+const { formatMetric, loadMetrics, submitNews, submitLibrary } = useAdminLogic({
+    status, contentVisible, metrics, newsInputText, newsStatus, newsSubmitting,
+    libraryInputText, libraryStatus, librarySubmitting,
+});
 const themeState = useThemeState();
 const themeLogic = useThemeLogic(themeState);
 
@@ -104,6 +110,32 @@ onMounted(loadMetrics);
                         {{ newsSubmitting ? "등록 중..." : "등록하기" }}
                     </button>
                     <span class="news-status">{{ newsStatus }}</span>
+                </div>
+            </section>
+
+            <section class="metric-section" aria-labelledby="libraryHeading">
+                <div class="section-heading">
+                    <p class="section-kicker">LIBRARY · 경전·철학·고전</p>
+                    <h2 id="libraryHeading">라이브러리 작품 추가</h2>
+                </div>
+                <p class="dashboard-subtitle">
+                    작품 배열을 JSON으로 붙여넣으세요. 필드: title(필수) · content(필수, 마크다운 —
+                    "# 장 제목"으로 챕터를 나누면 목차가 자동 생성됨) · category ·
+                    edition(판본) · translator(번역/편저) · source(출처) ·
+                    rights(이용 조건, 자유 텍스트) · description(1~2문장 소개) ·
+                    status("published"로 명시해야 공개됨, 생략 시 "review"로 비공개 저장).
+                </p>
+                <textarea
+                    class="news-input"
+                    rows="10"
+                    placeholder='[{"title": "도덕경", "category": "철학·사상", "edition": "왕필본", "translator": "원문 기반", "source": "중국 고전 《도덕경》", "rights": "원전 공개 이용 가능", "description": "노자가 전하는 도와 덕의 철학...", "status": "published", "content": "# 1장\n도가도 비상도...\n\n# 2장\n..."}]'
+                    v-model="libraryInputText"
+                ></textarea>
+                <div class="news-input-actions">
+                    <button type="button" :disabled="librarySubmitting" @click="submitLibrary">
+                        {{ librarySubmitting ? "등록 중..." : "등록하기" }}
+                    </button>
+                    <span class="news-status">{{ libraryStatus }}</span>
                 </div>
             </section>
         </section>
