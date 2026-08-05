@@ -894,83 +894,6 @@ a.myfiles-row {
     border-color: var(--primary-color);
 }
 
-.btn-url-clear {
-    position: absolute;
-    top: 50%;
-    right: 2px;
-    width: 44px;
-    height: 44px;
-    transform: translateY(-50%);
-    border: none;
-    border-radius: 50%;
-    background: transparent;
-    color: var(--text-muted);
-    font-size: 1.5rem;
-    line-height: 1;
-    cursor: pointer;
-}
-
-.btn-url-clear:hover {
-    background-color: rgba(93, 75, 64, 0.08);
-    color: var(--text-color);
-}
-
-/* 예전 바닐라 리더(static/index.html + static/js/generation.js)의
-   링크 가져오기 버튼. Vue AddSourceSheet_View.vue는 더 이상 이 클래스를
-   쓰지 않지만, 레거시 화면(index.html)이 여전히 이 클래스와 urlFetchBtn
-   is-loading 토글에 의존한다 — 지우면 안 된다. */
-.btn-url-fetch {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 12px 18px;
-    border-radius: 12px;
-    background-color: var(--primary-color);
-    border: none;
-    color: #fff;
-    font-family: var(--font-sans);
-    font-size: 0.9rem;
-    font-weight: 600;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: opacity 0.2s ease;
-}
-
-.btn-url-fetch:hover {
-    opacity: 0.88;
-}
-
-.btn-url-fetch:disabled {
-    opacity: 0.5;
-    cursor: default;
-}
-
-.btn-url-fetch.is-loading svg {
-    display: none;
-}
-
-.btn-url-fetch.is-loading::before {
-    content: "";
-    width: 16px;
-    height: 16px;
-    border: 2px solid rgba(255, 255, 255, 0.35);
-    border-top-color: #fff;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-}
-
-.btn-url-fetch svg {
-    width: 16px;
-    height: 16px;
-}
-
-@media (max-width: 480px) {
-    .btn-url-fetch span {
-        display: none;
-    }
-}
-
 .dropzone-icon {
     width: 32px;
     height: 32px;
@@ -3431,24 +3354,9 @@ input[type="range"]::-webkit-slider-thumb:active {
     margin: 0;
 }
 
-.logo .brand-wordmark {
-    color: var(--primary-color);
-    font-family: var(--font-sans);
-    font-size: 0.76rem;
-    font-weight: 800;
-    letter-spacing: 0.14em;
-    line-height: 44px;
-}
-
-.logo .brand-wordmark[data-admin="true"] {
-    cursor: pointer;
-}
-
-/* Vue 앱 전용: 애플 네이티브 설정 앱처럼 좌측 상단에 현재 화면 이름
-   (홈/내 파일)을 큰 타이틀로 보여준다(예전 "TEXTAUDIO" 워드마크 대신).
-   바닐라 정적 앱(static/index.html)은 여전히 .brand-wordmark를 그대로
-   쓰므로 위 규칙은 그대로 둔다. 관리자 3연속 탭 진입점(handleLogoTap)도
-   그대로 유지된다. */
+/* 애플 네이티브 설정 앱처럼 좌측 상단에 현재 화면 이름(홈/내 파일)을 큰
+   타이틀로 보여준다(예전 "TEXTAUDIO" 워드마크 대신). 관리자 3연속 탭
+   진입점(handleLogoTap)도 그대로 유지된다. */
 .logo .page-title {
     color: var(--text-color);
     font-family: var(--font-serif);
@@ -3493,10 +3401,6 @@ input[type="range"]::-webkit-slider-thumb:active {
 
     .logo h1 {
         font-size: 1.8rem;
-    }
-
-    .logo .brand-wordmark {
-        font-size: 0.82rem;
     }
 
     .logo .page-title {
@@ -3831,9 +3735,9 @@ input[type="range"]::-webkit-slider-thumb:active {
         border-color: rgba(247, 240, 233, 0.12);
     }
 
-    /* 예전 바닐라 리더(정적 index.html, data-reader-theme 속성 없음)의
-       OS 다크모드 배색. Vue 리더는 항상 data-reader-theme을 달고 있고,
-       위쪽 [data-reader-theme] 부스터 규칙(.reader-container 정의 부근)이
+    /* data-reader-theme이 아직 안 붙은 리더(첫 페인트 등)의 OS 다크모드
+       기본 배색. 리더는 마운트되면 항상 data-reader-theme을 달고, 위쪽
+       [data-reader-theme] 부스터 규칙(.reader-container 정의 부근)이
        specificity로 이 규칙을 이겨서 사용자가 고른 테마색을 유지한다. */
     .reader-container,
     .reader-content {

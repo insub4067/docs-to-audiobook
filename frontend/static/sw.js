@@ -1,22 +1,11 @@
-const CACHE_NAME = "2026.08.06.25";
+const CACHE_NAME = "2026.08.06.26";
 
+// Vue SPA(/)의 JS/CSS는 파일명에 빌드 해시가 붙어(app-<hash>.js) 여기에
+// 고정 경로로 적을 수 없다 — fetch 핸들러가 런타임에 캐시한다. 이 목록은
+// 해시가 붙지 않는 자산만 담는다.
 const ASSETS_TO_CACHE = [
   "/",
   "/static/style.css",
-  "/static/js/toast.js",
-  "/static/js/utils.js",
-  "/static/js/db.js",
-  "/static/js/auth.js",
-  "/static/js/pwa.js",
-  "/static/js/notifications.js",
-  "/static/js/generation-status.js",
-  "/static/js/generation.js",
-  "/static/js/voices.js",
-  "/static/js/web-speech.js",
-  "/static/js/reader-controls.js",
-  "/static/js/reader.js",
-  "/static/js/library.js",
-  "/static/app.js",
   "/static/admin.css",
   "/static/admin-metric.js",
   "/static/textaudio-icon.png",
