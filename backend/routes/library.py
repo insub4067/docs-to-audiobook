@@ -88,12 +88,18 @@ async def _store_library_item(supabase, admin_user_id: str, item: dict) -> str:
         storage.remove([audio_path])
         raise
 
+    # 목록 카드에 재생시간/장 수를 보여주려고 미리 계산해 둔다 — 매번
+    # sentences 파일을 내려받아 계산하면 목록 화면이 N배 느려진다.
+    duration_seconds = round(max((s.get("end", 0) for s in sentences), default=0) / 1000)
+    chapter_count = sum(1 for s in sentences if s.get("type") == "heading")
+
     supabase.table("audiobooks").insert({
         "id": audiobook_id,
         "user_id": admin_user_id,
         "title": item["title"],
         "file_name": item["title"],
         "storage_path": audio_path,
+        "duration_seconds": duration_seconds,
         "is_library": True,
         "library_status": item["status"],
         "library_category": item["category"],
@@ -102,6 +108,7 @@ async def _store_library_item(supabase, admin_user_id: str, item: dict) -> str:
         "library_source": item["source"],
         "library_rights": item["rights"],
         "library_description": item["description"],
+        "library_chapter_count": chapter_count,
     }).execute()
     return audiobook_id
 

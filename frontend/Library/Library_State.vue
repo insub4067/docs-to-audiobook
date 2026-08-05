@@ -10,6 +10,8 @@ export interface LibraryItem {
     library_source: string | null;
     library_rights: string | null;
     library_description: string | null;
+    library_chapter_count: number | null;
+    duration_seconds: number | null;
     created_at: string;
     audio_url: string;
     sentences_url: string | null;

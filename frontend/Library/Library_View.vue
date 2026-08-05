@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted } from "vue";
 import type { ReaderLogic } from "../Reader/Reader_Logic.vue";
-import { useLibraryState } from "./Library_State.vue";
+import { useLibraryState, type LibraryItem } from "./Library_State.vue";
 import { useLibraryLogic } from "./Library_Logic.vue";
 
 const props = defineProps<{ logic: ReaderLogic; hasMiniPlayer?: boolean }>();
@@ -18,6 +18,26 @@ const filteredItems = computed(() => {
     if (!state.activeCategory.value) return state.items.value;
     return state.items.value.filter((item) => item.library_category === state.activeCategory.value);
 });
+
+function metaLine(item: LibraryItem): string {
+    const parts: string[] = [];
+    if (item.library_category) parts.push(item.library_category);
+    if (item.library_edition) parts.push(item.library_edition);
+    return parts.join(" · ");
+}
+
+function statsLine(item: LibraryItem): string {
+    const parts: string[] = [];
+    if (item.library_chapter_count) parts.push(`총 ${item.library_chapter_count}장`);
+    if (item.duration_seconds) {
+        const hours = Math.floor(item.duration_seconds / 3600);
+        const minutes = Math.round((item.duration_seconds % 3600) / 60);
+        if (hours > 0) parts.push(`약 ${hours}시간 ${minutes}분`);
+        else if (minutes > 0) parts.push(`약 ${minutes}분`);
+        else parts.push("1분 미만");
+    }
+    return parts.join(" · ");
+}
 
 onMounted(() => {
     if (!state.loaded.value) libraryLogic.loadLibrary();
@@ -70,11 +90,11 @@ onMounted(() => {
                             <i data-lucide="book-open"></i>
                             <div class="audio-title-col">
                                 <span class="audio-title">{{ item.title }}</span>
-                                <span class="audio-subtitle">
-                                    <template v-if="item.library_category">{{ item.library_category }} · </template>
-                                    <template v-if="item.library_edition">{{ item.library_edition }}</template>
-                                </span>
+                                <span v-if="item.library_description" class="library-card-description">{{ item.library_description }}</span>
+                                <span class="audio-subtitle">{{ metaLine(item) }}</span>
+                                <span v-if="statsLine(item)" class="audio-subtitle">{{ statsLine(item) }}</span>
                             </div>
+                            <i v-if="libraryLogic.isSaved(item)" data-lucide="check-circle-2" class="library-saved-badge" aria-label="내 서재에 있음"></i>
                         </div>
                     </div>
                 </button>

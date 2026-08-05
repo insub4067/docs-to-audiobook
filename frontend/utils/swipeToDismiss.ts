@@ -21,7 +21,7 @@ export function useSwipeToDismiss(
     function onTouchStart(event: TouchEvent) {
         const el = contentElement.value;
         if (!el) return;
-        const scrollable = (event.target as HTMLElement).closest(".modal-scroll-area, .index-sheet-list");
+        const scrollable = (event.target as HTMLElement).closest(".modal-scroll-area, .index-sheet-list, .news-list-scroll");
         if (scrollable && scrollable.scrollTop > 0) return;
         startY = event.touches[0].clientY;
         currentY = startY;
@@ -34,7 +34,7 @@ export function useSwipeToDismiss(
     function onTouchMove(event: TouchEvent) {
         const el = contentElement.value;
         if (!isDragging || !el) return;
-        const scrollable = (event.target as HTMLElement).closest(".modal-scroll-area, .index-sheet-list");
+        const scrollable = (event.target as HTMLElement).closest(".modal-scroll-area, .index-sheet-list, .news-list-scroll");
         const currentYPosition = event.touches[0].clientY;
         const deltaY = currentYPosition - startY;
         if (scrollable && (scrollable.scrollTop > 0 || deltaY < 0)) {
