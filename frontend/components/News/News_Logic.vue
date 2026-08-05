@@ -59,6 +59,7 @@ export function useNewsLogic(state: NewsState, readerLogic: ReaderLogic): NewsLo
             item.audio_url,
             null,
             queueIndex >= 0 ? onQueueEnded : undefined,
+            "news",
         );
         state.isListOpen.value = false;
     }

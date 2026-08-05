@@ -93,6 +93,8 @@ function onEscape(event: KeyboardEvent): void {
         // 읽기 설정 시트를 닫았다
     } else if (readerLogic.closeMoreSheetIfOpen()) {
         // 더보기 시트를 닫았다
+    } else if (readerLogic.closePlaylistSheetIfOpen()) {
+        // 재생목록 시트를 닫았다
     } else if (generationState.isModalOpen.value) generationLogic.closeModal();
 }
 
@@ -277,6 +279,7 @@ onMounted(async () => {
         :controls-state="readerControlsState"
         :controls-logic="readerControlsLogic"
         :audio-list-logic="audioListLogic"
+        :audio-list-state="audioListState"
         :theme-logic="themeLogic"
     />
     <ThemeSheetView :state="themeState" :logic="themeLogic" />

@@ -12,7 +12,7 @@ import { useToastState } from "../components/Toast/Toast_State.vue";
 export interface ReaderLogic {
     open(audio: AudiobookRecord): void;
     restoreLastSession(audio: AudiobookRecord): void;
-    openSharedReaderMode(title: string, sentences: ReaderSentence[], audioUrl: string, shareId?: string | null, onEnded?: () => void): void;
+    openSharedReaderMode(title: string, sentences: ReaderSentence[], audioUrl: string, shareId?: string | null, onEnded?: () => void, playlistKind?: "news" | null): void;
     closeReader(): void;
     reopenReader(): void;
     checkSharedLink(): Promise<void>;
@@ -31,6 +31,9 @@ export interface ReaderLogic {
     openSettingsSheet(): void;
     closeSettingsSheet(): void;
     closeSettingsSheetIfOpen(): boolean;
+    openPlaylistSheet(): void;
+    closePlaylistSheet(): void;
+    closePlaylistSheetIfOpen(): boolean;
     importSharedLink(url: string): Promise<void>;
     saveSharedAudiobook(): Promise<void>;
     attachReaderResizeHandler(): () => void;
@@ -159,6 +162,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         const localUrl = URL.createObjectURL(audioBlob);
         currentObjectUrl = localUrl;
         isSharedMode = false;
+        state.sharedPlaylistKind.value = null;
         state.currentAudioObject.value = audio;
         sentences = (audio.sentences || []) as ReaderSentence[];
 
@@ -209,9 +213,10 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         open(audio, { autoplay: false, openReaderUI: false });
     }
 
-    function openSharedReaderMode(title: string, sharedSentences: ReaderSentence[], audioUrl: string, shareId: string | null = null, onEnded?: () => void): void {
+    function openSharedReaderMode(title: string, sharedSentences: ReaderSentence[], audioUrl: string, shareId: string | null = null, onEnded?: () => void, playlistKind: "news" | null = null): void {
         const el = state.audioEl.value;
         if (!el) return;
+        state.sharedPlaylistKind.value = playlistKind;
         isSharedMode = true;
         sharedAudioUrl = audioUrl;
         sharedShareId = shareId;
@@ -354,6 +359,20 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         return true;
     }
 
+    function openPlaylistSheet(): void {
+        state.isPlaylistSheetOpen.value = true;
+    }
+
+    function closePlaylistSheet(): void {
+        state.isPlaylistSheetOpen.value = false;
+    }
+
+    function closePlaylistSheetIfOpen(): boolean {
+        if (!state.isPlaylistSheetOpen.value) return false;
+        closePlaylistSheet();
+        return true;
+    }
+
     // "닫기"는 재생 세션을 끝내지 않는다 — 화면만 접고(미니 플레이어로),
     // 재생 중이면 계속 재생, 일시정지면 그대로 유지한다. 그래서 오디오
     // 핸들러(ontimeupdate 등)도 그대로 두어야 미니 플레이어가 실시간으로
@@ -465,6 +484,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         openIndexSheet, closeIndexSheet, closeIndexSheetIfOpen,
         openMoreSheet, closeMoreSheet, closeMoreSheetIfOpen,
         openSettingsSheet, closeSettingsSheet, closeSettingsSheetIfOpen,
+        openPlaylistSheet, closePlaylistSheet, closePlaylistSheetIfOpen,
         importSharedLink, saveSharedAudiobook, attachReaderResizeHandler,
     };
 }

@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, type ComponentPublicInstance } from "vue";
+import { computed, onMounted, onUnmounted, ref, type ComponentPublicInstance } from "vue";
 import type { ReaderState } from "./Reader_State.vue";
 import type { ReaderLogic } from "./Reader_Logic.vue";
 import type { ReaderControlsState } from "./ReaderControls/ReaderControls_State.vue";
 import type { ReaderControlsLogic } from "./ReaderControls/ReaderControls_Logic.vue";
 import type { AudioListLogic } from "../components/Library/AudioList_Logic.vue";
+import type { AudioListState } from "../components/Library/AudioList_State.vue";
 import ReaderControlsView from "./ReaderControls/ReaderControls_View.vue";
 import IndexSheetView from "../Sheet/IndexSheet_View.vue";
 import ReaderMoreSheetView from "../Sheet/ReaderMoreSheet_View.vue";
 import ReaderSettingsSheetView from "../Sheet/ReaderSettingsSheet_View.vue";
 import ReaderOptionsSheetView from "../Sheet/ReaderOptionsSheet_View.vue";
+import ReaderPlaylistSheetView from "../Sheet/ReaderPlaylistSheet_View.vue";
 import type { ThemeLogic } from "../Theme/Theme_Logic.vue";
 import { useSwipeToDismiss } from "../utils/swipeToDismiss";
 
@@ -19,8 +21,15 @@ const props = defineProps<{
     controlsState: ReaderControlsState;
     controlsLogic: ReaderControlsLogic;
     audioListLogic: AudioListLogic;
+    audioListState: AudioListState;
     themeLogic: ThemeLogic;
 }>();
+
+// 폴더에 담겨 있거나 경제 뉴스로 열렸을 때만 "같이 묶인 다른 항목"이
+// 있을 수 있어, 그때만 제목을 눌러 재생목록을 고를 수 있게 한다.
+const hasPlaylist = computed(() =>
+    props.state.sharedPlaylistKind.value === "news" || !!props.state.currentAudioObject.value?.folderId
+);
 
 function onShareClick(): void {
     const audio = props.state.currentAudioObject.value;
@@ -68,7 +77,11 @@ useSwipeToDismiss(props.state.containerEl, () => props.logic.closeReader(), head
                 <button class="btn-reader-close" aria-label="오디오북 듣기 닫기" title="오디오북 듣기 닫기" type="button" @click="logic.closeReader">
                     <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
                 </button>
-                <h3 class="reader-book-title">{{ state.title.value }}</h3>
+                <button v-if="hasPlaylist" type="button" class="reader-book-title reader-book-title-btn" @click="logic.openPlaylistSheet">
+                    <span class="reader-book-title-text">{{ state.title.value }}</span>
+                    <i data-lucide="chevron-down" class="reader-title-caret"></i>
+                </button>
+                <h3 v-else class="reader-book-title">{{ state.title.value }}</h3>
                 <button class="btn-reader-close" aria-label="더보기" title="더보기" type="button" @click="logic.openMoreSheet">
                     <i data-lucide="more-horizontal"></i>
                 </button>
@@ -165,4 +178,5 @@ useSwipeToDismiss(props.state.containerEl, () => props.logic.closeReader(), head
     <ReaderMoreSheetView :state="state" :logic="logic" :on-share-click="onShareClick" />
     <ReaderSettingsSheetView :state="state" :logic="logic" :controls-logic="controlsLogic" :theme-logic="themeLogic" />
     <ReaderOptionsSheetView :state="controlsState" :logic="controlsLogic" />
+    <ReaderPlaylistSheetView :state="state" :logic="logic" :audio-list-state="audioListState" />
 </template>

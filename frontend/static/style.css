@@ -1894,6 +1894,32 @@ input[type="range"]::-webkit-slider-thumb:active {
     max-width: 100%;
 }
 
+/* 폴더/경제 뉴스로 열려 재생목록이 있을 때만 제목이 버튼이 된다 —
+   위 .reader-book-title의 타이포그래피는 그대로 물려받고 버튼 기본
+   테두리·배경만 지운다. */
+.reader-book-title-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: none;
+    background: none;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    min-width: 0;
+}
+.reader-book-title-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.reader-title-caret {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+}
+
 .btn-reader-close {
     background: none;
     border: none;
