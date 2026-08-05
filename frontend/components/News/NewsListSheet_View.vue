@@ -10,7 +10,12 @@ const state = useNewsState();
 const newsLogic = useNewsLogic(state, props.logic);
 
 const sheet = ref<HTMLElement | null>(null);
-useSwipeToDismiss(sheet, () => newsLogic.closeList());
+const handle = ref<HTMLElement | null>(null);
+// 손잡이(핸들+제목) 영역에서 시작한 드래그만 시트를 닫는다 — 목록
+// 영역은 스크롤 위치와 무관하게 항상 네이티브 스크롤에만 반응해야
+// 한다(안 그러면 목록 맨 위에서 살짝만 당겨도 시트가 통째로 끌려
+// 내려오는 것처럼 보인다).
+useSwipeToDismiss(sheet, () => newsLogic.closeList(), handle);
 
 watch(() => state.isListOpen.value, (open) => {
     document.body.style.overflow = open ? "hidden" : "";
@@ -40,9 +45,11 @@ function formatRelativeTime(iso: string): string {
         @click="onBackdropClick"
     >
         <div class="action-sheet news-list-sheet" ref="sheet">
-            <div class="action-sheet-handle"></div>
-            <div class="index-sheet-header">
-                <h3>경제 뉴스</h3>
+            <div ref="handle">
+                <div class="action-sheet-handle"></div>
+                <div class="index-sheet-header">
+                    <h3>경제 뉴스</h3>
+                </div>
             </div>
             <button
                 v-if="state.items.value.length > 1"

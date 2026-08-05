@@ -14,6 +14,7 @@ export interface LibraryLogic {
     isSaved(item: LibraryItem): boolean;
     toggleSave(item: LibraryItem): Promise<void>;
     loadSentences(item: LibraryItem): Promise<unknown[]>;
+    getLastPosition(item: LibraryItem): Promise<number>;
     playFromStart(item: LibraryItem): Promise<void>;
     playFromLastPosition(item: LibraryItem): Promise<void>;
     playFromChapter(item: LibraryItem, sentences: unknown[], startSeconds: number): void;
@@ -141,7 +142,8 @@ export function useLibraryLogic(state: LibraryState, readerLogic: ReaderLogic): 
 
     return {
         loadLibrary, loadSaves, selectCategory, openDetail, closeDetail, isSaved, toggleSave,
-        loadSentences: fetchSentences, playFromStart, playFromLastPosition, playFromChapter,
+        loadSentences: fetchSentences, getLastPosition: fetchLastPosition,
+        playFromStart, playFromLastPosition, playFromChapter,
     };
 }
 

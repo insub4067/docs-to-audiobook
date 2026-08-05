@@ -1875,6 +1875,12 @@ input[type="range"]::-webkit-slider-thumb:active {
 .library-detail-actions .action-sheet-btn-primary {
     border-color: var(--primary-color);
 }
+.library-detail-actions .library-saved-state {
+    border-color: var(--primary-color);
+    background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+    color: var(--primary-color);
+    font-weight: 600;
+}
 .library-detail-section {
     margin-bottom: 28px;
 }

@@ -17,18 +17,24 @@ const props = defineProps<{
 const toc = ref<TocEntry[]>([]);
 const rawSentences = ref<unknown[]>([]);
 const isLoadingToc = ref(false);
+const hasPlaybackHistory = ref(false);
 
 watch(() => props.state.detailItem.value, async (item) => {
     toc.value = [];
     rawSentences.value = [];
+    hasPlaybackHistory.value = false;
     if (!item) return;
     isLoadingToc.value = true;
     try {
-        const sentences = await props.logic.loadSentences(item);
+        const [sentences, lastPosition] = await Promise.all([
+            props.logic.loadSentences(item),
+            props.logic.getLastPosition(item),
+        ]);
         rawSentences.value = sentences;
         toc.value = (sentences as { type?: string; display?: string; level?: number; start?: number }[])
             .filter((s) => s.type === "heading")
             .map((s) => ({ text: s.display || "", level: s.level || 1, startMs: s.start || 0 }));
+        hasPlaybackHistory.value = lastPosition > 0;
     } finally {
         isLoadingToc.value = false;
     }
@@ -67,13 +73,18 @@ function onChapterClick(entry: TocEntry): void {
                         <i data-lucide="play"></i>
                         처음부터 듣기
                     </button>
-                    <button type="button" class="action-sheet-btn" @click="logic.playFromLastPosition(state.detailItem.value)">
+                    <button v-if="hasPlaybackHistory" type="button" class="action-sheet-btn" @click="logic.playFromLastPosition(state.detailItem.value)">
                         <i data-lucide="rotate-ccw"></i>
                         이어 듣기
                     </button>
-                    <button type="button" class="action-sheet-btn" @click="logic.toggleSave(state.detailItem.value)">
+                    <button
+                        type="button"
+                        class="action-sheet-btn"
+                        :class="{ 'library-saved-state': logic.isSaved(state.detailItem.value) }"
+                        @click="logic.toggleSave(state.detailItem.value)"
+                    >
                         <i :data-lucide="logic.isSaved(state.detailItem.value) ? 'check' : 'plus'"></i>
-                        {{ logic.isSaved(state.detailItem.value) ? "내 서재에 있음" : "내 서재에 추가" }}
+                        {{ logic.isSaved(state.detailItem.value) ? "내 서재에 추가됨" : "내 서재에 추가" }}
                     </button>
                 </div>
 

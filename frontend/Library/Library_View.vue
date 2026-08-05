@@ -54,7 +54,7 @@ onMounted(() => {
             </div>
             <p class="action-sheet-hint" style="padding: 0 0 16px;">무료로 듣는 고전과 경전</p>
 
-            <div v-if="categories.length > 0" class="library-category-chips">
+            <div v-if="categories.length > 1" class="library-category-chips">
                 <button
                     type="button"
                     class="library-chip"
