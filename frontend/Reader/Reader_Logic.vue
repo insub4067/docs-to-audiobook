@@ -1,6 +1,7 @@
 <script lang="ts">
 import type { ReaderState } from "./Reader_State.vue";
 import type { ReaderControlsLogic } from "./ReaderControls/ReaderControls_Logic.vue";
+import type { RepeatMode } from "./ReaderControls/ReaderControls_State.vue";
 import type { AudioListLogic } from "../components/Library/AudioList_Logic.vue";
 import { useWebSpeech } from "./webSpeech";
 import { buildDisplayItems, findActiveSentenceIndex, type ReaderSentence } from "./sentenceDisplay";
@@ -12,7 +13,10 @@ import { useAuthLogic } from "../Auth/Auth_Logic.vue";
 
 export interface SharedReaderModeOptions {
     shareId?: string | null;
-    onEnded?: () => void;
+    // 재생목록(뉴스 연속 재생)이 있을 때 다음 항목으로 넘길 콜백. 현재 반복
+    // 모드를 함께 넘겨 "전체 반복"이면 마지막 항목 뒤에 처음으로 돌아갈지
+    // 큐 쪽에서 판단하게 한다.
+    onEnded?: (repeatMode: RepeatMode) => void;
     playlistKind?: "news" | null;
     // 라이브러리 작품처럼 실제 audiobooks 행이 있는 콘텐츠는 재생 위치를
     // 서버에 이어 듣기용으로 저장/복원할 수 있다 — 24시간짜리 임시 공유
@@ -303,15 +307,22 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
                 saveSharedPlaybackPosition(sharedAudiobookId, currentSec).catch((error) => console.error("재생 상태 저장 실패:", error));
             }
         };
-        // 뉴스 연속 재생(onEnded로 다음 기사로 넘어감)보다 사용자가 고른 반복
-        // 모드가 우선한다. 반복이 꺼져 있을 때만 큐를 진행시킨다 — 예전에는
-        // 이 자리에서 큐 콜백만 걸어 뉴스에서 반복 모드가 통째로 무시됐다.
+        // "현재 오디오 반복"은 지금 것만 다시 틀고 끝. "전체 반복"은 재생목록
+        // 전체를 도는 뜻이므로 큐가 있으면 큐에 맡기고(마지막 항목에서 처음으로
+        // 되돌아가는 건 큐 쪽이 판단한다), 큐가 없으면 그 오디오 하나가 곧
+        // 전체이므로 그것만 반복한다. 반복 모드는 큐 콜백에 넘겨준다 —
+        // News_Logic이 ReaderControls에 직접 접근하지 못해서다.
         el.onended = () => {
-            if (readerControls.getPlaybackSettings().repeatMode !== "off") {
+            const repeatMode = readerControls.getPlaybackSettings().repeatMode;
+            if (repeatMode === "one") {
                 readerControls.onEnded();
                 return;
             }
-            onEnded?.();
+            if (onEnded) {
+                onEnded(repeatMode);
+                return;
+            }
+            if (repeatMode === "all") readerControls.onEnded();
         };
         el.src = audioUrl;
         el.load();

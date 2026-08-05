@@ -1,6 +1,7 @@
 <script lang="ts">
 import type { NewsState, NewsItem } from "./News_State.vue";
 import type { ReaderLogic } from "../../Reader/Reader_Logic.vue";
+import type { RepeatMode } from "../../Reader/ReaderControls/ReaderControls_State.vue";
 import { useToastLogic } from "../Toast/Toast_Logic.vue";
 import { useToastState } from "../Toast/Toast_State.vue";
 
@@ -60,15 +61,22 @@ export function useNewsLogic(state: NewsState, readerLogic: ReaderLogic): NewsLo
         state.isListOpen.value = false;
     }
 
-    async function onQueueEnded(): Promise<void> {
+    async function onQueueEnded(repeatMode: RepeatMode = "off"): Promise<void> {
         const nextIndex = state.queueIndex.value + 1;
         const next = state.items.value[nextIndex];
         if (next) {
             await openNewsItem(next, nextIndex);
-        } else {
-            state.queueIndex.value = -1;
-            showToast("경제 뉴스를 모두 들었어요", "success");
+            return;
         }
+        // "전체 반복"은 재생목록 전체를 반복하라는 뜻이므로 마지막 기사가
+        // 끝나면 처음 기사로 돌아간다(한 기사만 반복하는 건 "현재 오디오
+        // 반복"이고, 그건 리더가 큐를 거치지 않고 직접 처리한다).
+        if (repeatMode === "all" && state.items.value.length > 0) {
+            await openNewsItem(state.items.value[0], 0);
+            return;
+        }
+        state.queueIndex.value = -1;
+        showToast("경제 뉴스를 모두 들었어요", "success");
     }
 
     async function playAll(): Promise<void> {

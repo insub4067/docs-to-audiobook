@@ -48,11 +48,28 @@ describe("반복 모드가 실제 audio 엘리먼트에 연결된다", () => {
         expect(onQueueEnded).toHaveBeenCalledTimes(1);
     });
 
-    it("공유/뉴스 모드에서 반복이 켜져 있으면 큐 진행 대신 처음부터 다시 재생한다", () => {
+    it("'전체 반복'은 재생목록을 반복하라는 뜻이므로 큐에 넘긴다", () => {
+        // 한 기사만 되풀이하면 안 된다 — 다음 기사로 진행하고, 목록 끝에서
+        // 처음으로 돌아갈지는 큐(News_Logic)가 판단한다.
         const { readerLogic, el, play, controlsLogic } = setup();
         const onQueueEnded = vi.fn();
 
         controlsLogic.selectRepeatMode("all");
+        readerLogic.openSharedReaderMode("뉴스1", SENTENCES, "blob:fake", {
+            onEnded: onQueueEnded,
+            playlistKind: "news",
+        });
+        el.onended?.(new Event("ended"));
+
+        expect(onQueueEnded).toHaveBeenCalledWith("all");
+        expect(play).not.toHaveBeenCalled();
+    });
+
+    it("'현재 오디오 반복'은 큐가 있어도 현재 기사만 다시 재생한다", () => {
+        const { readerLogic, el, play, controlsLogic } = setup();
+        const onQueueEnded = vi.fn();
+
+        controlsLogic.selectRepeatMode("one");
         readerLogic.openSharedReaderMode("뉴스1", SENTENCES, "blob:fake", {
             onEnded: onQueueEnded,
             playlistKind: "news",
@@ -65,29 +82,16 @@ describe("반복 모드가 실제 audio 엘리먼트에 연결된다", () => {
         expect(play).toHaveBeenCalled();
     });
 
-    it("'현재 오디오 반복'도 마찬가지로 다시 재생한다", () => {
-        const { readerLogic, el, play, controlsLogic } = setup();
-        const onQueueEnded = vi.fn();
-
-        controlsLogic.selectRepeatMode("one");
-        readerLogic.openSharedReaderMode("뉴스1", SENTENCES, "blob:fake", {
-            onEnded: onQueueEnded,
-            playlistKind: "news",
-        });
-        el.onended?.(new Event("ended"));
-
-        expect(onQueueEnded).not.toHaveBeenCalled();
-        expect(play).toHaveBeenCalled();
-    });
-
-    it("공유 모드에 큐 콜백이 없어도 반복은 동작한다", () => {
-        // 라이브러리 작품처럼 연속 재생 큐가 없는 경우.
+    it("재생목록이 없으면 '전체 반복'은 그 오디오 하나를 반복한다", () => {
+        // 라이브러리 작품처럼 큐가 없는 경우 — 그 오디오가 곧 "전체"다.
         const { readerLogic, el, play, controlsLogic } = setup();
 
         controlsLogic.selectRepeatMode("all");
         readerLogic.openSharedReaderMode("작품", SENTENCES, "blob:fake", {});
+        el.currentTime = 42;
         el.onended?.(new Event("ended"));
 
+        expect(el.currentTime).toBe(0);
         expect(play).toHaveBeenCalled();
     });
 
