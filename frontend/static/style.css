@@ -2192,6 +2192,22 @@ input[type="range"]::-webkit-slider-thumb:active {
     color: var(--reader-text);
 }
 
+/* 글꼴/글자크기/줄간격 시트 미리보기 — .reader-content와 같은 계산식을
+   써서 실제 리더 화면과 동일한 크기·간격으로 보이게 한다. */
+.reader-options-preview {
+    margin: 4px 24px 16px;
+    padding: 18px 20px;
+    border-radius: 16px;
+    border: 1px solid var(--reader-border);
+    background-color: var(--reader-bg);
+    color: var(--reader-text);
+    font-size: calc(1.15rem * var(--reader-font-scale, 1));
+    line-height: var(--reader-line-height, 2.0);
+    letter-spacing: 0.01em;
+    word-spacing: 0.05em;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
 .reader-theme-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);

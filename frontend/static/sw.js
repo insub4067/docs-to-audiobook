@@ -1,4 +1,4 @@
-const CACHE_NAME = "2026.08.06.18";
+const CACHE_NAME = "2026.08.06.19";
 
 const ASSETS_TO_CACHE = [
   "/",
@@ -128,6 +128,16 @@ self.addEventListener("fetch", (e) => {
 
   const url = new URL(e.request.url);
   if (url.pathname.startsWith("/api/")) {
+    return;
+  }
+
+  // ✅ 다른 origin(Supabase Storage의 서명된 오디오/문장 URL 등)도 SW가
+  // 건드리지 않는다. 서명 토큰이 매 요청마다 달라 캐시 적중이 애초에
+  // 불가능해 캐싱 이득이 없고, SW를 거치는 fetch()는 순간적인 네트워크
+  // 끊김에도 재시도 없이 바로 실패해(catch에서 캐시 미스면 그냥 끝)
+  // "공유 오디오를 불러올 수 없습니다" 같은 오류로 이어졌다. 브라우저가
+  // 직접 요청하게 두면 더 안정적이다.
+  if (!e.request.url.startsWith(self.location.origin)) {
     return;
   }
 

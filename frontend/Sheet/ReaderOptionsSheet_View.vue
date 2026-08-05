@@ -101,6 +101,11 @@ const options = computed<OptionRow[]>(() => {
     return [];
 });
 
+const showPreview = computed(() => {
+    const kind = props.state.activeSheet.value;
+    return kind === "fontFamily" || kind === "fontSize" || kind === "lineHeight";
+});
+
 function onBackdropClick(event: MouseEvent): void {
     if (event.target === event.currentTarget) props.logic.closeSheet();
 }
@@ -127,6 +132,17 @@ async function onCustomTimerClick(): Promise<void> {
             <div class="action-sheet-handle"></div>
             <div class="index-sheet-header">
                 <h3>{{ title }}</h3>
+            </div>
+            <div
+                v-if="showPreview"
+                class="reader-options-preview"
+                :style="{
+                    fontFamily: state.fontFamily.value === 'sans' ? 'var(--font-sans)' : 'var(--font-serif)',
+                    '--reader-font-scale': state.fontSize.value,
+                    '--reader-line-height': state.lineHeight.value,
+                }"
+            >
+                낯선 문장이 익숙한 목소리로 다가올 때, 우리는 비로소 이야기 속에 있다. 글꼴과 글자 크기, 줄 간격을 바꿔 가장 편안하게 읽히는 조합을 찾아보세요.
             </div>
             <button
                 v-for="option in options"
