@@ -18,10 +18,31 @@ export function useSwipeToDismiss(
     let isDragging = false;
     let dragStartTime = 0;
 
+    // 터치 지점에서 시작해 실제로 스크롤 가능한(overflow가 auto/scroll이고
+    // 내용이 실제로 넘치는) 조상을 boundary까지 훑어 찾는다. 시트 자체가
+    // 스크롤 영역인 경우(대부분의 액션시트 — .action-sheet 기본값이
+    // overflow-y: auto)와, 시트 안에 별도 스크롤 박스가 있는 경우(경제
+    // 뉴스 목록의 .news-list-scroll 등) 둘 다 이거 하나로 커버한다.
+    // 예전에는 특정 class 이름을 하드코딩한 화이트리스트로 판단해서
+    // 새 시트를 만들 때마다 빠뜨리기 쉬웠다 — 그래서 시트 하나(경제
+    // 뉴스)만 고치고 다른 시트(문서 추가 등)에서 같은 버그가 남아있었다.
+    function findScrollable(target: HTMLElement, boundary: HTMLElement): HTMLElement | null {
+        let node: HTMLElement | null = target;
+        while (node) {
+            if (node.scrollHeight > node.clientHeight) {
+                const overflowY = getComputedStyle(node).overflowY;
+                if (overflowY === "auto" || overflowY === "scroll") return node;
+            }
+            if (node === boundary) break;
+            node = node.parentElement;
+        }
+        return null;
+    }
+
     function onTouchStart(event: TouchEvent) {
         const el = contentElement.value;
         if (!el) return;
-        const scrollable = (event.target as HTMLElement).closest(".modal-scroll-area, .index-sheet-list, .news-list-scroll");
+        const scrollable = findScrollable(event.target as HTMLElement, el);
         if (scrollable && scrollable.scrollTop > 0) return;
         startY = event.touches[0].clientY;
         currentY = startY;
@@ -34,7 +55,7 @@ export function useSwipeToDismiss(
     function onTouchMove(event: TouchEvent) {
         const el = contentElement.value;
         if (!isDragging || !el) return;
-        const scrollable = (event.target as HTMLElement).closest(".modal-scroll-area, .index-sheet-list, .news-list-scroll");
+        const scrollable = findScrollable(event.target as HTMLElement, el);
         const currentYPosition = event.touches[0].clientY;
         const deltaY = currentYPosition - startY;
         if (scrollable && (scrollable.scrollTop > 0 || deltaY < 0)) {
