@@ -4,6 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover">
     <meta name="robots" content="noindex, nofollow">
+    <!-- app.html(메인 SPA)에는 있는데 여기 없었다. 앱 안에서 "관리자
+         페이지" 링크를 누르면 같은 standalone PWA 세션이 아니라 별도
+         문서(admin.html)로 완전히 새로 이동하는데, 이 문서가 스스로
+         "나도 standalone web app이다"라고 선언하지 않으면 iOS가 이
+         페이지를 일반 웹뷰로 취급해 하단 safe-area(홈 인디케이터 영역)
+         계산이 어긋난다 — 그래서 관리자 페이지의 입력 시트만 닫기
+         버튼이 하단에 딱 붙지 않고 떠 보였다. -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="TextAudio 관리자">
+    <meta name="theme-color" content="#5d4b40">
     <title>TextAudio 관리자</title>
     <link rel="stylesheet" href="/static/admin.css">
 </head>

@@ -15,6 +15,8 @@ ADMIN_VIEW_VUE = ROOT_DIR / "frontend" / "Admin" / "Admin_View.vue"
 ADMIN_LOGIC_VUE = ROOT_DIR / "frontend" / "Admin" / "Admin_Logic.vue"
 ADMIN_METRIC_HTML = FRONTEND_STATIC / "admin-metric.html"
 ADMIN_METRIC_JS = FRONTEND_STATIC / "admin-metric.js"
+ADMIN_HTML = ROOT_DIR / "frontend" / "admin.html"
+APP_HTML = ROOT_DIR / "frontend" / "app.html"
 
 
 def test_service_worker_handles_ready_push_and_notification_click():
@@ -170,3 +172,19 @@ def test_admin_metric_cards_link_to_dedicated_detail_pages():
     assert 'id="metricPageList"' in detail_html
     assert 'function renderPeople(people)' in detail_source
     assert 'fetch("/api/admin/metrics"' in detail_source
+
+def test_admin_html_declares_standalone_web_app_like_the_main_app():
+    # admin.html은 app.html과 별개의 문서(별도 Vite 진입점)라, 메인 앱
+    # 안에서 "관리자 페이지" 링크를 눌러 이동하면 같은 standalone PWA
+    # 세션이 이어지는 게 아니라 완전히 새 문서가 로드된다. 이 문서가
+    # 스스로 "나도 standalone web app"이라고 선언하지 않으면 iOS가 일반
+    # 웹뷰로 취급해 하단 safe-area 계산이 어긋난다(입력 시트 닫기 버튼이
+    # 하단에 붙지 않고 떠 보이는 문제로 실제 확인됨). app.html에 있는
+    # 이 메타 태그들이 admin.html에서 빠지면 다시 조용히 재발한다.
+    admin_html = ADMIN_HTML.read_text(encoding="utf-8")
+    app_html = APP_HTML.read_text(encoding="utf-8")
+
+    for tag in ('name="apple-mobile-web-app-capable"', 'name="apple-mobile-web-app-status-bar-style"'):
+        assert tag in app_html, f"app.html 기준선에 {tag}가 없다 — 테스트 전제가 깨짐"
+        assert tag in admin_html, f"admin.html에 {tag}가 빠졌다"
+    assert 'viewport-fit=cover' in admin_html
