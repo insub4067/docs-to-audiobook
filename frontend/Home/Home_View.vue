@@ -233,7 +233,7 @@ onMounted(async () => {
         </footer>
     </main>
 
-    <LibraryView v-show="activeTab === 'library'" :logic="readerLogic" :has-mini-player="hasMiniPlayer" />
+    <LibraryView v-show="activeTab === 'library'" :active="activeTab === 'library'" :logic="readerLogic" :has-mini-player="hasMiniPlayer" />
 
     <MyFilesView
         v-show="activeTab === 'files'"

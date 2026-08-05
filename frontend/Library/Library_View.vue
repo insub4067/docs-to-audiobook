@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
+import { computed, onMounted, watch } from "vue";
 import type { ReaderLogic } from "../Reader/Reader_Logic.vue";
 import { useLibraryState, type LibraryItem } from "./Library_State.vue";
 import { useLibraryLogic } from "./Library_Logic.vue";
 
-const props = defineProps<{ logic: ReaderLogic; hasMiniPlayer?: boolean }>();
+const props = defineProps<{ logic: ReaderLogic; hasMiniPlayer?: boolean; active?: boolean }>();
 const state = useLibraryState();
 const libraryLogic = useLibraryLogic(state, props.logic);
 
@@ -42,6 +42,13 @@ function statsLine(item: LibraryItem): string {
 onMounted(() => {
     if (!state.loaded.value) libraryLogic.loadLibrary();
     libraryLogic.loadSaves();
+});
+
+// v-show로 항상 마운트돼 있는 탭이라 onMounted는 앱 실행 중 딱 한 번만
+// 불린다 — 관리자가 앱을 새로 열지 않고 작품을 발행해도 목록에 바로
+// 반영되도록, 탭이 다시 활성화될 때마다 새로 불러온다.
+watch(() => props.active, (active) => {
+    if (active) libraryLogic.loadLibrary();
 });
 </script>
 
