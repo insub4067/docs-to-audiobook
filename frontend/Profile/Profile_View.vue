@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useAuthStore } from "../stores/auth";
 import { useAuthLogic } from "../Auth/Auth_Logic.vue";
 import type { ThemeLogic } from "../Theme/Theme_Logic.vue";
@@ -17,6 +17,8 @@ const props = defineProps<{
 
 const authStore = useAuthStore();
 const authLogic = useAuthLogic();
+
+const isSettingsExpanded = ref(false);
 
 const profileName = computed(() => authStore.user?.full_name || authStore.user?.email || "사용자");
 const profileInitial = computed(() => profileName.value.trim().split(/\s+/)[0].slice(0, 2));
@@ -51,10 +53,17 @@ async function handleLogout(): Promise<void> {
         </div>
 
         <div class="glass-card profile-section">
-            <div class="card-header">
+            <button
+                class="card-header profile-settings-toggle"
+                type="button"
+                :aria-expanded="isSettingsExpanded"
+                @click="isSettingsExpanded = !isSettingsExpanded"
+            >
                 <i data-lucide="settings-2" class="header-icon"></i>
                 <h2>읽기 설정</h2>
-            </div>
+                <i data-lucide="chevron-down" class="profile-settings-toggle-chevron" :class="{ 'is-expanded': isSettingsExpanded }"></i>
+            </button>
+            <template v-if="isSettingsExpanded">
             <button class="myfiles-row" type="button" @click="themeLogic.openSheet">
                 <i data-lucide="palette" class="myfiles-row-icon"></i>
                 <span class="myfiles-row-title">읽기 화면 테마</span>
@@ -96,6 +105,7 @@ async function handleLogout(): Promise<void> {
                 <span class="myfiles-row-value">{{ controlsState.timerLabel.value }}</span>
                 <i data-lucide="chevron-right" class="myfiles-row-chevron"></i>
             </button>
+            </template>
         </div>
     </main>
 </template>
