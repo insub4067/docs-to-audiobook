@@ -248,16 +248,20 @@ h2 { margin-bottom: 0; font-size: 1.4rem; }
 .content-create-chevron { flex-shrink: 0; color: var(--muted); font-size: 1.3rem; }
 
 /* 입력 시트 — 핸들·제목·등록 버튼·닫기는 고정하고 텍스트영역+검증
-   결과만 스크롤한다(길게 붙여넣으면 시트가 화면을 넘칠 수 있어서). */
+   결과만 스크롤한다(길게 붙여넣으면 시트가 화면을 넘칠 수 있어서).
+   높이 제한은 바깥 .action-sheet가 아니라 안쪽 스크롤 영역에만 건다 —
+   다른 시트(news-list-sheet 등)와 같은 패턴. 바깥 박스에 max-height를
+   같이 주면 실기기(iOS Safari)에서 하단 safe-area 패딩이 제대로
+   반영되지 않아 닫기 버튼이 하단에서 떠 보이는 문제가 있었다. */
 .action-sheet.input-sheet {
     display: flex;
     flex-direction: column;
-    max-height: 85vh;
     overflow: hidden;
 }
 .input-sheet-scroll {
-    flex: 1;
+    flex-shrink: 1;
     min-height: 0;
+    max-height: 55vh;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     padding: 0 20px;

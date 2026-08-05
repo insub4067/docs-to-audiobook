@@ -185,9 +185,7 @@ onMounted(() => {
             <div class="action-sheet-handle"></div>
             <div class="index-sheet-header"><h3>경제 뉴스 추가</h3></div>
             <div class="input-sheet-scroll">
-                <p class="dashboard-subtitle">
-                    [{"title": "...", "content": "...", "category": "...", "source": "..."}] 형식의 JSON 배열을 붙여넣으세요.
-                </p>
+                <p class="dashboard-subtitle">아래 형식에 맞는 json을 붙여넣으세요.</p>
                 <textarea
                     class="news-input"
                     rows="10"
@@ -224,13 +222,7 @@ onMounted(() => {
             <div class="action-sheet-handle"></div>
             <div class="index-sheet-header"><h3>라이브러리 작품 추가</h3></div>
             <div class="input-sheet-scroll">
-                <p class="dashboard-subtitle">
-                    작품 배열을 JSON으로 붙여넣으세요. 필드: title(필수) · content(필수, 마크다운 —
-                    "# 장 제목"으로 챕터를 나누면 목차가 자동 생성됨) · category ·
-                    edition(판본) · translator(번역/편저) · source(출처) ·
-                    rights(이용 조건, 자유 텍스트) · description(1~2문장 소개) ·
-                    status("published"로 명시해야 공개됨, 생략 시 "review"로 비공개 저장).
-                </p>
+                <p class="dashboard-subtitle">아래 형식에 맞는 json을 붙여넣으세요.</p>
                 <textarea
                     class="news-input"
                     rows="10"
