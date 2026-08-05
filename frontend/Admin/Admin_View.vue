@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from "vue";
+import { computed, onMounted } from "vue";
 import { useAdminState } from "./Admin_State.vue";
 import { useAdminLogic } from "./Admin_Logic.vue";
 import ThemeSheetView from "../Sheet/ThemeSheet_View.vue";
@@ -7,17 +7,34 @@ import { useThemeState } from "../Theme/Theme_State.vue";
 import { useThemeLogic } from "../Theme/Theme_Logic.vue";
 
 const {
-    status, contentVisible, metrics, newsInputText, newsStatus, newsSubmitting,
+    status, contentVisible, metrics, activeAdminTab, newsInputText, newsStatus, newsSubmitting,
     libraryInputText, libraryStatus, librarySubmitting,
-    libraryItems, libraryItemsStatus, libraryTogglingIds,
+    libraryItems, libraryItemsStatus, libraryTogglingIds, statusMenuItem,
 } = useAdminState();
-const { formatMetric, loadMetrics, submitNews, submitLibrary, loadLibraryItems, toggleLibraryStatus } = useAdminLogic({
-    status, contentVisible, metrics, newsInputText, newsStatus, newsSubmitting,
+const {
+    formatMetric, loadMetrics, selectTab, validateJson, submitNews, submitLibrary,
+    loadLibraryItems, openStatusMenu, closeStatusMenu, toggleLibraryStatus,
+} = useAdminLogic({
+    status, contentVisible, metrics, activeAdminTab, newsInputText, newsStatus, newsSubmitting,
     libraryInputText, libraryStatus, librarySubmitting,
-    libraryItems, libraryItemsStatus, libraryTogglingIds,
+    libraryItems, libraryItemsStatus, libraryTogglingIds, statusMenuItem,
 });
 const themeState = useThemeState();
 const themeLogic = useThemeLogic(themeState);
+
+const newsValidation = computed(() => validateJson(newsInputText.value));
+const libraryValidation = computed(() => validateJson(libraryInputText.value));
+
+function submitLabel(text: string, validation: { isValid: boolean; itemCount: number; errors: string[] }, submitting: boolean): string {
+    if (submitting) return "등록 중...";
+    if (!text.trim()) return "등록하기";
+    if (validation.errors.length > 0) return "형식 확인 필요";
+    return `${validation.itemCount}개 작품 등록`;
+}
+const newsSubmitLabel = computed(() => submitLabel(newsInputText.value, newsValidation.value, newsSubmitting.value));
+const librarySubmitLabel = computed(() => submitLabel(libraryInputText.value, libraryValidation.value, librarySubmitting.value));
+const newsCanSubmit = computed(() => !newsSubmitting.value && !!newsInputText.value.trim() && newsValidation.value.errors.length === 0);
+const libraryCanSubmit = computed(() => !librarySubmitting.value && !!libraryInputText.value.trim() && libraryValidation.value.errors.length === 0);
 
 onMounted(() => {
     loadMetrics();
@@ -30,7 +47,7 @@ onMounted(() => {
         <header class="dashboard-header">
             <div>
                 <p class="eyebrow">TEXTAUDIO · PRODUCT PULSE</p>
-                <h1>이용 현황</h1>
+                <h1>관리자</h1>
                 <p class="dashboard-subtitle">개인 콘텐츠 없이 서비스 흐름만 집계합니다.</p>
             </div>
             <div class="header-actions">
@@ -42,8 +59,14 @@ onMounted(() => {
 
         <p class="dashboard-status" role="status" aria-live="polite">{{ status }}</p>
 
+        <nav class="admin-tabs" role="tablist" aria-label="관리자 화면 전환">
+            <button type="button" class="admin-tab-btn" :class="{ active: activeAdminTab === 'dashboard' }" role="tab" :aria-selected="activeAdminTab === 'dashboard'" @click="selectTab('dashboard')">대시보드</button>
+            <button type="button" class="admin-tab-btn" :class="{ active: activeAdminTab === 'create' }" role="tab" :aria-selected="activeAdminTab === 'create'" @click="selectTab('create')">콘텐츠 등록</button>
+            <button type="button" class="admin-tab-btn" :class="{ active: activeAdminTab === 'publishing' }" role="tab" :aria-selected="activeAdminTab === 'publishing'" @click="selectTab('publishing')">발행 관리</button>
+        </nav>
+
         <section v-show="contentVisible">
-            <section class="metric-section" aria-labelledby="retentionHeading">
+            <section v-show="activeAdminTab === 'dashboard'" class="metric-section" aria-labelledby="retentionHeading">
                 <div class="section-heading">
                     <p class="section-kicker">READER HABIT</p>
                     <h2 id="retentionHeading">다시 듣는가</h2>
@@ -64,15 +87,6 @@ onMounted(() => {
                         <strong data-metric="week_one_retention_rate">{{ formatMetric('week_one_retention_rate', metrics.week_one_retention_rate) }}</strong>
                         <span>{{ metrics.retention_cohort_size ? `${metrics.retention_cohort_size}명 코호트 기준` : "측정 코호트 없음" }}</span>
                     </a>
-                </div>
-            </section>
-
-            <section class="metric-section" aria-labelledby="funnelHeading">
-                <div class="section-heading">
-                    <p class="section-kicker">CORE LOOP</p>
-                    <h2 id="funnelHeading">만들고 듣는가</h2>
-                </div>
-                <div class="metric-grid metric-grid-wide">
                     <a class="metric-card" href="/admin/metrics/total_users">
                         <p>전체 사용자</p>
                         <strong data-metric="total_users">{{ formatMetric('total_users', metrics.total_users) }}</strong>
@@ -96,7 +110,7 @@ onMounted(() => {
                 </div>
             </section>
 
-            <section class="metric-section" aria-labelledby="newsHeading">
+            <section v-show="activeAdminTab === 'create'" class="metric-section" aria-labelledby="newsHeading">
                 <div class="section-heading">
                     <p class="section-kicker">HOME · ECONOMIC NEWS</p>
                     <h2 id="newsHeading">경제 뉴스 추가</h2>
@@ -110,15 +124,22 @@ onMounted(() => {
                     placeholder='[{"title": "뉴스 제목", "content": "요약 본문", "category": "국제", "source": "Reuters"}]'
                     v-model="newsInputText"
                 ></textarea>
+                <ul class="json-errors" v-if="newsValidation.errors.length">
+                    <li v-for="(error, i) in newsValidation.errors" :key="i">{{ error }}</li>
+                </ul>
+                <div class="json-preview" v-else-if="newsValidation.itemCount > 0">
+                    <p>{{ newsValidation.itemCount }}개 항목 인식됨</p>
+                    <ul>
+                        <li v-for="(title, i) in newsValidation.previewTitles" :key="i">{{ title }}</li>
+                    </ul>
+                </div>
                 <div class="news-input-actions">
-                    <button type="button" :disabled="newsSubmitting" @click="submitNews">
-                        {{ newsSubmitting ? "등록 중..." : "등록하기" }}
-                    </button>
+                    <button type="button" :disabled="!newsCanSubmit" @click="submitNews">{{ newsSubmitLabel }}</button>
                     <span class="news-status">{{ newsStatus }}</span>
                 </div>
             </section>
 
-            <section class="metric-section" aria-labelledby="libraryHeading">
+            <section v-show="activeAdminTab === 'create'" class="metric-section" aria-labelledby="libraryHeading">
                 <div class="section-heading">
                     <p class="section-kicker">LIBRARY · 경전·철학·고전</p>
                     <h2 id="libraryHeading">라이브러리 작품 추가</h2>
@@ -136,15 +157,22 @@ onMounted(() => {
                     placeholder='[{"title": "도덕경", "category": "철학·사상", "edition": "왕필본", "translator": "원문 기반", "source": "중국 고전 《도덕경》", "rights": "원전 공개 이용 가능", "description": "노자가 전하는 도와 덕의 철학...", "status": "published", "content": "# 1장\n도가도 비상도...\n\n# 2장\n..."}]'
                     v-model="libraryInputText"
                 ></textarea>
+                <ul class="json-errors" v-if="libraryValidation.errors.length">
+                    <li v-for="(error, i) in libraryValidation.errors" :key="i">{{ error }}</li>
+                </ul>
+                <div class="json-preview" v-else-if="libraryValidation.itemCount > 0">
+                    <p>{{ libraryValidation.itemCount }}개 항목 인식됨</p>
+                    <ul>
+                        <li v-for="(title, i) in libraryValidation.previewTitles" :key="i">{{ title }}</li>
+                    </ul>
+                </div>
                 <div class="news-input-actions">
-                    <button type="button" :disabled="librarySubmitting" @click="submitLibrary">
-                        {{ librarySubmitting ? "등록 중..." : "등록하기" }}
-                    </button>
+                    <button type="button" :disabled="!libraryCanSubmit" @click="submitLibrary">{{ librarySubmitLabel }}</button>
                     <span class="news-status">{{ libraryStatus }}</span>
                 </div>
             </section>
 
-            <section class="metric-section" aria-labelledby="libraryReviewHeading">
+            <section v-show="activeAdminTab === 'publishing'" class="metric-section" aria-labelledby="libraryReviewHeading">
                 <div class="section-heading">
                     <p class="section-kicker">LIBRARY · 검토 및 발행</p>
                     <h2 id="libraryReviewHeading">등록된 작품 관리</h2>
@@ -164,11 +192,11 @@ onMounted(() => {
                             </span>
                             <button
                                 type="button"
+                                class="row-more-btn"
+                                aria-label="더보기"
                                 :disabled="libraryTogglingIds.has(item.id)"
-                                @click="toggleLibraryStatus(item)"
-                            >
-                                {{ item.library_status === "published" ? "비공개로 전환" : "발행" }}
-                            </button>
+                                @click="openStatusMenu(item)"
+                            >⋯</button>
                         </div>
                     </li>
                 </ul>
@@ -178,4 +206,15 @@ onMounted(() => {
     </main>
 
     <ThemeSheetView :state="themeState" :logic="themeLogic" />
+
+    <div class="action-sheet-backdrop" :class="{ show: !!statusMenuItem }" role="dialog" aria-modal="true" @click="(e) => { if (e.target === e.currentTarget) closeStatusMenu(); }">
+        <div class="action-sheet" v-if="statusMenuItem">
+            <div class="action-sheet-handle"></div>
+            <div class="index-sheet-header"><h3>{{ statusMenuItem.title }}</h3></div>
+            <button type="button" class="action-sheet-btn" @click="toggleLibraryStatus(statusMenuItem)">
+                {{ statusMenuItem.library_status === "published" ? "비공개로 전환" : "공개로 전환" }}
+            </button>
+            <button type="button" class="action-sheet-btn action-sheet-btn-cancel" @click="closeStatusMenu">취소</button>
+        </div>
+    </div>
 </template>

@@ -2,6 +2,8 @@
 import { ref, type Ref } from "vue";
 import type { AdminMetrics } from "../types/adminDashboard";
 
+export type AdminTab = "dashboard" | "create" | "publishing";
+
 export interface LibraryAdminItem {
     id: string;
     title: string;
@@ -11,10 +13,18 @@ export interface LibraryAdminItem {
     created_at: string;
 }
 
+export interface JsonValidationResult {
+    isValid: boolean;
+    itemCount: number;
+    previewTitles: string[];
+    errors: string[];
+}
+
 export interface AdminState {
     status: Ref<string>;
     contentVisible: Ref<boolean>;
     metrics: Ref<AdminMetrics>;
+    activeAdminTab: Ref<AdminTab>;
     newsInputText: Ref<string>;
     newsStatus: Ref<string>;
     newsSubmitting: Ref<boolean>;
@@ -24,6 +34,7 @@ export interface AdminState {
     libraryItems: Ref<LibraryAdminItem[]>;
     libraryItemsStatus: Ref<string>;
     libraryTogglingIds: Ref<Set<string>>;
+    statusMenuItem: Ref<LibraryAdminItem | null>;
 }
 
 export function useAdminState(): AdminState {
@@ -31,6 +42,7 @@ export function useAdminState(): AdminState {
         status: ref("지표를 불러오는 중입니다."),
         contentVisible: ref(false),
         metrics: ref({}),
+        activeAdminTab: ref("dashboard"),
         newsInputText: ref(""),
         newsStatus: ref(""),
         newsSubmitting: ref(false),
@@ -40,6 +52,7 @@ export function useAdminState(): AdminState {
         libraryItems: ref([]),
         libraryItemsStatus: ref(""),
         libraryTogglingIds: ref(new Set()),
+        statusMenuItem: ref(null),
     };
 }
 

@@ -1,29 +1,37 @@
 <script lang="ts">
-import type { AdminState } from "./Admin_State.vue";
+import type { AdminState, AdminTab, JsonValidationResult, LibraryAdminItem } from "./Admin_State.vue";
 import type { AdminMetricName } from "../types/adminDashboard";
 
 export interface AdminLogic {
     formatMetric(name: AdminMetricName, value: number | null | undefined): string;
     loadMetrics(): Promise<void>;
+    selectTab(tab: AdminTab): void;
+    validateJson(raw: string): JsonValidationResult;
     submitNews(): Promise<void>;
     submitLibrary(): Promise<void>;
     loadLibraryItems(): Promise<void>;
-    toggleLibraryStatus(item: import("./Admin_State.vue").LibraryAdminItem): Promise<void>;
+    openStatusMenu(item: LibraryAdminItem): void;
+    closeStatusMenu(): void;
+    toggleLibraryStatus(item: LibraryAdminItem): Promise<void>;
 }
 
 // 상태를 인자로 받는다(직접 import하지 않음) — 그래야 이 로직만 따로
 // 테스트하거나, 필요하면 다른 상태 인스턴스에도 재사용할 수 있다.
 export function useAdminLogic(
     {
-        status, contentVisible, metrics, newsInputText, newsStatus, newsSubmitting,
+        status, contentVisible, metrics, activeAdminTab, newsInputText, newsStatus, newsSubmitting,
         libraryInputText, libraryStatus, librarySubmitting,
-        libraryItems, libraryItemsStatus, libraryTogglingIds,
+        libraryItems, libraryItemsStatus, libraryTogglingIds, statusMenuItem,
     }: AdminState
 ): AdminLogic {
     function formatMetric(name: AdminMetricName, value: number | null | undefined): string {
         if (value === null || value === undefined) return "—";
         if (name.endsWith("_rate")) return `${value}%`;
         return Number(value).toLocaleString("ko-KR");
+    }
+
+    function selectTab(tab: AdminTab): void {
+        activeAdminTab.value = tab;
     }
 
     async function loadMetrics(): Promise<void> {
@@ -53,6 +61,50 @@ export function useAdminLogic(
             status.value = "지표를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
             contentVisible.value = false;
         }
+    }
+
+    // 등록 전에 형식·필수 필드를 미리 확인한다 — 모바일에서 긴 JSON을
+    // 손으로 붙여넣다 보면 title/content 누락이나 문법 오류가 흔한데,
+    // 그걸 등록 요청을 보내기 전에(백엔드 왕복 없이) 바로 알려준다.
+    function validateJson(raw: string): JsonValidationResult {
+        const empty: JsonValidationResult = { isValid: false, itemCount: 0, previewTitles: [], errors: [] };
+        const text = raw.trim();
+        if (!text) return empty;
+
+        let jsonText = text;
+        if (jsonText.startsWith("```")) {
+            jsonText = jsonText.replace(/^```[a-zA-Z]*\n?/, "").replace(/```\s*$/, "").trim();
+        }
+
+        let parsed: unknown;
+        try {
+            parsed = JSON.parse(jsonText);
+        } catch (error) {
+            return { ...empty, errors: [`JSON 문법 오류가 발생했습니다: ${(error as Error).message}`] };
+        }
+
+        if (!Array.isArray(parsed)) {
+            return { ...empty, errors: ["배열([ ]) 형식이어야 합니다."] };
+        }
+        if (parsed.length === 0) {
+            return { ...empty, errors: ["배열이 비어 있습니다."] };
+        }
+
+        const errors: string[] = [];
+        const previewTitles: string[] = [];
+        parsed.forEach((raw, index) => {
+            const item = raw as Record<string, unknown> | null;
+            const ordinal = `${index + 1}번째 항목`;
+            if (typeof item !== "object" || item === null) {
+                errors.push(`${ordinal}이 객체가 아닙니다.`);
+                return;
+            }
+            if (typeof item.title !== "string" || !item.title.trim()) errors.push(`${ordinal}에 title 필드가 없습니다.`);
+            if (typeof item.content !== "string" || !item.content.trim()) errors.push(`${ordinal}에 content 필드가 없습니다.`);
+            previewTitles.push(typeof item.title === "string" && item.title.trim() ? item.title : `(제목 없음 #${index + 1})`);
+        });
+
+        return { isValid: errors.length === 0, itemCount: parsed.length, previewTitles, errors };
     }
 
     async function submitNews(): Promise<void> {
@@ -148,11 +200,20 @@ export function useAdminLogic(
         }
     }
 
-    async function toggleLibraryStatus(item: import("./Admin_State.vue").LibraryAdminItem): Promise<void> {
+    function openStatusMenu(item: LibraryAdminItem): void {
+        statusMenuItem.value = item;
+    }
+
+    function closeStatusMenu(): void {
+        statusMenuItem.value = null;
+    }
+
+    async function toggleLibraryStatus(item: LibraryAdminItem): Promise<void> {
         const token = localStorage.getItem("authToken");
         if (!token) return;
         const nextStatus = item.library_status === "published" ? "review" : "published";
 
+        closeStatusMenu();
         libraryTogglingIds.value = new Set(libraryTogglingIds.value).add(item.id);
         try {
             const response = await fetch(`/api/admin/library/${item.id}`, {
@@ -172,7 +233,10 @@ export function useAdminLogic(
         }
     }
 
-    return { formatMetric, loadMetrics, submitNews, submitLibrary, loadLibraryItems, toggleLibraryStatus };
+    return {
+        formatMetric, loadMetrics, selectTab, validateJson, submitNews, submitLibrary,
+        loadLibraryItems, openStatusMenu, closeStatusMenu, toggleLibraryStatus,
+    };
 }
 
 // 이 파일은 템플릿 없는 "로직 전용" 컴포넌트라, Vue SFC 컴파일러가 요구하는

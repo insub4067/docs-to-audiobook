@@ -80,14 +80,18 @@ h2 { margin-bottom: 0; font-size: 1.4rem; }
 .dashboard-status { min-height: 1.4em; margin: 20px 0 32px; font-size: 0.9rem; }
 .metric-section { margin-top: 42px; }
 .section-heading { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
-.metric-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.metric-grid-wide { grid-template-columns: repeat(4, 1fr); }
-.metric-card { min-height: 168px; padding: 22px; border: 1px solid var(--line); border-radius: 18px; background: var(--card); color: var(--ink); display: flex; flex-direction: column; justify-content: space-between; text-align: left; font: inherit; text-decoration: none; cursor: pointer; transition: transform 0.18s ease, border-color 0.18s ease; }
+
+/* 관리자는 대부분 모바일에서 훑어보는 용도라, 큰 화면 대응보다 2열
+   그리드를 기본값으로 두고 카드 높이를 압축했다(기존 168px → 100px,
+   약 40% 감소) — 한 화면에서 더 많은 지표를 한눈에 비교할 수 있다. */
+.metric-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.metric-grid-wide { grid-template-columns: repeat(2, 1fr); }
+.metric-card { min-height: 100px; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); color: var(--ink); display: flex; flex-direction: column; justify-content: space-between; text-align: left; font: inherit; text-decoration: none; cursor: pointer; transition: transform 0.18s ease, border-color 0.18s ease; }
 .metric-card:hover, .metric-card:focus-visible { border-color: var(--accent); outline: none; transform: translateY(-2px); }
 .metric-card:active { transform: scale(0.985); }
-.metric-card p { margin-bottom: 18px; color: var(--muted); font-size: 0.88rem; }
-.metric-card strong { font-family: Georgia, "Noto Serif KR", serif; font-size: clamp(2rem, 5vw, 3rem); letter-spacing: -0.06em; }
-.metric-card span { margin-top: 12px; font-size: 0.78rem; line-height: 1.45; }
+.metric-card p { margin-bottom: 8px; color: var(--muted); font-size: 0.78rem; }
+.metric-card strong { font-family: Georgia, "Noto Serif KR", serif; font-size: clamp(1.6rem, 6vw, 2.2rem); letter-spacing: -0.06em; }
+.metric-card span { margin-top: 6px; font-size: 0.72rem; line-height: 1.4; }
 .metric-card span b { color: var(--ink); }
 .metric-card-primary { color: #fff; border-color: #805034; background: linear-gradient(135deg, #9f5936, #704330); }
 .metric-card-primary p, .metric-card-primary span { color: #f8e6d8; }
@@ -136,40 +140,101 @@ h2 { margin-bottom: 0; font-size: 1.4rem; }
 .news-input-actions button:disabled { opacity: 0.55; cursor: default; }
 .news-status { color: var(--muted); font-size: 0.85rem; }
 
+/* 등록 전 형식 검사 결과 — 오류가 있으면 위치와 함께 보여주고, 없으면
+   실제로 등록될 항목 수와 제목을 미리 보여준다(완료 조건: 등록 전에
+   실제 등록될 콘텐츠를 확인할 수 있어야 한다). */
+.json-errors {
+    margin: 10px 0 0;
+    padding: 12px 14px;
+    border: 1px solid #c0392b;
+    border-radius: 12px;
+    background: rgba(192, 57, 43, 0.08);
+    color: #c0392b;
+    font-size: 0.82rem;
+    line-height: 1.6;
+    list-style: disc;
+    padding-left: 30px;
+}
+.json-preview {
+    margin: 10px 0 0;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--paper);
+}
+.json-preview p { margin-bottom: 6px; color: var(--accent); font-size: 0.8rem; font-weight: 700; }
+.json-preview ul { margin: 0; padding-left: 20px; color: var(--ink); font-size: 0.85rem; line-height: 1.6; max-height: 160px; overflow-y: auto; }
+
 .library-review-list { margin: 0; padding: 0; border-top: 1px solid var(--line); list-style: none; }
 .library-review-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 2px; border-bottom: 1px solid var(--line); }
-.library-review-info { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.library-review-info strong { font-size: 1rem; }
-.library-review-info span { overflow: hidden; color: var(--muted); font-size: 0.84rem; text-overflow: ellipsis; white-space: nowrap; }
+.library-review-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.library-review-info strong {
+    font-size: 1rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.library-review-info span {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    color: var(--muted);
+    font-size: 0.84rem;
+}
 .library-review-actions { flex-shrink: 0; display: flex; align-items: center; gap: 10px; }
-.library-status-badge { padding: 4px 10px; border-radius: 999px; font-size: 0.76rem; font-weight: 700; }
+.library-status-badge { flex-shrink: 0; padding: 4px 10px; border-radius: 999px; font-size: 0.76rem; font-weight: 700; white-space: nowrap; }
 .library-status-badge.is-review { color: var(--muted); background: rgba(122, 109, 100, 0.14); }
 .library-status-badge.is-published { color: #fff; background: var(--accent); }
-.library-review-actions button {
-    border: 1px solid var(--accent);
-    border-radius: 999px;
-    padding: 8px 14px;
-    color: var(--accent);
+.row-more-btn {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    color: var(--ink);
     background: transparent;
-    font: inherit;
-    font-size: 0.82rem;
+    font-size: 1.1rem;
+    line-height: 1;
     cursor: pointer;
 }
-.library-review-actions button:disabled { opacity: 0.55; cursor: default; }
+.row-more-btn:disabled { opacity: 0.55; cursor: default; }
 
-@media (max-width: 480px) {
-    .library-review-row { flex-direction: column; align-items: flex-start; gap: 8px; }
+/* 대시보드/콘텐츠 등록/발행 관리 탭 전환 */
+.admin-tabs {
+    display: flex;
+    gap: 4px;
+    margin-top: 24px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--line);
 }
+.admin-tab-btn {
+    flex: 1;
+    padding: 10px 8px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.admin-tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
 
 @media (max-width: 720px) {
     .dashboard-shell { padding: 32px 16px 56px; }
     .dashboard-header { flex-direction: column; }
-    .metric-grid, .metric-grid-wide { grid-template-columns: 1fr 1fr; }
 }
 
-@media (max-width: 420px) {
+@media (max-width: 360px) {
     .metric-grid, .metric-grid-wide { grid-template-columns: 1fr; }
-    .metric-card { min-height: 130px; }
 }
 
 /* 화면 테마 시트(ThemeSheet_View.vue). 메인 앱(style.css)과 같은 컴포넌트를
