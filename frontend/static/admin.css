@@ -247,27 +247,23 @@ h2 { margin-bottom: 0; font-size: 1.4rem; }
 .content-create-row span { display: block; margin-top: 3px; color: var(--muted); font-size: 0.82rem; }
 .content-create-chevron { flex-shrink: 0; color: var(--muted); font-size: 1.3rem; }
 
-/* 입력 시트 — 핸들·제목·등록 버튼·닫기는 고정하고 텍스트영역+검증
-   결과만 스크롤한다(길게 붙여넣으면 시트가 화면을 넘칠 수 있어서).
-   높이 제한은 바깥 .action-sheet가 아니라 안쪽 스크롤 영역에만 건다 —
-   다른 시트(news-list-sheet 등)와 같은 패턴. 바깥 박스에 max-height를
-   같이 주면 실기기(iOS Safari)에서 하단 safe-area 패딩이 제대로
-   반영되지 않아 닫기 버튼이 하단에서 떠 보이는 문제가 있었다. */
-.action-sheet.input-sheet {
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}
+/* 입력 시트 — 텍스트영역+검증 결과가 길어지면(JSON을 많이 붙여넣으면)
+   그 부분만 안쪽에서 스크롤되게 한다.
+   실기기(iOS Safari)에서 실측해 보니, 바깥 .action-sheet를
+   display:flex + overflow:hidden으로 만드는 것 자체가 원인이었다 —
+   이 조합이 있으면 하단 safe-area 패딩이 절반도 안 반영돼 닫기 버튼이
+   위로 떠 보였다(다른 정상 시트들과 나란히 스크린샷으로 대조해 확인:
+   정상 시트는 닫기 아래 여백이 약 54pt인데 이 시트만 약 113pt였다).
+   그래서 바깥 .action-sheet는 다른 시트들과 완전히 똑같이 평범한(플렉스
+   아닌) 박스로 두고, 높이 제한은 안쪽 스크롤 영역 하나에만 건다 — 여기는
+   flex 컨테이너가 전혀 필요 없다. 그냥 블록으로 쌓여도 충분하다. */
 .input-sheet-scroll {
-    flex-shrink: 1;
-    min-height: 0;
     max-height: 55vh;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     padding: 0 20px;
 }
 .input-sheet .news-input-actions {
-    flex-shrink: 0;
     padding: 0 20px;
 }
 
