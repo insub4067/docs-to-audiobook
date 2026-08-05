@@ -49,33 +49,48 @@ export function useNewsLogic(state: NewsState, readerLogic: ReaderLogic): NewsLo
         return [];
     }
 
-    // queueIndex >= 0이면 "전체 듣기" 중이라는 뜻 — 오디오가 끝나면 다음
-    // 항목으로 자동 진행한다. 개별 항목을 그냥 눌러서 열 때는 -1(큐 없음).
+    // queueIndex >= 0이면 "전체 듣기"로 시작한 연속 재생이라는 뜻. 개별 기사를
+    // 눌러서 열 때(-1)도 목록에서의 위치는 기록해 둔다 — "전체 반복"은 어떻게
+    // 재생을 시작했든 목록을 순환해야 하기 때문이다. 그래서 onEnded도 항상
+    // 넘기고, 실제로 무엇을 할지는 onQueueEnded가 반복 모드를 보고 정한다.
     async function openNewsItem(item: NewsItem, queueIndex = -1): Promise<void> {
-        state.queueIndex.value = queueIndex;
+        state.isContinuous.value = queueIndex >= 0;
+        state.queueIndex.value = queueIndex >= 0
+            ? queueIndex
+            : state.items.value.findIndex((candidate) => candidate.id === item.id);
         const sentences = await fetchSentences(item);
         readerLogic.openSharedReaderMode(item.title, sentences as never, item.audio_url, {
-            onEnded: queueIndex >= 0 ? onQueueEnded : undefined,
+            onEnded: onQueueEnded,
             playlistKind: "news",
         });
         state.isListOpen.value = false;
     }
 
     async function onQueueEnded(repeatMode: RepeatMode = "off"): Promise<void> {
-        const nextIndex = state.queueIndex.value + 1;
-        const next = state.items.value[nextIndex];
-        if (next) {
-            await openNewsItem(next, nextIndex);
+        const items = state.items.value;
+        const current = state.queueIndex.value;
+        if (current < 0 || items.length === 0) return;
+
+        // "전체 반복"은 재생목록 전체를 반복하라는 뜻이다. 전체 듣기로
+        // 시작했든 기사 하나를 눌러서 시작했든 목록을 끝까지 돌고 처음으로
+        // 되돌아간다(한 기사만 되풀이하는 건 "현재 오디오 반복"이고, 그건
+        // 리더가 큐를 거치지 않고 직접 처리한다).
+        if (repeatMode === "all") {
+            const nextIndex = (current + 1) % items.length;
+            await openNewsItem(items[nextIndex], state.isContinuous.value ? nextIndex : -1);
             return;
         }
-        // "전체 반복"은 재생목록 전체를 반복하라는 뜻이므로 마지막 기사가
-        // 끝나면 처음 기사로 돌아간다(한 기사만 반복하는 건 "현재 오디오
-        // 반복"이고, 그건 리더가 큐를 거치지 않고 직접 처리한다).
-        if (repeatMode === "all" && state.items.value.length > 0) {
-            await openNewsItem(state.items.value[0], 0);
+
+        // 반복이 꺼져 있으면 "전체 듣기"로 시작했을 때만 다음 기사로 넘어간다.
+        if (!state.isContinuous.value) return;
+
+        const next = items[current + 1];
+        if (next) {
+            await openNewsItem(next, current + 1);
             return;
         }
         state.queueIndex.value = -1;
+        state.isContinuous.value = false;
         showToast("경제 뉴스를 모두 들었어요", "success");
     }
 

@@ -85,3 +85,35 @@ describe("경제 뉴스 전체 듣기 + 반복", () => {
         await vi.waitFor(() => expect(opened).toEqual(["유일한 기사", "유일한 기사"]));
     });
 });
+
+// 회귀: "전체 듣기"가 아니라 목록에서 기사 하나를 눌러 들을 때도 전체
+// 반복이면 목록을 순환해야 한다. 예전에는 이 경로에 큐가 없어서 그 기사만
+// 되풀이됐다 — 사용자가 실제로 겪은 증상이다.
+describe("목록에서 기사 하나를 눌러 들을 때", () => {
+    const items = [newsItem("1", "기사A"), newsItem("2", "기사B"), newsItem("3", "기사C")];
+
+    it("전체 반복이면 그 기사부터 목록을 순환한다", async () => {
+        const { logic, opened, fireEnded } = setup(items);
+
+        await logic.openNewsItem(items[1]);          // 가운데 기사를 탭
+        expect(opened).toEqual(["기사B"]);
+
+        fireEnded("all");
+        await vi.waitFor(() => expect(opened).toEqual(["기사B", "기사C"]));
+
+        // 목록 끝에서 처음으로 돌아간다.
+        fireEnded("all");
+        await vi.waitFor(() => expect(opened).toEqual(["기사B", "기사C", "기사A"]));
+    });
+
+    it("반복이 꺼져 있으면 그 기사만 듣고 끝난다", async () => {
+        // 개별 재생은 자동으로 다음 기사로 넘어가지 않는다(기존 동작 유지).
+        const { logic, opened, fireEnded } = setup(items);
+
+        await logic.openNewsItem(items[0]);
+        fireEnded("off");
+        await new Promise((r) => setTimeout(r, 50));
+
+        expect(opened).toEqual(["기사A"]);
+    });
+});

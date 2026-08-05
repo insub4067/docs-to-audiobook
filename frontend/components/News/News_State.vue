@@ -16,7 +16,13 @@ export interface NewsState {
     items: Ref<NewsItem[]>;
     loaded: Ref<boolean>;
     isListOpen: Ref<boolean>;
+    // 지금 재생 중인 기사가 목록에서 몇 번째인가. 개별 기사를 눌러 들을
+    // 때도 채워진다 — "전체 반복"이면 어떻게 시작했든 목록을 순환해야 해서
+    // 위치를 항상 알고 있어야 한다.
     queueIndex: Ref<number>;
+    // "전체 듣기"로 시작한 연속 재생인가. 반복이 꺼져 있을 때 다음 기사로
+    // 자동으로 넘어갈지를 가른다(개별 재생은 한 기사만 듣고 끝난다).
+    isContinuous: Ref<boolean>;
 }
 
 // 홈의 요약 카드와 전체 목록 시트가 같은 목록/재생 큐를 공유해야 해서
@@ -26,6 +32,7 @@ const state: NewsState = {
     loaded: ref(false),
     isListOpen: ref(false),
     queueIndex: ref(-1),
+    isContinuous: ref(false),
 };
 
 export function useNewsState(): NewsState {
