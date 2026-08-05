@@ -180,6 +180,34 @@ function watchTabBarHeight(): void {
     tabBarResizeObserver.observe(tabBar);
 }
 
+// 프로필 탭에서 로그아웃 버튼을 화면 맨 아래에 고정하려면(.profile-root의
+// min-height 계산) 헤더의 실제 렌더 높이도 필요하다 — 위 탭바와 같은 이유.
+let headerResizeObserver: ResizeObserver | null = null;
+function watchHeaderHeight(): void {
+    const header = document.querySelector<HTMLElement>(".app-header");
+    if (!header) return;
+    document.documentElement.style.setProperty("--header-h", `${header.offsetHeight}px`);
+    headerResizeObserver = new ResizeObserver(() => {
+        document.documentElement.style.setProperty("--header-h", `${header.offsetHeight}px`);
+    });
+    headerResizeObserver.observe(header);
+}
+
+// 미니 플레이어가 떠 있으면 프로필 탭의 로그아웃 버튼이 그 밑에 가려지지
+// 않도록 .profile-root의 min-height 계산에서 미니 플레이어 높이도 함께
+// 빼야 한다. 미니 플레이어는 항상 마운트돼 있고(v-show가 아닌 opacity/
+// transform으로 표시) 표시 여부와 무관하게 실제 렌더 높이를 잴 수 있다.
+let miniPlayerResizeObserver: ResizeObserver | null = null;
+function watchMiniPlayerHeight(): void {
+    const miniPlayer = document.querySelector<HTMLElement>(".mini-player");
+    if (!miniPlayer) return;
+    document.documentElement.style.setProperty("--mini-player-h", `${miniPlayer.offsetHeight}px`);
+    miniPlayerResizeObserver = new ResizeObserver(() => {
+        document.documentElement.style.setProperty("--mini-player-h", `${miniPlayer.offsetHeight}px`);
+    });
+    miniPlayerResizeObserver.observe(miniPlayer);
+}
+
 // 마지막으로 듣던 오디오북이 있으면, 리더 화면을 펼치지 않고도 그 정보를
 // 오디오 엘리먼트에 미리 실어 둔다 — PWA를 새로 열자마자 미니 플레이어에
 // 제목/진행 상황이 바로 보이게 하기 위해서다(재생은 하지 않는다).
@@ -195,6 +223,8 @@ async function restoreLastPlayedSession(): Promise<void> {
 onMounted(async () => {
     document.addEventListener("keydown", onEscape);
     watchTabBarHeight();
+    watchHeaderHeight();
+    watchMiniPlayerHeight();
     await voiceLogic.loadVoices();
     readerLogic.checkSharedLink();
     restoreLastPlayedSession();

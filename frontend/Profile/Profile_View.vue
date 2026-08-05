@@ -75,8 +75,16 @@ function onLogoutBackdropClick(event: MouseEvent): void {
             >
                 <i data-lucide="settings-2" class="header-icon"></i>
                 <h2>읽기 설정</h2>
-                <i v-if="isSettingsExpanded" data-lucide="chevron-down" class="profile-settings-toggle-chevron"></i>
-                <i v-else data-lucide="chevron-right" class="profile-settings-toggle-chevron"></i>
+                <!-- lucide.createIcons()가 data-lucide 엘리먼트를 <svg>로
+                     바꿔치기해 Vue의 vnode 추적과 어긋난다 — v-if/v-else로
+                     아이콘을 통째로 스왑하면 다음 클릭 때 Vue가 이미 lucide가
+                     치환해버린(사라진) 노드를 기준으로 insertBefore를 시도하다
+                     크래시한다("Cannot read properties of null"). 대신 두
+                     아이콘을 순수 SVG로 미리 그려두고 v-show(display만
+                     토글, 노드 삽입/제거 없음)로 바꾼다 — 재생/일시정지
+                     아이콘 토글과 같은 패턴. -->
+                <svg v-show="isSettingsExpanded" class="profile-settings-toggle-chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                <svg v-show="!isSettingsExpanded" class="profile-settings-toggle-chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
             </button>
             <div class="profile-settings-collapse" :class="{ 'is-expanded': isSettingsExpanded }">
                 <div class="profile-settings-collapse-inner">
@@ -126,6 +134,7 @@ function onLogoutBackdropClick(event: MouseEvent): void {
             </div>
         </div>
 
+        <div class="profile-spacer" aria-hidden="true"></div>
         <button v-if="authStore.isLoggedIn" type="button" class="profile-logout-btn" @click="openLogoutConfirm">
             <i data-lucide="log-out"></i>
             로그아웃
