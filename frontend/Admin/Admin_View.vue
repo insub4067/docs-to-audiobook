@@ -9,15 +9,20 @@ import { useThemeLogic } from "../Theme/Theme_Logic.vue";
 const {
     status, contentVisible, metrics, newsInputText, newsStatus, newsSubmitting,
     libraryInputText, libraryStatus, librarySubmitting,
+    libraryItems, libraryItemsStatus, libraryTogglingIds,
 } = useAdminState();
-const { formatMetric, loadMetrics, submitNews, submitLibrary } = useAdminLogic({
+const { formatMetric, loadMetrics, submitNews, submitLibrary, loadLibraryItems, toggleLibraryStatus } = useAdminLogic({
     status, contentVisible, metrics, newsInputText, newsStatus, newsSubmitting,
     libraryInputText, libraryStatus, librarySubmitting,
+    libraryItems, libraryItemsStatus, libraryTogglingIds,
 });
 const themeState = useThemeState();
 const themeLogic = useThemeLogic(themeState);
 
-onMounted(loadMetrics);
+onMounted(() => {
+    loadMetrics();
+    loadLibraryItems();
+});
 </script>
 
 <template>
@@ -137,6 +142,37 @@ onMounted(loadMetrics);
                     </button>
                     <span class="news-status">{{ libraryStatus }}</span>
                 </div>
+            </section>
+
+            <section class="metric-section" aria-labelledby="libraryReviewHeading">
+                <div class="section-heading">
+                    <p class="section-kicker">LIBRARY · 검토 및 발행</p>
+                    <h2 id="libraryReviewHeading">등록된 작품 관리</h2>
+                </div>
+                <p class="dashboard-subtitle" v-if="libraryItemsStatus">{{ libraryItemsStatus }}</p>
+                <ul class="library-review-list" v-if="libraryItems.length">
+                    <li v-for="item in libraryItems" :key="item.id" class="library-review-row">
+                        <div class="library-review-info">
+                            <strong>{{ item.title }}</strong>
+                            <span>
+                                <template v-if="item.library_category">{{ item.library_category }} · </template>{{ item.library_description || "설명 없음" }}
+                            </span>
+                        </div>
+                        <div class="library-review-actions">
+                            <span class="library-status-badge" :class="`is-${item.library_status}`">
+                                {{ item.library_status === "published" ? "공개" : "검토중" }}
+                            </span>
+                            <button
+                                type="button"
+                                :disabled="libraryTogglingIds.has(item.id)"
+                                @click="toggleLibraryStatus(item)"
+                            >
+                                {{ item.library_status === "published" ? "비공개로 전환" : "발행" }}
+                            </button>
+                        </div>
+                    </li>
+                </ul>
+                <p class="dashboard-subtitle" v-else-if="!libraryItemsStatus">등록된 작품이 없습니다.</p>
             </section>
         </section>
     </main>

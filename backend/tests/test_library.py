@@ -102,6 +102,67 @@ async def test_add_library_rejects_unknown_status_value(mock_supabase):
 
 
 @pytest.mark.asyncio
+async def test_list_all_library_items_rejects_non_admin():
+    def reject(authorization):
+        raise HTTPException(status_code=403, detail="관리자만 접근할 수 있습니다.")
+
+    with patch("routes.library.require_admin_user", side_effect=reject):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get("/api/admin/library", headers=_auth_headers())
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_list_all_library_items_includes_review_and_published(mock_supabase):
+    mock_supabase.table().select().eq().order().execute.return_value = MagicMock(data=[
+        {"id": "book-1", "title": "도덕경", "library_status": "published"},
+        {"id": "book-2", "title": "금강경", "library_status": "review"},
+    ])
+
+    with patch("routes.library.require_admin_user", return_value="admin-user"):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get("/api/admin/library", headers=_auth_headers())
+
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert len(items) == 2
+    assert {item["library_status"] for item in items} == {"published", "review"}
+
+
+@pytest.mark.asyncio
+async def test_update_library_status_rejects_non_admin():
+    def reject(authorization):
+        raise HTTPException(status_code=403, detail="관리자만 접근할 수 있습니다.")
+
+    with patch("routes.library.require_admin_user", side_effect=reject):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.patch("/api/admin/library/book-1", json={"status": "published"}, headers=_auth_headers())
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_update_library_status_rejects_unknown_status(mock_supabase):
+    with patch("routes.library.require_admin_user", return_value="admin-user"):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.patch("/api/admin/library/book-1", json={"status": "definitely-verified"}, headers=_auth_headers())
+    assert response.status_code == 400
+    mock_supabase.table().update.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_update_library_status_publishes_item(mock_supabase):
+    with patch("routes.library.require_admin_user", return_value="admin-user"):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.patch("/api/admin/library/book-1", json={"status": "published"}, headers=_auth_headers())
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "published"}
+    mock_supabase.table().update.assert_called_with({"library_status": "published"})
+    eq_calls = mock_supabase.table().update().eq.call_args_list
+    assert ("id", "book-1") in [c.args for c in eq_calls]
+
+
+@pytest.mark.asyncio
 async def test_list_library_filters_by_published_status_only(mock_supabase):
     mock_supabase.table().select().eq().eq().order().execute.return_value = MagicMock(data=[{
         "id": "book-1", "user_id": "admin-user", "title": "도덕경",

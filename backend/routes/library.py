@@ -130,6 +130,39 @@ async def add_library_items(payload: dict, background_tasks: BackgroundTasks, au
     return {"queued": len(items)}
 
 
+@router.get("/api/admin/library")
+async def list_all_library_items(authorization: str = Header(None)):
+    """상태(review/published) 상관없이 전체 작품을 관리자에게 보여준다 —
+    /api/library(공개 목록)와 달리 published 필터를 걸지 않는다."""
+    require_admin_user(authorization)
+    supabase = _supabase_or_503()
+    try:
+        rows = supabase.table("audiobooks") \
+            .select("id, title, library_status, library_category, library_description, created_at") \
+            .eq("is_library", True).order("created_at", desc=True).execute().data or []
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"작품 목록을 불러오지 못했습니다: {e}")
+    return {"items": rows}
+
+
+@router.patch("/api/admin/library/{audiobook_id}")
+async def update_library_status(audiobook_id: str, payload: dict, authorization: str = Header(None)):
+    """관리자가 판본/권리를 직접 확인한 뒤에만 published로 전환한다 —
+    AI가 대신 "확인됨"이라고 표시하지 않는다는 원칙은 여기서도 유지된다."""
+    require_admin_user(authorization)
+    status = payload.get("status")
+    if status not in LIBRARY_STATUSES:
+        raise HTTPException(status_code=400, detail="status는 review 또는 published여야 합니다.")
+
+    supabase = _supabase_or_503()
+    try:
+        supabase.table("audiobooks").update({"library_status": status}) \
+            .eq("id", audiobook_id).eq("is_library", True).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"상태를 변경하지 못했습니다: {e}")
+    return {"status": status}
+
+
 @router.get("/api/library")
 async def list_library():
     """공개된(published) 라이브러리 작품 목록. 로그인 여부와 무관하게 볼 수 있다."""

@@ -2,6 +2,15 @@
 import { ref, type Ref } from "vue";
 import type { AdminMetrics } from "../types/adminDashboard";
 
+export interface LibraryAdminItem {
+    id: string;
+    title: string;
+    library_status: "review" | "published";
+    library_category: string | null;
+    library_description: string | null;
+    created_at: string;
+}
+
 export interface AdminState {
     status: Ref<string>;
     contentVisible: Ref<boolean>;
@@ -12,6 +21,9 @@ export interface AdminState {
     libraryInputText: Ref<string>;
     libraryStatus: Ref<string>;
     librarySubmitting: Ref<boolean>;
+    libraryItems: Ref<LibraryAdminItem[]>;
+    libraryItemsStatus: Ref<string>;
+    libraryTogglingIds: Ref<Set<string>>;
 }
 
 export function useAdminState(): AdminState {
@@ -25,6 +37,9 @@ export function useAdminState(): AdminState {
         libraryInputText: ref(""),
         libraryStatus: ref(""),
         librarySubmitting: ref(false),
+        libraryItems: ref([]),
+        libraryItemsStatus: ref(""),
+        libraryTogglingIds: ref(new Set()),
     };
 }
 
