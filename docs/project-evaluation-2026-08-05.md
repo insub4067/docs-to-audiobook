@@ -49,9 +49,29 @@
 
 ## 우선순위 제안
 
-1. **레거시 정적 JS 제거/격리** — 혼란 비용이 계속 발생 중, 가장 투자 대비 효과 큼
-2. **프론트 최소 테스트 도입** — 크래시가 났던 두 패턴(멀티루트, lucide 토글)만이라도 회귀 테스트로
+1. ~~**레거시 정적 JS 제거/격리**~~ → **완료** (`ca51f4c`). index.html + static/js/ + app.js 삭제, sw.js 프리캐시 21개 → 7개, 레거시 전용 테스트 39개 제거, 고아 CSS 정리.
+2. ~~**프론트 최소 테스트 도입**~~ → **완료** (`b1ffd08`). Vitest 도입, 두 크래시 패턴 회귀 테스트 5개, CI에 연결. 두 테스트 모두 수정을 되돌려 실제로 실패하는 것을 확인함.
 3. `style.css` 분리 (화면별 or 컴포넌트별)
 4. 650줄+ 파일들 분할은 다음에 그 파일을 건드릴 때 같이
+
+## 작업 중 발견된 프로덕션 버그 (미해결)
+
+`GET /api/library/saves`가 로그인한 모든 사용자에게 500을 돌려준다. 즉 "서점 → 서재에 저장" 기능이 프로덕션에서 완전히 동작하지 않는다.
+
+원인은 애플리케이션 코드가 아니라 DB 권한이다. 프로덕션 Supabase에 service_role 키로 직접 쿼리해 확인:
+
+```
+{'message': 'permission denied for table library_saves', 'code': '42501'}
+```
+
+앱이 쓰는 다른 테이블(audiobooks, users, folders, push_subscriptions)은 전부 정상이고 `library_saves`만 GRANT가 빠져 있다 — 테이블 생성 시 누락된 것으로 보인다.
+
+조치 (Supabase SQL 에디터에서 실행 필요):
+
+```sql
+GRANT SELECT, INSERT, DELETE ON public.library_saves TO service_role;
+```
+
+RLS가 켜져 있는데 정책이 없는 건 아닌지도 함께 확인하고, 새 프로젝트에서 또 누락되지 않도록 `docs/SUPABASE_SETUP.md`에도 반영할 것.
 
 **종합: B+ ~ A-.** 코드가 "빨리 만든 사이드 프로젝트"가 아니라 "운영하는 제품"의 형태를 갖추고 있고, 약점들도 방치된 게 아니라 인지된 상태(주석·태스크에 기록됨)라는 점이 좋다. 레거시 정리와 프론트 테스트만 채우면 안정적으로 A.
