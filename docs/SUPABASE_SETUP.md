@@ -175,6 +175,41 @@ select
   has_table_privilege('service_role', 'public.push_subscriptions', 'DELETE');
 ```
 
+### 2.7 라이브러리 저장 테이블
+
+서점(라이브러리)에서 "서재에 저장"한 작품을 사용자별로 기록한다. 한 사용자가 같은 작품을
+중복 저장하지 않도록 `(user_id, audiobook_id)`에 유니크 제약을 둔다(서버가 `upsert`를 쓴다).
+
+```sql
+create table public.library_saves (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+  audiobook_id uuid not null references public.audiobooks(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (user_id, audiobook_id)
+);
+
+create index library_saves_user_id_idx on public.library_saves(user_id);
+alter table public.library_saves enable row level security;
+revoke all on table public.library_saves from anon, authenticated;
+grant select, insert, update, delete on table public.library_saves to service_role;
+```
+
+⚠️ 이 테이블은 처음 만들 때 `GRANT`가 통째로 빠져 있었고, 그 탓에 "서재에 저장" 기능
+전체가 프로덕션에서 `42501 permission denied`로 500을 냈다. 테이블만 만들고 권한을 주지
+않으면 RLS 우회 여부와 무관하게 Data API 접근이 거부되므로, 위 `grant`를 반드시 함께
+실행할 것. 서버는 조회·저장(upsert)·저장취소(delete)를 하므로 네 권한이 모두 필요하다.
+
+적용 후에는 다음 SQL의 네 값이 모두 `true`인지 확인한다.
+
+```sql
+select
+  has_table_privilege('service_role', 'public.library_saves', 'SELECT'),
+  has_table_privilege('service_role', 'public.library_saves', 'INSERT'),
+  has_table_privilege('service_role', 'public.library_saves', 'UPDATE'),
+  has_table_privilege('service_role', 'public.library_saves', 'DELETE');
+```
+
 ---
 
 ## 🔐 3단계: Row Level Security (RLS) 정책 설정

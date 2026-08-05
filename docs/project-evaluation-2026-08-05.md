@@ -54,24 +54,23 @@
 3. `style.css` 분리 (화면별 or 컴포넌트별)
 4. 650줄+ 파일들 분할은 다음에 그 파일을 건드릴 때 같이
 
-## 작업 중 발견된 프로덕션 버그 (미해결)
+## 작업 중 발견된 프로덕션 버그 (해결됨)
 
-`GET /api/library/saves`가 로그인한 모든 사용자에게 500을 돌려준다. 즉 "서점 → 서재에 저장" 기능이 프로덕션에서 완전히 동작하지 않는다.
+"서점 → 서재에 저장" 기능이 프로덕션에서 완전히 동작하지 않았다. `GET /api/library/saves`가 로그인한 모든 사용자에게 500을 돌려주고 있었다. 원인이 **두 개 겹쳐** 있었다.
 
-원인은 애플리케이션 코드가 아니라 DB 권한이다. 프로덕션 Supabase에 service_role 키로 직접 쿼리해 확인:
-
-```
-{'message': 'permission denied for table library_saves', 'code': '42501'}
-```
-
-앱이 쓰는 다른 테이블(audiobooks, users, folders, push_subscriptions)은 전부 정상이고 `library_saves`만 GRANT가 빠져 있다 — 테이블 생성 시 누락된 것으로 보인다.
-
-조치 (Supabase SQL 에디터에서 실행 필요):
+**원인 1 — DB 권한 누락.** `library_saves` 테이블에만 DML 권한이 아무 롤에도 부여돼 있지 않았다(`42501 permission denied`). 다른 테이블(audiobooks, users, folders, push_subscriptions)은 전부 정상. 게다가 이 테이블만 RLS가 꺼져 있고 정책도 없었다. 프로덕션 DB에 적용:
 
 ```sql
-GRANT SELECT, INSERT, DELETE ON public.library_saves TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.library_saves TO service_role;
+ALTER TABLE public.library_saves ENABLE ROW LEVEL SECURITY;
 ```
 
-RLS가 켜져 있는데 정책이 없는 건 아닌지도 함께 확인하고, 새 프로젝트에서 또 누락되지 않도록 `docs/SUPABASE_SETUP.md`에도 반영할 것.
+anon/authenticated에는 권한을 주지 않았다 — 백엔드가 service_role로만 접근하고, 브라우저는 Supabase에 직접 붙지 않기 때문이다. 이 테이블은 RLS 정책이 없으므로 anon에 권한을 열었다면 전 사용자의 저장 목록이 노출됐을 것이다.
+
+**원인 2 — 라우트 순서 버그** (커밋 `a55da2c`). 권한을 고친 뒤에도 500이 계속됐고, 에러 메시지가 `invalid input syntax for type uuid: "saves"`로 바뀌면서 드러났다. `@router.get("/api/library/{audiobook_id}")`가 `/api/library/saves`보다 먼저 등록돼 있어 `"saves"`가 audiobook_id로 잡히고 있었다. FastAPI는 등록 순서대로 매칭하므로 **이 엔드포인트는 추가된 이후 한 번도 동작한 적이 없었다.** 순서를 바꾸고 회귀 테스트를 추가했다.
+
+검증: 프로덕션에서 인증 없이 401(= saves 핸들러에 도달), 인증 후 200 `{"library":[]}`. DB 레벨에서 저장/저장취소 왕복과 반복 저장 멱등성도 확인했고 테스트 데이터는 모두 정리했다.
+
+재발 방지로 `docs/SUPABASE_SETUP.md`에 `library_saves` 섹션을 추가했다 — 애초에 이 테이블만 셋업 문서에 없었던 것이 누락의 원인이었다.
 
 **종합: B+ ~ A-.** 코드가 "빨리 만든 사이드 프로젝트"가 아니라 "운영하는 제품"의 형태를 갖추고 있고, 약점들도 방치된 게 아니라 인지된 상태(주석·태스크에 기록됨)라는 점이 좋다. 레거시 정리와 프론트 테스트만 채우면 안정적으로 A.
