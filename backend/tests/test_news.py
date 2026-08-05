@@ -84,6 +84,7 @@ async def test_add_news_strips_json_code_fence_and_stores_items(mock_supabase):
     assert inserted_rows[0]["news_category"] == "국제"
     assert inserted_rows[0]["news_source"] == "Reuters"
     assert inserted_rows[1]["news_category"] is None
+    assert all(row["duration_seconds"] == 1 for row in inserted_rows)
 
 
 @pytest.mark.asyncio

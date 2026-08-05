@@ -9,6 +9,7 @@ export interface NewsItem {
     created_at: string;
     audio_url: string;
     sentences_url: string | null;
+    duration_seconds: number | null;
 }
 
 export interface NewsState {

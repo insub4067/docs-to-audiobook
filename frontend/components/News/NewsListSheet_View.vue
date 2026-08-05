@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import type { ReaderLogic } from "../../Reader/Reader_Logic.vue";
 import { useNewsState } from "./News_State.vue";
 import { useNewsLogic } from "./News_Logic.vue";
@@ -8,6 +8,25 @@ import { useSwipeToDismiss } from "../../utils/swipeToDismiss";
 const props = defineProps<{ logic: ReaderLogic }>();
 const state = useNewsState();
 const newsLogic = useNewsLogic(state, props.logic);
+
+// "재생 범위가 뭔지 모호하다"는 피드백에 맞춰, 몇 개를 얼마나 듣게
+// 되는지를 헤더 부제와 버튼 라벨에 직접 명시한다.
+const listSubtitle = computed(() => {
+    const count = state.items.value.length;
+    if (!count) return null;
+    const totalSeconds = state.items.value.reduce((sum, item) => sum + (item.duration_seconds || 0), 0);
+    const parts = [`총 ${count}개`];
+    if (totalSeconds > 0) {
+        const minutes = Math.round(totalSeconds / 60);
+        parts.push(minutes > 0 ? `약 ${minutes}분` : "1분 미만");
+    }
+    return parts.join(" · ");
+});
+
+const playAllLabel = computed(() => {
+    const count = state.items.value.length;
+    return count > 0 ? `경제 뉴스 ${count}개 연속 듣기` : "경제 뉴스 연속 듣기";
+});
 
 const sheet = ref<HTMLElement | null>(null);
 const handle = ref<HTMLElement | null>(null);
@@ -49,17 +68,9 @@ function formatRelativeTime(iso: string): string {
                 <div class="action-sheet-handle"></div>
                 <div class="index-sheet-header">
                     <h3>경제 뉴스</h3>
+                    <p v-if="listSubtitle" class="action-sheet-subtitle">{{ listSubtitle }}</p>
                 </div>
             </div>
-            <button
-                v-if="state.items.value.length > 1"
-                type="button"
-                class="news-play-all-btn"
-                @click="newsLogic.playAll"
-            >
-                <i data-lucide="list-music"></i>
-                전체 듣기
-            </button>
             <div class="news-list-scroll">
                 <div class="audio-list">
                     <button
@@ -84,7 +95,18 @@ function formatRelativeTime(iso: string): string {
                     </button>
                 </div>
             </div>
-            <button class="action-sheet-btn action-sheet-btn-cancel" type="button" @click="newsLogic.closeList">닫기</button>
+            <div class="news-list-footer">
+                <button
+                    type="button"
+                    class="news-play-all-btn"
+                    :disabled="state.items.value.length === 0"
+                    @click="newsLogic.playAll"
+                >
+                    <i data-lucide="list-music"></i>
+                    {{ playAllLabel }}
+                </button>
+                <button class="action-sheet-btn action-sheet-btn-cancel" type="button" @click="newsLogic.closeList">닫기</button>
+            </div>
         </div>
     </div>
 </template>

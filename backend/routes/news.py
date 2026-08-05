@@ -97,12 +97,17 @@ async def _store_news_item(supabase, admin_user_id: str, item: dict) -> str:
         storage.remove([audio_path])
         raise
 
+    # 목록 헤더에 "총 N개 · 약 M분"을 보여주려고 미리 계산해 둔다 — library.py와
+    # 동일한 패턴 (매번 sentences 파일을 내려받으면 목록 화면이 느려진다).
+    duration_seconds = round(max((s.get("end", 0) for s in sentences), default=0) / 1000)
+
     supabase.table("audiobooks").insert({
         "id": audiobook_id,
         "user_id": admin_user_id,
         "title": item["title"],
         "file_name": item["title"],
         "storage_path": audio_path,
+        "duration_seconds": duration_seconds,
         "is_news": True,
         "news_category": item["category"],
         "news_source": item["source"],
