@@ -31,6 +31,10 @@ jobs:
           npm ci
           npm run build
           npm run build:app
+      # Vue 컴포넌트 회귀 테스트(Vitest). 실제로 프로덕션에서 터졌던
+      # 패턴(멀티루트 v-show 무시, lucide 아이콘 교체와 v-if 충돌)을 잡는다.
+      - run: npm test
+        working-directory: frontend
       - run: pytest -v
 
   # 🚀 병렬 작업 2: Fly.io 배포 (테스트 성공 여부를 기다리지 않고 즉시 배포)
