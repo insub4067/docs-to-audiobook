@@ -74,17 +74,26 @@ useSwipeToDismiss(props.state.containerEl, () => props.logic.closeReader(), head
     <div class="reader-overlay" :class="{ show: state.isOpen.value }" role="dialog" aria-modal="true" aria-label="오디오북 듣기">
         <div class="reader-container" :ref="setContainerEl">
             <header class="reader-header" ref="header">
-                <button class="btn-reader-close" aria-label="오디오북 듣기 닫기" title="오디오북 듣기 닫기" type="button" @click="logic.closeReader">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                <button class="btn-reader-close" aria-label="오디오북 듣기 닫기" title="닫기" type="button" @click="logic.closeReader">
+                    <i data-lucide="chevron-left"></i>
                 </button>
-                <button v-if="hasPlaylist" type="button" class="reader-book-title reader-book-title-btn" @click="logic.openPlaylistSheet">
-                    <span class="reader-book-title-text">{{ state.title.value }}</span>
-                    <i data-lucide="chevron-down" class="reader-title-caret"></i>
-                </button>
-                <h3 v-else class="reader-book-title">{{ state.title.value }}</h3>
-                <button class="btn-reader-close" aria-label="더보기" title="더보기" type="button" @click="logic.openMoreSheet">
-                    <i data-lucide="more-horizontal"></i>
-                </button>
+                <h3 class="reader-book-title">{{ state.title.value }}</h3>
+                <div class="reader-header-actions">
+                    <button
+                        v-if="hasPlaylist"
+                        type="button"
+                        class="btn-reader-close"
+                        :class="{ 'is-active': state.isPlaylistSheetOpen.value }"
+                        aria-label="재생목록"
+                        title="재생목록"
+                        @click="logic.openPlaylistSheet"
+                    >
+                        <i data-lucide="list-music"></i>
+                    </button>
+                    <button class="btn-reader-close" aria-label="더보기" title="더보기" type="button" @click="logic.openMoreSheet">
+                        <i data-lucide="more-horizontal"></i>
+                    </button>
+                </div>
             </header>
 
             <div
