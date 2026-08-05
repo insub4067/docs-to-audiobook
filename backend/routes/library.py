@@ -183,25 +183,10 @@ async def list_library():
     return {"library": items}
 
 
-@router.get("/api/library/{audiobook_id}")
-async def get_library_item(audiobook_id: str):
-    """작품 상세. published 상태인 작품만 조회할 수 있다."""
-    supabase = _supabase_or_503()
-    try:
-        response = supabase.table("audiobooks").select("*") \
-            .eq("id", audiobook_id).eq("is_library", True).eq("library_status", "published") \
-            .maybe_single().execute()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"작품을 불러오지 못했습니다: {e}")
-    if not response or not response.data:
-        raise HTTPException(status_code=404, detail="작품을 찾을 수 없습니다.")
-
-    items = audiobook_items_with_urls(supabase, response.data["user_id"], [response.data])
-    if not items:
-        raise HTTPException(status_code=404, detail="작품 오디오를 찾을 수 없습니다.")
-    return items[0]
-
-
+# ⚠️ 이 라우트는 반드시 "/api/library/{audiobook_id}"보다 먼저 등록해야 한다.
+# FastAPI는 등록 순서대로 매칭하므로, 뒤에 두면 "saves"가 audiobook_id로
+# 잡혀 UUID 캐스팅에서 터진다(실제로 그래서 이 엔드포인트는 추가된 이후
+# 한 번도 동작한 적이 없었다).
 @router.get("/api/library/saves")
 async def list_library_saves(authorization: str = Header(None)):
     """내가 서재에 추가한 라이브러리 작품 목록."""
@@ -225,6 +210,25 @@ async def list_library_saves(authorization: str = Header(None)):
         except Exception:
             continue
     return {"library": items}
+
+
+@router.get("/api/library/{audiobook_id}")
+async def get_library_item(audiobook_id: str):
+    """작품 상세. published 상태인 작품만 조회할 수 있다."""
+    supabase = _supabase_or_503()
+    try:
+        response = supabase.table("audiobooks").select("*") \
+            .eq("id", audiobook_id).eq("is_library", True).eq("library_status", "published") \
+            .maybe_single().execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"작품을 불러오지 못했습니다: {e}")
+    if not response or not response.data:
+        raise HTTPException(status_code=404, detail="작품을 찾을 수 없습니다.")
+
+    items = audiobook_items_with_urls(supabase, response.data["user_id"], [response.data])
+    if not items:
+        raise HTTPException(status_code=404, detail="작품 오디오를 찾을 수 없습니다.")
+    return items[0]
 
 
 @router.post("/api/library/{audiobook_id}/save")

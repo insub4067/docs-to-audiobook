@@ -194,6 +194,33 @@ async def test_get_library_item_404s_for_review_status_item(mock_supabase):
 
 
 @pytest.mark.asyncio
+async def test_saves_route_is_not_shadowed_by_audiobook_id_route():
+    """/api/library/saves가 /api/library/{audiobook_id}에 잡히면 안 된다.
+
+    FastAPI는 등록 순서대로 매칭한다. saves 라우트가 뒤에 있으면 "saves"가
+    audiobook_id로 넘어가 상세 조회 핸들러가 돌고, DB에서 UUID 캐스팅에
+    실패해 500이 났다 — 실제로 이 엔드포인트는 추가된 이후 프로덕션에서
+    한 번도 동작하지 않았다. 로그인 없이 호출했을 때 상세 핸들러(인증
+    불필요)가 아니라 saves 핸들러의 401이 나오는지로 순서를 검증한다.
+    """
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/library/saves")
+
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_list_library_saves_returns_empty_when_nothing_saved(mock_supabase):
+    mock_supabase.table().select().eq().execute.return_value = MagicMock(data=[])
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/library/saves", headers=_auth_headers())
+
+    assert response.status_code == 200
+    assert response.json() == {"library": []}
+
+
+@pytest.mark.asyncio
 async def test_save_library_item_requires_login():
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post("/api/library/book-1/save")
