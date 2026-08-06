@@ -375,3 +375,29 @@ async def test_auth_me_success(mock_supabase, monkeypatch):
     assert data["id"] == "user-1"
     assert data["email"] == "a@b.com"
     assert data["is_admin"] is True
+
+
+@pytest.mark.asyncio
+async def test_save_playback_state_truncates_fractional_seconds(mock_supabase, mock_auth):
+    """실수 초를 정수로 잘라서 저장하는지 확인한다.
+
+    ⚠️ 회귀: current_time_seconds 컬럼은 INTEGER인데 클라이언트는
+    audio.currentTime을 그대로 보낸다(예: 78.63075268650299). 그대로 넘기면
+    Postgres가 22P02로 거절하고, 클라이언트는 저장 실패를 조용히 무시해서
+    아무도 눈치채지 못한다. 실제로 그 탓에 playback_history가 통째로 비어
+    있었다 — 이어 듣기가 동작하지 않았고 관리자 대시보드의 재생 지표도 0이었다.
+    기존 테스트는 전부 정수(120)만 보내서 이 문제를 잡지 못했다.
+    """
+    mock_supabase.table().upsert().execute.return_value = MagicMock(data=[])
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.put(
+            "/api/audiobooks/book1/playback",
+            json={"current_time_seconds": 78.63075268650299, "playback_speed": 1.0, "repeat_mode": "off"},
+            headers={"Authorization": "Bearer fake_token"},
+        )
+
+    assert response.status_code == 200
+    saved = mock_supabase.table().upsert.call_args.args[0]
+    assert saved["current_time_seconds"] == 78
+    assert isinstance(saved["current_time_seconds"], int)

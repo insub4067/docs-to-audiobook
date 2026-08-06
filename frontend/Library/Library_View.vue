@@ -4,7 +4,7 @@ import type { ReaderLogic } from "../Reader/Reader_Logic.vue";
 import { useLibraryState, type LibraryItem } from "./Library_State.vue";
 import { useLibraryLogic } from "./Library_Logic.vue";
 
-const props = defineProps<{ logic: ReaderLogic; hasMiniPlayer?: boolean; active?: boolean }>();
+const props = defineProps<{ logic: ReaderLogic; hasMiniPlayer?: boolean; active?: boolean; readerOpen?: boolean }>();
 const state = useLibraryState();
 const libraryLogic = useLibraryLogic(state, props.logic);
 
@@ -57,6 +57,15 @@ watch(() => props.active, (active) => {
     libraryLogic.loadLibrary();
     // 듣다가 돌아온 경우 진행률이 바로 반영돼야 한다.
     libraryLogic.loadPlaybackPositions();
+});
+
+// 이 탭에서 바로 작품을 듣고 리더를 닫으면 탭 전환이 일어나지 않는다.
+// 그래서 위 watch만으로는 방금 들은 만큼이 카드에 반영되지 않았다.
+// 리더가 닫히는 순간에도 다시 불러온다. 닫으면서 보내는 저장 요청과
+// 겹칠 수 있지만, 재생 중 30초마다 저장한 값이 이미 서버에 있어
+// 막대는 정상적으로 그려진다(최대 30초 뒤처질 뿐이다).
+watch(() => props.readerOpen, (open, wasOpen) => {
+    if (wasOpen && !open) libraryLogic.loadPlaybackPositions();
 });
 </script>
 

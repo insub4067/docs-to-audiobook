@@ -12,6 +12,8 @@ export interface ReaderState {
     isScrolledAway: Ref<boolean>;
     currentTimeLabel: Ref<string>;
     durationLabel: Ref<string>;
+    /** 총 재생시간(초). 마지막 장의 길이를 계산하려면 숫자가 필요하다. */
+    durationSeconds: Ref<number>;
     progressPercent: Ref<number>;
     isPlaying: Ref<boolean>;
     showShareBtn: Ref<boolean>;
@@ -37,6 +39,7 @@ export function useReaderState(): ReaderState {
         isScrolledAway: ref(false),
         currentTimeLabel: ref("00:00"),
         durationLabel: ref("00:00"),
+        durationSeconds: ref(0),
         progressPercent: ref(0),
         isPlaying: ref(false),
         showShareBtn: ref(false),

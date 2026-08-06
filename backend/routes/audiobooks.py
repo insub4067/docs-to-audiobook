@@ -139,7 +139,7 @@ async def update_audiobook(audiobook_id: str, payload: dict, authorization: str 
         raise HTTPException(status_code=500, detail=f"수정에 실패했습니다: {e}")
 
 
-def _validate_playback_state(payload: dict) -> tuple[float, float, str]:
+def _validate_playback_state(payload: dict) -> tuple[int, float, str]:
     position = payload.get("current_time_seconds")
     speed = payload.get("playback_speed", 1.0)
     repeat_mode = payload.get("repeat_mode", "off")
@@ -149,7 +149,13 @@ def _validate_playback_state(payload: dict) -> tuple[float, float, str]:
         raise HTTPException(status_code=400, detail="재생 속도가 올바르지 않습니다.")
     if repeat_mode not in ("off", "all", "one"):
         raise HTTPException(status_code=400, detail="반복 모드가 올바르지 않습니다.")
-    return position, speed, repeat_mode
+    # ⚠️ current_time_seconds 컬럼은 INTEGER다. 클라이언트는 audio.currentTime을
+    # 그대로 보내므로 78.63075268650299 같은 실수가 온다. 이걸 그대로 넘기면
+    # Postgres가 22P02(invalid input syntax for type integer)로 거절하고,
+    # 클라이언트는 저장 실패를 조용히 무시해서 아무도 눈치채지 못한다 —
+    # 그 탓에 playback_history가 통째로 비어 있었다(이어 듣기 불가, 관리자
+    # 대시보드의 재생 지표도 0). 초 단위 정밀도면 충분하므로 여기서 자른다.
+    return int(position), speed, repeat_mode
 
 
 @router.get("/api/audiobooks/{audiobook_id}/playback")

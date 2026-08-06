@@ -36,6 +36,8 @@ export interface ReaderLogic {
     seekTo(fraction: number): void;
     onSentenceClick(index: number): void;
     onHeadingClick(heading: { sentIndex: number; startMs: number }): void;
+    currentChapterIndex(): number;
+    goToChapter(offset: number): void;
     onReaderContentScroll(): void;
     jumpToCurrentSentence(): void;
     openIndexSheet(): void;
@@ -218,7 +220,10 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
             showToast(`오디오 로드 실패 (code: ${el.error?.code ?? "?"})`, "error");
         };
         el.onloadedmetadata = () => {
-            if (el.duration && !isNaN(el.duration)) state.durationLabel.value = formatTime(el.duration);
+            if (el.duration && !isNaN(el.duration)) {
+                state.durationLabel.value = formatTime(el.duration);
+                state.durationSeconds.value = el.duration;
+            }
             if (audio.lastPosition && audio.lastPosition > 0) el.currentTime = audio.lastPosition;
             el.playbackRate = readerControls.getPlaybackSettings().playbackSpeed;
             if (autoplay) {
@@ -298,7 +303,10 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
             showToast("공유 오디오를 불러올 수 없습니다.", "error");
         };
         el.onloadedmetadata = () => {
-            if (el.duration && !isNaN(el.duration)) state.durationLabel.value = formatTime(el.duration);
+            if (el.duration && !isNaN(el.duration)) {
+                state.durationLabel.value = formatTime(el.duration);
+                state.durationSeconds.value = el.duration;
+            }
             if (resumeSeconds > 0) el.currentTime = resumeSeconds;
             el.playbackRate = readerControls.getPlaybackSettings().playbackSpeed;
             el.play().catch((error) => console.log("Autoplay blocked:", error));
@@ -394,6 +402,38 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         el.play().catch((error) => console.log("Play failed:", error));
         state.isScrolledAway.value = false;
         requestAnimationFrame(() => scrollToSentence(heading.sentIndex));
+    }
+
+    /** 지금 재생 중인 장의 인덱스. 아직 첫 장 전이면 -1. */
+    function currentChapterIndex(): number {
+        const headings = state.headings.value;
+        const activeIndex = state.activeIndex.value;
+        if (activeIndex < 0) return headings.length > 0 ? 0 : -1;
+        // 뒤에서부터 찾는다 — 현재 문장을 지나지 않은 첫 장이 곧 현재 장이다.
+        for (let i = headings.length - 1; i >= 0; i--) {
+            if (headings[i].sentIndex <= activeIndex) return i;
+        }
+        return -1;
+    }
+
+    /** 장 단위로 건너뛴다. offset이 -1이면 이전 장, +1이면 다음 장.
+     *
+     * "이전 장"은 음악 앱의 이전 곡과 같게 동작한다 — 장을 재생한 지
+     * 얼마 안 됐으면 진짜 이전 장으로 가고, 한참 들었으면 현재 장의
+     * 처음으로 돌아간다. 그래야 한 번 눌러 장을 다시 듣기 쉽다. */
+    function goToChapter(offset: number): void {
+        const headings = state.headings.value;
+        const el = state.audioEl.value;
+        if (!el || headings.length === 0) return;
+
+        const current = currentChapterIndex();
+        let target = current + offset;
+        if (offset < 0 && current >= 0) {
+            const elapsed = el.currentTime - headings[current].startMs / 1000;
+            if (elapsed > 3) target = current;
+        }
+        target = Math.max(0, Math.min(headings.length - 1, target));
+        onHeadingClick(headings[target]);
     }
 
     function openIndexSheet(): void {
@@ -561,6 +601,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
     return {
         open, restoreLastSession, openSharedReaderMode, closeReader, reopenReader, checkSharedLink,
         togglePlayPause, seekTo, onSentenceClick, onHeadingClick,
+        currentChapterIndex, goToChapter,
         onReaderContentScroll, jumpToCurrentSentence,
         openIndexSheet, closeIndexSheet, closeIndexSheetIfOpen,
         openMoreSheet, closeMoreSheet, closeMoreSheetIfOpen,
