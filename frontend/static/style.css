@@ -2829,6 +2829,25 @@ input[type="range"]::-webkit-slider-thumb:active {
     left: 0;
 }
 
+/* 끄는 동안에는 굵게 해서 "지금 조작 중"임을 드러낸다. */
+.player-progress-bar.is-dragging {
+    height: 6px;
+}
+
+.player-progress-tooltip {
+    position: absolute;
+    bottom: 14px;
+    transform: translateX(-50%);
+    padding: 4px 9px;
+    border-radius: 8px;
+    color: var(--bg-color);
+    background: var(--text-color);
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
 @media (max-width: 480px) {
     .reader-container {
         border-left: none;

@@ -266,3 +266,20 @@ def test_reader_highlight_thickens_strokes_without_changing_glyph_width():
     assert "font-weight" not in highlight_rule
     # px로 고정하면 글자 크기를 키웠을 때 두께 비율이 깨진다.
     assert "em" in highlight_rule.split("text-shadow:", 1)[1].split(";", 1)[0]
+
+def test_progress_bar_supports_dragging_with_a_time_tooltip():
+    """진행 바를 끌어서 이동할 수 있고, 끄는 동안 시각을 보여주는지 확인한다.
+
+    두 시간짜리 경전에서 탭 한 번으로 원하는 지점을 짚기는 어렵다. 놓기
+    전까지는 실제로 옮기지 않아야 손을 뗄 곳을 보고 정할 수 있다.
+    """
+    reader_view = (ROOT_DIR / "frontend" / "Reader" / "Reader_View.vue").read_text(encoding="utf-8")
+    css = STYLE_CSS.read_text(encoding="utf-8")
+
+    assert "@pointerdown=" in reader_view
+    assert "@pointermove=" in reader_view
+    assert "@pointerup=" in reader_view
+    # 드래그가 취소돼도(다른 앱으로 전환 등) 말풍선이 남으면 안 된다.
+    assert "@pointercancel=" in reader_view
+    assert "player-progress-tooltip" in reader_view
+    assert ".player-progress-tooltip" in css

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, type ComponentPublicInstance } from "vue";
+import { formatTime } from "../utils/format";
 import type { ReaderState } from "./Reader_State.vue";
 import type { ReaderLogic } from "./Reader_Logic.vue";
 import type { ReaderControlsState } from "./ReaderControls/ReaderControls_State.vue";
@@ -36,10 +37,42 @@ function onShareClick(): void {
     if (audio) props.audioListLogic.performShare(audio);
 }
 
-function onProgressBarClick(event: MouseEvent): void {
-    const bar = event.currentTarget as HTMLElement;
+// 진행 바를 끌어서 이동할 수 있게 한다. 두 시간짜리 경전에서 탭만으로는
+// 원하는 지점을 정확히 짚기 어렵다. 끄는 동안에는 어느 시각으로 가는지
+// 말풍선으로 보여준다 — 놓기 전까지는 실제로 옮기지 않는다.
+const dragFraction = ref<number | null>(null);
+
+function fractionFromEvent(bar: HTMLElement, clientX: number): number {
     const rect = bar.getBoundingClientRect();
-    if (rect.width > 0) props.logic.seekTo((event.clientX - rect.left) / rect.width);
+    if (rect.width <= 0) return 0;
+    return Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+}
+
+const dragTimeLabel = computed(() => {
+    if (dragFraction.value === null) return "";
+    return formatTime(props.state.durationSeconds.value * dragFraction.value);
+});
+
+function onProgressPointerDown(event: PointerEvent): void {
+    const bar = event.currentTarget as HTMLElement;
+    bar.setPointerCapture(event.pointerId);
+    dragFraction.value = fractionFromEvent(bar, event.clientX);
+}
+
+function onProgressPointerMove(event: PointerEvent): void {
+    if (dragFraction.value === null) return;
+    dragFraction.value = fractionFromEvent(event.currentTarget as HTMLElement, event.clientX);
+}
+
+function onProgressPointerUp(event: PointerEvent): void {
+    if (dragFraction.value === null) return;
+    const fraction = fractionFromEvent(event.currentTarget as HTMLElement, event.clientX);
+    dragFraction.value = null;
+    props.logic.seekTo(fraction);
+}
+
+function onProgressPointerCancel(): void {
+    dragFraction.value = null;
 }
 
 // 인라인 화살표를 :ref에 바로 쓰면 이 컴포넌트가 리렌더될 때마다(재생 중
@@ -161,8 +194,23 @@ useSwipeToDismiss(props.state.containerEl, () => props.logic.closeReader(), head
 
             <footer class="reader-controls">
                 <audio :ref="setAudioEl"></audio>
-                <div class="player-progress-bar" @click="onProgressBarClick">
-                    <div class="player-progress-fill" :style="{ width: state.progressPercent.value + '%' }"></div>
+                <div
+                    class="player-progress-bar"
+                    :class="{ 'is-dragging': dragFraction !== null }"
+                    @pointerdown="onProgressPointerDown"
+                    @pointermove="onProgressPointerMove"
+                    @pointerup="onProgressPointerUp"
+                    @pointercancel="onProgressPointerCancel"
+                >
+                    <div
+                        class="player-progress-fill"
+                        :style="{ width: (dragFraction !== null ? dragFraction * 100 : state.progressPercent.value) + '%' }"
+                    ></div>
+                    <span
+                        v-if="dragFraction !== null"
+                        class="player-progress-tooltip"
+                        :style="{ left: dragFraction * 100 + '%' }"
+                    >{{ dragTimeLabel }}</span>
                 </div>
                 <div class="reader-time-row">
                     <span class="player-time">{{ state.currentTimeLabel.value }}</span>
