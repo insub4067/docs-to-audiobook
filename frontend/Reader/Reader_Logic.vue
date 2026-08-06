@@ -6,6 +6,7 @@ import type { AudioListLogic } from "../components/Library/AudioList_Logic.vue";
 import { useWebSpeech } from "./webSpeech";
 import { buildDisplayItems, findActiveSentenceIndex, type ReaderSentence } from "./sentenceDisplay";
 import { saveAudiobookToDB, updateAudiobookPosition, saveAudiobookDuration, type AudiobookRecord } from "../services/indexedDb";
+import { getBookmarks, toggleBookmark, removeBookmarkAt, type BookmarkRecord } from "../services/bookmarks";
 import { getAudiobookDisplayTitle, formatTime, getReaderScrollTarget } from "../utils/format";
 import { useToastLogic, setReaderOpenForToast } from "../components/Toast/Toast_Logic.vue";
 import { useToastState } from "../components/Toast/Toast_State.vue";
@@ -38,6 +39,11 @@ export interface ReaderLogic {
     onHeadingClick(heading: { sentIndex: number; startMs: number }): void;
     currentChapterIndex(): number;
     goToChapter(offset: number): void;
+    toggleBookmarkForCurrentSentence(): void;
+    openBookmarkSheet(): void;
+    closeBookmarkSheet(): void;
+    goToBookmark(bookmark: BookmarkRecord): void;
+    removeBookmark(bookmark: BookmarkRecord): void;
     onReaderContentScroll(): void;
     jumpToCurrentSentence(): void;
     openIndexSheet(): void;
@@ -492,6 +498,55 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         onHeadingClick(headings[target]);
     }
 
+    /** 북마크는 개인 오디오북(IndexedDB id)과 라이브러리 작품(서버 id)을
+     *  같은 스토어에 담는다. 둘 다 안정적인 id를 갖고 있어서다. */
+    function currentAudiobookKey(): string | null {
+        return state.currentAudioObject.value?.id || sharedAudiobookId;
+    }
+
+    function toggleBookmarkForCurrentSentence(): void {
+        const audiobookId = currentAudiobookKey();
+        const index = state.activeIndex.value;
+        const sentence = sentences[index];
+        if (!audiobookId || index < 0 || !sentence) {
+            showToast("저장할 문장이 없습니다.", "info");
+            return;
+        }
+        const saved = toggleBookmark({
+            audiobookId,
+            sentenceIndex: index,
+            text: sentence.text,
+            seconds: sentence.start / 1000,
+            createdAt: Date.now(),
+        });
+        showToast(saved ? "문장을 저장했어요" : "문장 저장을 해제했어요", saved ? "success" : "info");
+    }
+
+    function openBookmarkSheet(): void {
+        const audiobookId = currentAudiobookKey();
+        state.bookmarks.value = audiobookId ? getBookmarks(audiobookId) : [];
+        state.isBookmarkSheetOpen.value = true;
+    }
+
+    function closeBookmarkSheet(): void {
+        state.isBookmarkSheetOpen.value = false;
+    }
+
+    function goToBookmark(bookmark: BookmarkRecord): void {
+        closeBookmarkSheet();
+        const el = state.audioEl.value;
+        if (!el) return;
+        el.currentTime = bookmark.seconds;
+        el.play().catch((error) => console.log("Play failed:", error));
+        state.isScrolledAway.value = false;
+        requestAnimationFrame(() => scrollToSentence(bookmark.sentenceIndex));
+    }
+
+    function removeBookmark(bookmark: BookmarkRecord): void {
+        removeBookmarkAt(bookmark.audiobookId, bookmark.sentenceIndex);
+        state.bookmarks.value = state.bookmarks.value.filter((b) => b.sentenceIndex !== bookmark.sentenceIndex);
+    }
+
     function openIndexSheet(): void {
         state.isIndexSheetOpen.value = true;
     }
@@ -662,6 +717,8 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         open, restoreLastSession, openSharedReaderMode, closeReader, reopenReader, checkSharedLink,
         togglePlayPause, seekTo, onSentenceClick, onHeadingClick,
         currentChapterIndex, goToChapter,
+        toggleBookmarkForCurrentSentence, openBookmarkSheet, closeBookmarkSheet,
+        goToBookmark, removeBookmark,
         onReaderContentScroll, jumpToCurrentSentence,
         openIndexSheet, closeIndexSheet, closeIndexSheetIfOpen,
         openMoreSheet, closeMoreSheet, closeMoreSheetIfOpen,

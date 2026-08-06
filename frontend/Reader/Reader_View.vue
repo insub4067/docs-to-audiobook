@@ -13,6 +13,7 @@ import ReaderMoreSheetView from "../Sheet/ReaderMoreSheet_View.vue";
 import ReaderSettingsSheetView from "../Sheet/ReaderSettingsSheet_View.vue";
 import ReaderOptionsSheetView from "../Sheet/ReaderOptionsSheet_View.vue";
 import ReaderPlaylistSheetView from "../Sheet/ReaderPlaylistSheet_View.vue";
+import BookmarkSheetView from "../Sheet/BookmarkSheet_View.vue";
 import type { ThemeLogic } from "../Theme/Theme_Logic.vue";
 import { useSwipeToDismiss } from "../utils/swipeToDismiss";
 
@@ -236,6 +237,7 @@ useSwipeToDismiss(props.state.containerEl, () => props.logic.closeReader(), head
     </div>
 
     <IndexSheetView :state="state" :logic="logic" />
+    <BookmarkSheetView :state="state" :logic="logic" />
     <ReaderMoreSheetView :state="state" :logic="logic" :on-share-click="onShareClick" />
     <ReaderSettingsSheetView :state="state" :logic="logic" :controls-logic="controlsLogic" :theme-logic="themeLogic" />
     <ReaderOptionsSheetView :state="controlsState" :logic="controlsLogic" />

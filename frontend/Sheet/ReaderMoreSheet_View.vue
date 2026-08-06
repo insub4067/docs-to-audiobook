@@ -31,6 +31,16 @@ function onIndexClick(): void {
     props.logic.openIndexSheet();
 }
 
+function onBookmarkClick(): void {
+    props.logic.closeMoreSheet();
+    props.logic.toggleBookmarkForCurrentSentence();
+}
+
+function onBookmarkListClick(): void {
+    props.logic.closeMoreSheet();
+    props.logic.openBookmarkSheet();
+}
+
 function onChapterClick(offset: number): void {
     props.logic.closeMoreSheet();
     props.logic.goToChapter(offset);
@@ -71,6 +81,14 @@ function onSaveSharedClick(): void {
             <button v-if="state.headings.value.length > 1" class="action-sheet-btn" type="button" @click="onChapterClick(1)">
                 <i data-lucide="chevron-last"></i>
                 다음 장
+            </button>
+            <button class="action-sheet-btn" type="button" @click="onBookmarkClick">
+                <i data-lucide="bookmark"></i>
+                이 문장 저장
+            </button>
+            <button class="action-sheet-btn" type="button" @click="onBookmarkListClick">
+                <i data-lucide="bookmark-check"></i>
+                저장한 문장
             </button>
             <button v-if="state.showShareBtn.value" class="action-sheet-btn" type="button" @click="onShareClickWrapped">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>

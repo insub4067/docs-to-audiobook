@@ -2,6 +2,7 @@
 import { ref, type Ref } from "vue";
 import type { AudiobookRecord } from "../services/indexedDb";
 import type { ReaderDisplayItem, HeadingRef } from "./sentenceDisplay";
+import type { BookmarkRecord } from "../services/bookmarks";
 
 export interface ReaderState {
     isOpen: Ref<boolean>;
@@ -22,6 +23,8 @@ export interface ReaderState {
     isMoreSheetOpen: Ref<boolean>;
     isSettingsSheetOpen: Ref<boolean>;
     isPlaylistSheetOpen: Ref<boolean>;
+    isBookmarkSheetOpen: Ref<boolean>;
+    bookmarks: Ref<BookmarkRecord[]>;
     sharedPlaylistKind: Ref<"news" | null>;
     currentAudioObject: Ref<AudiobookRecord | null>;
     audioEl: Ref<HTMLAudioElement | null>;
@@ -48,6 +51,8 @@ export function useReaderState(): ReaderState {
         isMoreSheetOpen: ref(false),
         isSettingsSheetOpen: ref(false),
         isPlaylistSheetOpen: ref(false),
+        isBookmarkSheetOpen: ref(false),
+        bookmarks: ref([]),
         sharedPlaylistKind: ref(null),
         currentAudioObject: ref(null),
         audioEl: ref(null),

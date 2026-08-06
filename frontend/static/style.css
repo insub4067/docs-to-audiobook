@@ -3965,3 +3965,57 @@ input[type="range"]::-webkit-slider-thumb:active {
     overflow: hidden !important;
     box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.25) !important;
 }
+
+/* 저장한 문장 목록. 문장은 길 수 있으므로 세 줄까지만 보여주고,
+   시각과 삭제 버튼은 옆에 고정한다. */
+.bookmark-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 12px 20px;
+    border-bottom: 1px solid rgba(120, 90, 60, 0.06);
+}
+
+.bookmark-row-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+}
+
+.bookmark-row-text {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    color: var(--text-color);
+    font-family: var(--font-serif);
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.bookmark-row-time {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.bookmark-row-remove {
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 50%;
+    color: var(--text-muted);
+    background: transparent;
+    cursor: pointer;
+}
