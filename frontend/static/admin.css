@@ -293,6 +293,19 @@ h2 { margin-bottom: 0; font-size: 1.4rem; }
     transition: opacity 0.3s cubic-bezier(0.25, 1, 0.5, 1);
 }
 .action-sheet-backdrop.show { opacity: 1; pointer-events: auto; }
+
+/* 홈 화면에 추가한 PWA(standalone)에서는 레이아웃 뷰포트가 실제 화면보다
+   상태바 높이만큼 짧다 — 실기기 계측: innerHeight=793 / screen=852 /
+   100vh=852. 그래서 top:0+bottom:0으로 잡은 백드롭이 793에서 끝나 시트
+   아래에 59pt의 빈 띠가 남았다(카드는 백드롭 바닥에 정확히 붙어 있었으므로
+   카드/시트 쪽 CSS 문제가 아니었다). 화면 전체를 덮는 100vh로 바꾼다.
+   innerHeight가 정상(852)일 때도 100vh는 852라 결과가 같아 안전하다.
+   .ios-standalone은 main-admin.ts가 붙인다 — Safari에서는 100vh가 툴바
+   뒤까지 잡혀 시트가 가려지므로 적용하지 않는다. */
+:root.ios-standalone .action-sheet-backdrop {
+    bottom: auto;
+    height: 100vh;
+}
 .action-sheet {
     width: 100%;
     max-width: 500px;
