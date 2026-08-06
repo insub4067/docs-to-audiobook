@@ -41,7 +41,10 @@ const libraryCanSubmit = computed(() => !librarySubmitting.value && !!libraryInp
 // 실기기(iOS)에서만 재현되는 시트 하단 여백 문제의 원인을 좁히기 위한 것으로,
 // 원인을 찾으면 이 블록은 통째로 제거한다.
 const vpDebug = ref("");
-const showVpDebug = typeof location !== "undefined" && location.search.includes("vpdebug");
+// PWA(standalone)에서는 주소창이 없어 ?vpdebug를 붙일 수 없는데, 문제는
+// 바로 그 PWA에서만 재현된다. 그래서 잠시 조건 없이 켜 둔다 — 관리자만
+// 보는 화면이라 영향 범위가 좁다. 원인 확인 후 이 블록은 통째로 제거한다.
+const showVpDebug = true;
 
 function collectVpDebug(): void {
     const probe = document.createElement("div");
