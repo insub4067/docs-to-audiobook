@@ -250,3 +250,19 @@ def test_light_reader_theme_is_not_pure_white():
     assert "--reader-bg:" in light_theme
     background = light_theme.split("--reader-bg:", 1)[1].split(";", 1)[0].strip().lower()
     assert background not in ("#fff", "#ffffff", "white")
+
+def test_reader_highlight_thickens_strokes_without_changing_glyph_width():
+    """재생 중 문장을 굵게 보이게 하되 글자 폭은 그대로 두는지 확인한다.
+
+    font-weight를 올리면 글자 폭이 함께 바뀌어 줄바꿈이 밀린다. 재생 중
+    문장이 넘어갈 때마다 본문이 들썩이게 된다(실측: weight 700에서 첫 줄
+    끝이 330.9px → 328.8px로 밀려 글자 하나가 다음 줄로 넘어갔다).
+    text-shadow는 획만 덧그려서 레이아웃이 전혀 바뀌지 않는다.
+    """
+    css = STYLE_CSS.read_text(encoding="utf-8")
+    highlight_rule = css.split("\n.reader-sentence.highlight {", 1)[1].split("}", 1)[0]
+
+    assert "text-shadow" in highlight_rule
+    assert "font-weight" not in highlight_rule
+    # px로 고정하면 글자 크기를 키웠을 때 두께 비율이 깨진다.
+    assert "em" in highlight_rule.split("text-shadow:", 1)[1].split(";", 1)[0]
