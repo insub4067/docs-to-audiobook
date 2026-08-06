@@ -210,6 +210,55 @@ select
   has_table_privilege('service_role', 'public.library_saves', 'DELETE');
 ```
 
+### 2.8 라이브러리 등록 작업 테이블
+
+관리자가 라이브러리에 작품을 등록하면 합성이 끝나기 전까지의 상태를 여기에 남긴다.
+**원문(`source_text`)을 합성 전에 먼저 저장하는 것이 이 테이블의 존재 이유다.** 예전에는
+합성이 실패하면 `audiobooks` 행이 아예 만들어지지 않아 서버 로그 말고는 아무 흔적도 남지
+않았고, 관리자는 무엇이 왜 실패했는지 알 수도 다시 시도할 수도 없었다.
+
+작품이 완성되면 이 행은 삭제한다 — 완성된 작품은 `audiobooks`에 있고, 여기 남겨두면
+"등록 작업" 목록이 완료 항목으로 계속 불어난다. 따라서 이 테이블에 남아 있는 행은
+언제나 "아직 안 끝났거나 실패한 것"뿐이다.
+
+```sql
+create table public.library_jobs (
+  id uuid primary key,
+  admin_user_id uuid not null references public.users(id) on delete cascade,
+  title varchar(255) not null,
+  source_text text not null,
+  metadata jsonb not null default '{}'::jsonb,
+  status varchar(20) not null default 'queued',
+  error text,
+  created_at timestamptz not null default now()
+);
+
+create index library_jobs_status_idx on public.library_jobs(status);
+alter table public.library_jobs enable row level security;
+revoke all on table public.library_jobs from anon, authenticated;
+grant select, insert, update, delete on table public.library_jobs to service_role;
+```
+
+`id`는 애플리케이션이 만들어 넣으므로 기본값을 두지 않는다. `status`는 `queued` →
+`processing` → (성공 시 행 삭제 / 실패 시 `error`)로 전이한다. `metadata`에는 카테고리·판본·
+번역자·출처·이용조건·설명과 목표 공개 상태가 들어가고, 합성이 끝나면 `audiobooks`의
+`library_*` 컬럼으로 옮겨간다.
+
+진행률은 이 테이블에 저장하지 않는다 — 청크마다 UPDATE를 날리면 긴 경전 하나에 수백 번의
+쓰기가 생긴다. 서버 프로세스 메모리에만 두고 목록 응답에 얹어 준다(재시작하면 사라지지만,
+그때는 `status`가 진실이다).
+
+`GRANT`를 빠뜨리면 §2.7의 `library_saves`가 그랬듯 `42501 permission denied`로 등록 기능
+전체가 500을 낸다. 적용 후 다음 SQL의 네 값이 모두 `true`인지 확인한다.
+
+```sql
+select
+  has_table_privilege('service_role', 'public.library_jobs', 'SELECT'),
+  has_table_privilege('service_role', 'public.library_jobs', 'INSERT'),
+  has_table_privilege('service_role', 'public.library_jobs', 'UPDATE'),
+  has_table_privilege('service_role', 'public.library_jobs', 'DELETE');
+```
+
 ---
 
 ## 🔐 3단계: Row Level Security (RLS) 정책 설정

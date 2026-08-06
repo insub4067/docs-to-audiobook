@@ -13,6 +13,17 @@ export interface LibraryAdminItem {
     created_at: string;
 }
 
+/** 합성이 끝나기 전(또는 실패한) 등록 작업. 성공하면 목록에서 사라지고
+ *  아래 "등록된 작품 관리"에 LibraryAdminItem으로 나타난다. */
+export interface LibraryJob {
+    id: string;
+    title: string;
+    status: "queued" | "processing" | "error";
+    error: string | null;
+    progress: number | null;
+    created_at: string;
+}
+
 export interface JsonValidationResult {
     isValid: boolean;
     itemCount: number;
@@ -34,6 +45,9 @@ export interface AdminState {
     libraryItems: Ref<LibraryAdminItem[]>;
     libraryItemsStatus: Ref<string>;
     libraryTogglingIds: Ref<Set<string>>;
+    libraryJobs: Ref<LibraryJob[]>;
+    libraryJobsStatus: Ref<string>;
+    libraryJobBusyIds: Ref<Set<string>>;
     statusMenuItem: Ref<LibraryAdminItem | null>;
     activeInputSheet: Ref<"news" | "library" | null>;
 }
@@ -53,6 +67,9 @@ export function useAdminState(): AdminState {
         libraryItems: ref([]),
         libraryItemsStatus: ref(""),
         libraryTogglingIds: ref(new Set()),
+        libraryJobs: ref([]),
+        libraryJobsStatus: ref(""),
+        libraryJobBusyIds: ref(new Set()),
         statusMenuItem: ref(null),
         activeInputSheet: ref(null),
     };

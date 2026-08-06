@@ -1,7 +1,9 @@
 """라이브러리: 공개 이용 가능한 경전·철학서·고전문학을 관리자가 등록해
 개인 문서/경제 뉴스와 같은 파이프라인(TTS 합성 → Storage 저장)으로
-오디오북화한다. 별도 테이블 없이 audiobooks를 재사용하고 is_library로
-구분한다.
+오디오북화한다. 완성된 작품은 별도 테이블 없이 audiobooks를 재사용하고
+is_library로 구분한다. 다만 합성이 끝나기 전까지의 등록 작업은
+library_jobs에 따로 남긴다 — 원문을 들고 있어야 실패한 작품을 다시
+만들 수 있기 때문이다.
 
 문서 자체보다 중요한 제약: library_status가 'review'(기본값)인 동안은
 공개 목록/상세에서 절대 노출하지 않는다. 판본별 저작권이 실제로
@@ -23,6 +25,15 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 LIBRARY_STATUSES = {"review", "published"}
+
+# 등록 작업이 원문과 함께 넘겨받는 메타데이터 키. 합성이 끝나면
+# audiobooks의 library_* 컬럼으로 옮겨간다.
+LIBRARY_JOB_METADATA_KEYS = ("category", "edition", "translator", "source", "rights", "description", "status")
+
+# 진행률은 DB가 아니라 프로세스 메모리에만 둔다 — 청크마다 UPDATE를 날리면
+# 긴 경전 하나에 수백 번의 쓰기가 생긴다. 재시작하면 사라지지만 그때는
+# status(DB)가 진실이고, 진행률은 0부터 다시 보이면 그만이다.
+_job_progress: dict[str, int] = {}
 
 
 def _parse_library_payload(raw_text: str) -> list[dict]:
@@ -67,9 +78,13 @@ def _parse_library_payload(raw_text: str) -> list[dict]:
     return parsed
 
 
-async def _store_library_item(supabase, admin_user_id: str, item: dict) -> str:
+async def _store_library_item(supabase, admin_user_id: str, item: dict, job_id: str | None = None) -> str:
+    def on_progress(done: int, total: int) -> None:
+        if job_id and total:
+            _job_progress[job_id] = round(done * 100 / total)
+
     audio_bytes, sentences, _headings = await synthesize_document(
-        item["content"], DEFAULT_VOICE_KEY, "+5%", "+0Hz"
+        item["content"], DEFAULT_VOICE_KEY, "+5%", "+0Hz", progress_callback=on_progress
     )
     if not audio_bytes:
         raise RuntimeError("음성 합성 결과가 비어 있습니다.")
@@ -113,21 +128,123 @@ async def _store_library_item(supabase, admin_user_id: str, item: dict) -> str:
     return audiobook_id
 
 
-async def _process_library_batch(admin_user_id: str, items: list[dict]) -> None:
+async def _run_library_job(supabase, job_id: str) -> None:
+    """작업 한 건을 원문에서 되살려 처리한다. 최초 등록과 재시도가 같은
+    경로를 쓰도록 DB에서 다시 읽는다 — 재시도 때만 도는 별도 코드가 있으면
+    한쪽만 고쳐진 채로 남는다."""
+    try:
+        response = supabase.table("library_jobs").select("*").eq("id", job_id).maybe_single().execute()
+    except Exception:
+        logger.exception("등록 작업을 불러오지 못했습니다 job_id=%s", job_id)
+        return
+    if not response or not response.data:
+        return
+    job = response.data
+
+    supabase.table("library_jobs").update({"status": "processing", "error": None}).eq("id", job_id).execute()
+    _job_progress[job_id] = 0
+    try:
+        metadata = job.get("metadata") or {}
+        item = {
+            "title": job["title"],
+            "content": job["source_text"],
+            **{key: metadata.get(key) for key in LIBRARY_JOB_METADATA_KEYS},
+        }
+        item["status"] = item["status"] if item["status"] in LIBRARY_STATUSES else "review"
+        await _store_library_item(supabase, job["admin_user_id"], item, job_id)
+        # 작품이 만들어졌으면 작업 기록은 지운다 — 남겨두면 "등록 작업"
+        # 목록이 완료 항목으로 계속 불어나고, 같은 작품이 아래 "등록된
+        # 작품 관리"에도 있어 두 번 보인다.
+        supabase.table("library_jobs").delete().eq("id", job_id).execute()
+    except Exception as error:
+        logger.exception("라이브러리 작품 등록 실패 title=%s", job.get("title"))
+        supabase.table("library_jobs").update({
+            "status": "error",
+            "error": f"{type(error).__name__}: {error}"[:500],
+        }).eq("id", job_id).execute()
+    finally:
+        _job_progress.pop(job_id, None)
+
+
+async def _process_library_batch(job_ids: list[str]) -> None:
     supabase = _supabase_or_503()
-    for item in items:
-        try:
-            await _store_library_item(supabase, admin_user_id, item)
-        except Exception:
-            logger.exception("라이브러리 작품 등록 실패 title=%s", item["title"])
+    for job_id in job_ids:
+        await _run_library_job(supabase, job_id)
 
 
 @router.post("/api/admin/library")
 async def add_library_items(payload: dict, background_tasks: BackgroundTasks, authorization: str = Header(None)):
     admin_user_id = require_admin_user(authorization)
     items = _parse_library_payload(payload.get("text") or "")
-    background_tasks.add_task(_process_library_batch, admin_user_id, items)
-    return {"queued": len(items)}
+
+    # 합성을 시작하기 전에 원문을 먼저 저장한다. 예전에는 실패하면 아무
+    # 흔적도 남지 않아(작품 행은 합성 성공 후에야 생겼다) 무엇이 왜 실패했는지
+    # 알 수도, 다시 시도할 수도 없었다.
+    supabase = _supabase_or_503()
+    job_ids = []
+    for item in items:
+        job_id = str(uuid.uuid4())
+        supabase.table("library_jobs").insert({
+            "id": job_id,
+            "admin_user_id": admin_user_id,
+            "title": item["title"],
+            "source_text": item["content"],
+            "metadata": {key: item[key] for key in LIBRARY_JOB_METADATA_KEYS},
+        }).execute()
+        job_ids.append(job_id)
+
+    background_tasks.add_task(_process_library_batch, job_ids)
+    return {"queued": len(job_ids)}
+
+
+# ⚠️ /api/admin/library/{audiobook_id}(PATCH)와 경로가 겹치므로 작업 라우트를
+# 먼저 등록한다. library_saves 때 겪은 것과 같은 종류의 함정이다.
+@router.get("/api/admin/library/jobs")
+async def list_library_jobs(authorization: str = Header(None)):
+    """진행 중이거나 실패한 등록 작업. 성공한 작업은 행을 지우므로 여기 없다."""
+    require_admin_user(authorization)
+    supabase = _supabase_or_503()
+    try:
+        # source_text는 작품 한 편 분량이라 목록 응답에 싣지 않는다.
+        rows = supabase.table("library_jobs") \
+            .select("id, title, status, error, created_at") \
+            .order("created_at", desc=True).limit(50).execute().data or []
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"등록 작업을 불러오지 못했습니다: {e}")
+    for row in rows:
+        row["progress"] = _job_progress.get(row["id"])
+    return {"jobs": rows}
+
+
+@router.post("/api/admin/library/jobs/{job_id}/retry")
+async def retry_library_job(job_id: str, background_tasks: BackgroundTasks, authorization: str = Header(None)):
+    """실패한 작업을 원문에서 다시 시작한다. 배포 중 재시작 등으로
+    'processing'에 멈춰 버린 작업도 여기서 되살릴 수 있도록 상태를 가리지
+    않는다 — 원문이 남아 있는 한 다시 만드는 건 언제나 안전하다."""
+    require_admin_user(authorization)
+    supabase = _supabase_or_503()
+    try:
+        response = supabase.table("library_jobs").select("id").eq("id", job_id).maybe_single().execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"작업을 확인하지 못했습니다: {e}")
+    if not response or not response.data:
+        raise HTTPException(status_code=404, detail="등록 작업을 찾을 수 없습니다.")
+
+    supabase.table("library_jobs").update({"status": "queued", "error": None}).eq("id", job_id).execute()
+    background_tasks.add_task(_process_library_batch, [job_id])
+    return {"status": "queued"}
+
+
+@router.delete("/api/admin/library/jobs/{job_id}")
+async def delete_library_job(job_id: str, authorization: str = Header(None)):
+    """다시 시도하지 않을 실패 작업을 목록에서 치운다."""
+    require_admin_user(authorization)
+    supabase = _supabase_or_503()
+    try:
+        supabase.table("library_jobs").delete().eq("id", job_id).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"작업을 삭제하지 못했습니다: {e}")
+    return {"deleted": job_id}
 
 
 @router.get("/api/admin/library")
