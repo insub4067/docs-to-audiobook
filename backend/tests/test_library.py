@@ -11,6 +11,7 @@ import httpx
 import pytest
 from fastapi import HTTPException
 
+from tests.conftest import rows_inserted_into
 from main import app
 
 
@@ -30,42 +31,6 @@ def mock_supabase():
         client = MagicMock()
         get_client.return_value = client
         yield client
-
-
-@pytest.fixture
-def mock_supabase_tables():
-    """테이블 이름별로 다른 목을 돌려주는 supabase 클라이언트.
-
-    등록 경로는 library_jobs(작업)와 audiobooks(완성된 작품) 두 테이블을
-    함께 건드린다. 위의 mock_supabase처럼 하나의 목을 공유하면 어느
-    테이블에 무엇을 넣었는지 구분할 수 없어 검증이 무의미해진다.
-    """
-    with patch("auth.get_supabase_client") as get_client:
-        client = MagicMock()
-        tables: dict[str, MagicMock] = {}
-        client.table.side_effect = lambda name: tables.setdefault(name, MagicMock())
-        get_client.return_value = client
-        yield client, tables
-
-
-def _stub_pending_job(tables, *, title, content, metadata):
-    """등록 직후 작업 처리기가 다시 읽어 갈 작업 행을 흉내 낸다."""
-    jobs = tables.setdefault("library_jobs", MagicMock())
-    jobs.select().eq().maybe_single().execute.return_value = MagicMock(data={
-        "id": "job-1",
-        "admin_user_id": "admin-user",
-        "title": title,
-        "source_text": content,
-        "metadata": metadata,
-    })
-    return jobs
-
-
-def _rows_inserted_into(tables, table_name):
-    mock = tables.get(table_name)
-    if mock is None:
-        return []
-    return [call.args[0] for call in mock.insert.call_args_list if call.args]
 
 
 @pytest.mark.asyncio
@@ -90,7 +55,6 @@ async def test_add_library_rejects_malformed_json():
 @pytest.mark.asyncio
 async def test_add_library_defaults_to_review_status(mock_supabase_tables):
     _client, tables = mock_supabase_tables
-    _stub_pending_job(tables, title="도덕경", content="도가도 비상도", metadata={"category": "철학·사상", "status": "review"})
     payload_text = '[{"title": "도덕경", "content": "도가도 비상도", "category": "철학·사상"}]'
 
     with patch("routes.library.require_admin_user", return_value="admin-user"), \
@@ -101,7 +65,7 @@ async def test_add_library_defaults_to_review_status(mock_supabase_tables):
     assert response.status_code == 200
     assert response.json()["queued"] == 1
 
-    inserted_rows = _rows_inserted_into(tables, "audiobooks")
+    inserted_rows = rows_inserted_into(tables, "audiobooks")
     assert len(inserted_rows) == 1
     assert inserted_rows[0]["library_status"] == "review"
     assert inserted_rows[0]["is_library"] is True
@@ -111,7 +75,6 @@ async def test_add_library_defaults_to_review_status(mock_supabase_tables):
 @pytest.mark.asyncio
 async def test_add_library_honors_explicit_published_status(mock_supabase_tables):
     _client, tables = mock_supabase_tables
-    _stub_pending_job(tables, title="논어", content="학이시습지", metadata={"status": "published"})
     payload_text = '[{"title": "논어", "content": "학이시습지", "status": "published"}]'
 
     with patch("routes.library.require_admin_user", return_value="admin-user"), \
@@ -120,14 +83,13 @@ async def test_add_library_honors_explicit_published_status(mock_supabase_tables
             response = await client.post("/api/admin/library", json={"text": payload_text}, headers=_auth_headers())
 
     assert response.status_code == 200
-    assert _rows_inserted_into(tables, "audiobooks")[0]["library_status"] == "published"
+    assert rows_inserted_into(tables, "audiobooks")[0]["library_status"] == "published"
 
 
 @pytest.mark.asyncio
 async def test_add_library_rejects_unknown_status_value(mock_supabase_tables):
     _client, tables = mock_supabase_tables
     # 작업 행에 이상한 status가 들어가 있어도 작품을 만들 때 다시 걸러야 한다.
-    _stub_pending_job(tables, title="테스트", content="본문", metadata={"status": "definitely-verified-trust-me"})
     payload_text = '[{"title": "테스트", "content": "본문", "status": "definitely-verified-trust-me"}]'
 
     with patch("routes.library.require_admin_user", return_value="admin-user"), \
@@ -135,7 +97,7 @@ async def test_add_library_rejects_unknown_status_value(mock_supabase_tables):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             await client.post("/api/admin/library", json={"text": payload_text}, headers=_auth_headers())
 
-    assert _rows_inserted_into(tables, "audiobooks")[0]["library_status"] == "review"
+    assert rows_inserted_into(tables, "audiobooks")[0]["library_status"] == "review"
 
 
 @pytest.mark.asyncio
@@ -298,142 +260,3 @@ async def test_unsave_library_item():
 
     assert response.status_code == 200
     assert response.json() == {"saved": False}
-
-
-# ── 등록 작업(library_jobs) ────────────────────────────────────────────────
-# 예전에는 합성이 실패하면 audiobooks에 행이 아예 생기지 않아 서버 로그
-# 말고는 아무 흔적도 남지 않았다. 무엇이 왜 실패했는지 관리자가 알 수도,
-# 다시 시도할 수도 없었다. 그래서 원문을 먼저 저장한 뒤 합성한다.
-
-@pytest.mark.asyncio
-async def test_add_library_persists_source_text_before_synthesizing(mock_supabase_tables):
-    _client, tables = mock_supabase_tables
-    _stub_pending_job(tables, title="금강경", content="여시아문", metadata={"status": "review"})
-    payload_text = '[{"title": "금강경", "content": "여시아문", "category": "종교·경전"}]'
-
-    with patch("routes.library.require_admin_user", return_value="admin-user"), \
-         patch("routes.library.synthesize_document", side_effect=_fake_synthesize_document):
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-            response = await client.post("/api/admin/library", json={"text": payload_text}, headers=_auth_headers())
-
-    assert response.status_code == 200
-    job_rows = _rows_inserted_into(tables, "library_jobs")
-    assert len(job_rows) == 1
-    assert job_rows[0]["source_text"] == "여시아문"
-    assert job_rows[0]["title"] == "금강경"
-    assert job_rows[0]["metadata"]["category"] == "종교·경전"
-
-
-@pytest.mark.asyncio
-async def test_failed_synthesis_records_error_instead_of_vanishing(mock_supabase_tables):
-    _client, tables = mock_supabase_tables
-    jobs = _stub_pending_job(tables, title="법구경", content="본문", metadata={"status": "review"})
-
-    async def explode(*args, **kwargs):
-        raise TimeoutError("TTS 요청 시간 초과")
-
-    with patch("routes.library.require_admin_user", return_value="admin-user"), \
-         patch("routes.library.synthesize_document", side_effect=explode):
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-            await client.post("/api/admin/library", json={"text": '[{"title": "법구경", "content": "본문"}]'}, headers=_auth_headers())
-
-    updates = [call.args[0] for call in jobs.update.call_args_list if call.args]
-    error_updates = [u for u in updates if u.get("status") == "error"]
-    assert len(error_updates) == 1
-    assert "TTS 요청 시간 초과" in error_updates[0]["error"]
-    # 실패했으면 작품 행은 만들어지지 않아야 한다.
-    assert _rows_inserted_into(tables, "audiobooks") == []
-    # 그리고 원문이 담긴 작업 행은 지우면 안 된다 — 재시도의 유일한 근거다.
-    jobs.delete.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_successful_synthesis_removes_the_job_row(mock_supabase_tables):
-    _client, tables = mock_supabase_tables
-    jobs = _stub_pending_job(tables, title="도덕경", content="도가도", metadata={"status": "review"})
-
-    with patch("routes.library.require_admin_user", return_value="admin-user"), \
-         patch("routes.library.synthesize_document", side_effect=_fake_synthesize_document):
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-            await client.post("/api/admin/library", json={"text": '[{"title": "도덕경", "content": "도가도"}]'}, headers=_auth_headers())
-
-    assert len(_rows_inserted_into(tables, "audiobooks")) == 1
-    jobs.delete.assert_called()
-
-
-@pytest.mark.asyncio
-async def test_list_library_jobs_rejects_non_admin():
-    def reject(authorization):
-        raise HTTPException(status_code=403, detail="관리자만 접근할 수 있습니다.")
-
-    with patch("routes.library.require_admin_user", side_effect=reject):
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-            response = await client.get("/api/admin/library/jobs", headers=_auth_headers())
-    assert response.status_code == 403
-
-
-@pytest.mark.asyncio
-async def test_list_library_jobs_returns_status_and_error(mock_supabase):
-    mock_supabase.table().select().order().limit().execute.return_value = MagicMock(data=[
-        {"id": "job-1", "title": "법구경", "status": "error", "error": "TimeoutError: 시간 초과"},
-        {"id": "job-2", "title": "금강경", "status": "queued", "error": None},
-    ])
-
-    with patch("routes.library.require_admin_user", return_value="admin-user"):
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-            response = await client.get("/api/admin/library/jobs", headers=_auth_headers())
-
-    assert response.status_code == 200
-    jobs = response.json()["jobs"]
-    assert [job["status"] for job in jobs] == ["error", "queued"]
-    assert "시간 초과" in jobs[0]["error"]
-
-
-@pytest.mark.asyncio
-async def test_list_library_jobs_does_not_return_source_text(mock_supabase):
-    """작품 한 편 분량의 원문을 목록 응답에 실으면 관리자 화면이 감당하지 못한다."""
-    mock_supabase.table().select().order().limit().execute.return_value = MagicMock(data=[])
-
-    with patch("routes.library.require_admin_user", return_value="admin-user"):
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-            await client.get("/api/admin/library/jobs", headers=_auth_headers())
-
-    selected = mock_supabase.table().select.call_args.args[0]
-    assert "source_text" not in selected
-
-
-@pytest.mark.asyncio
-async def test_retry_library_job_reruns_from_stored_source_text(mock_supabase_tables):
-    _client, tables = mock_supabase_tables
-    jobs = _stub_pending_job(tables, title="법구경", content="다시 만들 본문", metadata={"status": "review"})
-
-    with patch("routes.library.require_admin_user", return_value="admin-user"), \
-         patch("routes.library.synthesize_document", side_effect=_fake_synthesize_document):
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-            response = await client.post("/api/admin/library/jobs/job-1/retry", headers=_auth_headers())
-
-    assert response.status_code == 200
-    assert _rows_inserted_into(tables, "audiobooks")[0]["title"] == "법구경"
-    jobs.delete.assert_called()
-
-
-@pytest.mark.asyncio
-async def test_retry_library_job_404s_for_unknown_job(mock_supabase):
-    mock_supabase.table().select().eq().maybe_single().execute.return_value = MagicMock(data=None)
-
-    with patch("routes.library.require_admin_user", return_value="admin-user"):
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-            response = await client.post("/api/admin/library/jobs/nope/retry", headers=_auth_headers())
-
-    assert response.status_code == 404
-
-
-@pytest.mark.asyncio
-async def test_delete_library_job_rejects_non_admin():
-    def reject(authorization):
-        raise HTTPException(status_code=403, detail="관리자만 접근할 수 있습니다.")
-
-    with patch("routes.library.require_admin_user", side_effect=reject):
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-            response = await client.delete("/api/admin/library/jobs/job-1", headers=_auth_headers())
-    assert response.status_code == 403

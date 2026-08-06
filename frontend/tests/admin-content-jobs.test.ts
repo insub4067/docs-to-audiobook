@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 import AdminView from "../Admin/Admin_View.vue";
-import type { LibraryJob } from "../Admin/Admin_State.vue";
+import type { ContentJob } from "../Admin/Admin_State.vue";
 
 const METRICS_RESPONSE = { weekly_active_users: 0 };
 
@@ -14,10 +14,10 @@ function jsonResponse(body: unknown) {
 let fetchMock: ReturnType<typeof vi.fn>;
 
 /** 관리자 화면을 띄우고 등록 작업 목록만 원하는 값으로 채운다. */
-async function mountAdminWithJobs(jobs: Partial<LibraryJob>[]) {
+async function mountAdminWithJobs(jobs: Partial<ContentJob>[]) {
     fetchMock.mockImplementation(async (url: string) => {
         const path = String(url);
-        if (path.startsWith("/api/admin/library/jobs")) return jsonResponse({ jobs });
+        if (path.startsWith("/api/admin/content-jobs")) return jsonResponse({ jobs });
         if (path.startsWith("/api/admin/library")) return jsonResponse({ items: [] });
         return jsonResponse(METRICS_RESPONSE);
     });
@@ -47,7 +47,7 @@ afterEach(() => {
 describe("관리자 등록 작업 목록", () => {
     it("실패한 작업의 사유와 다시 시도 버튼을 보여준다", async () => {
         const wrapper = await mountAdminWithJobs([
-            { id: "job-1", title: "법구경", status: "error", error: "TimeoutError: TTS 요청 시간 초과", progress: null },
+            { id: "job-1", kind: "library", title: "법구경", status: "error", error: "TimeoutError: TTS 요청 시간 초과", progress: null },
         ]);
 
         const text = wrapper.text();
@@ -58,7 +58,7 @@ describe("관리자 등록 작업 목록", () => {
 
     it("진행 중인 작업은 진행률을 보여주고 재시도 버튼은 없다", async () => {
         const wrapper = await mountAdminWithJobs([
-            { id: "job-1", title: "도덕경", status: "processing", error: null, progress: 43 },
+            { id: "job-1", kind: "library", title: "도덕경", status: "processing", error: null, progress: 43 },
         ]);
 
         expect(wrapper.text()).toContain("음성 생성 중 · 43%");
@@ -69,7 +69,7 @@ describe("관리자 등록 작업 목록", () => {
         // 서버가 재시작되면 메모리에 있던 진행률이 사라진다. 그때 0%로
         // 보여주면 작업이 멈춘 것처럼 오해하게 된다.
         const wrapper = await mountAdminWithJobs([
-            { id: "job-1", title: "도덕경", status: "processing", error: null, progress: null },
+            { id: "job-1", kind: "library", title: "도덕경", status: "processing", error: null, progress: null },
         ]);
 
         expect(wrapper.text()).toContain("음성 생성 중");
@@ -78,14 +78,27 @@ describe("관리자 등록 작업 목록", () => {
 
     it("다시 시도를 누르면 해당 작업의 retry를 호출한다", async () => {
         const wrapper = await mountAdminWithJobs([
-            { id: "job-1", title: "법구경", status: "error", error: "실패", progress: null },
+            { id: "job-1", kind: "library", title: "법구경", status: "error", error: "실패", progress: null },
         ]);
 
         await wrapper.findAll(".library-job-btn")[0].trigger("click");
 
-        const retryCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/jobs/job-1/retry"));
+        const retryCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/content-jobs/job-1/retry"));
         expect(retryCall).toBeTruthy();
         expect((retryCall![1] as RequestInit).method).toBe("POST");
+    });
+
+    it("뉴스와 작품을 한 목록에서 종류를 구분해 보여준다", async () => {
+        // 경제 뉴스도 라이브러리와 같은 등록 경로를 타므로 한 목록에 섞인다.
+        // 제목만 보면 어느 쪽인지 알 수 없어 종류 배지가 필요하다.
+        const wrapper = await mountAdminWithJobs([
+            { id: "job-1", kind: "news", title: "환율 급등", status: "processing", error: null, progress: 20 },
+            { id: "job-2", kind: "library", title: "도덕경", status: "queued", error: null, progress: null },
+        ]);
+
+        expect(wrapper.findAll(".content-job-kind").map((el) => el.text())).toEqual(["뉴스", "작품"]);
+        expect(wrapper.text()).toContain("환율 급등");
+        expect(wrapper.text()).toContain("도덕경");
     });
 
     it("작업이 없으면 비어 있다고 알린다", async () => {

@@ -209,6 +209,19 @@ h2 { margin-bottom: 0; font-size: 1.4rem; }
 }
 .row-more-btn:disabled { opacity: 0.55; cursor: default; }
 
+/* 뉴스와 작품이 한 목록에 섞이므로 제목 앞에 종류를 붙인다. */
+.content-job-kind {
+    display: inline-block;
+    margin-right: 6px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    color: var(--muted);
+    background: rgba(122, 109, 100, 0.14);
+    font-size: 0.72rem;
+    font-weight: 700;
+    vertical-align: middle;
+}
+
 /* 등록 작업 행: 실패 사유는 두 줄로 잘리지 않고 다 보여야 원인을 알 수 있다. */
 .library-job-error { color: #b3261e; -webkit-line-clamp: unset; }
 .library-job-btn {

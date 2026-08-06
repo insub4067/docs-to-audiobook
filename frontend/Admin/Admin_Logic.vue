@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { AdminState, AdminTab, JsonValidationResult, LibraryAdminItem, LibraryJob } from "./Admin_State.vue";
+import type { AdminState, AdminTab, JsonValidationResult, LibraryAdminItem, ContentJob } from "./Admin_State.vue";
 import type { AdminMetricName } from "../types/adminDashboard";
 
 export interface AdminLogic {
@@ -10,9 +10,9 @@ export interface AdminLogic {
     submitNews(): Promise<void>;
     submitLibrary(): Promise<void>;
     loadLibraryItems(): Promise<void>;
-    loadLibraryJobs(): Promise<void>;
-    retryLibraryJob(job: LibraryJob): Promise<void>;
-    dismissLibraryJob(job: LibraryJob): Promise<void>;
+    loadContentJobs(): Promise<void>;
+    retryContentJob(job: ContentJob): Promise<void>;
+    dismissContentJob(job: ContentJob): Promise<void>;
     openStatusMenu(item: LibraryAdminItem): void;
     closeStatusMenu(): void;
     toggleLibraryStatus(item: LibraryAdminItem): Promise<void>;
@@ -27,7 +27,7 @@ export function useAdminLogic(
         status, contentVisible, metrics, activeAdminTab, newsInputText, newsStatus, newsSubmitting,
         libraryInputText, libraryStatus, librarySubmitting,
         libraryItems, libraryItemsStatus, libraryTogglingIds, statusMenuItem, activeInputSheet,
-        libraryJobs, libraryJobsStatus, libraryJobBusyIds,
+        contentJobs, contentJobsStatus, contentJobBusyIds,
     }: AdminState
 ): AdminLogic {
     function formatMetric(name: AdminMetricName, value: number | null | undefined): string {
@@ -142,6 +142,7 @@ export function useAdminLogic(
             newsStatus.value = `${queuedCount}개 접수됨 — 변환이 끝나면 전체 사용자에게 알림이 발송돼요.`;
             newsInputText.value = "";
             closeInputSheet();
+            loadContentJobs();
         } catch (error) {
             console.error(error);
             newsStatus.value = (error as Error).message || "등록에 실패했습니다.";
@@ -179,7 +180,7 @@ export function useAdminLogic(
             libraryStatus.value = `${queuedCount}개 접수됨 — status를 "published"로 명시하지 않은 작품은 검토 상태로만 저장되고 공개되지 않아요.`;
             libraryInputText.value = "";
             closeInputSheet();
-            loadLibraryJobs();
+            loadContentJobs();
             loadLibraryItems();
         } catch (error) {
             console.error(error);
@@ -209,54 +210,54 @@ export function useAdminLogic(
         }
     }
 
-    async function loadLibraryJobs(): Promise<void> {
+    async function loadContentJobs(): Promise<void> {
         const token = localStorage.getItem("authToken");
         if (!token) return;
 
         try {
-            const response = await fetch("/api/admin/library/jobs", {
+            const response = await fetch("/api/admin/content-jobs", {
                 headers: { "Authorization": `Bearer ${token}` },
                 cache: "no-store",
             });
             if (!response.ok) throw new Error("등록 작업을 불러오지 못했습니다.");
             const data = await response.json();
-            const previous = libraryJobs.value;
-            libraryJobs.value = data.jobs || [];
-            libraryJobsStatus.value = "";
-            // 작업이 사라졌다는 건 그 작품이 완성됐다는 뜻이다 — 아래 작품
+            const previous = contentJobs.value;
+            contentJobs.value = data.jobs || [];
+            contentJobsStatus.value = "";
+            // 작업이 사라졌다는 건 그 콘텐츠가 완성됐다는 뜻이다 — 아래 작품
             // 목록에 바로 보이도록 같이 새로 고친다.
-            if (previous.length > libraryJobs.value.length) loadLibraryItems();
+            if (previous.length > contentJobs.value.length) loadLibraryItems();
         } catch (error) {
             console.error(error);
-            libraryJobsStatus.value = "등록 작업을 불러오지 못했습니다.";
+            contentJobsStatus.value = "등록 작업을 불러오지 못했습니다.";
         }
     }
 
-    async function sendJobAction(job: LibraryJob, method: "POST" | "DELETE", path: string): Promise<void> {
+    async function sendJobAction(job: ContentJob, method: "POST" | "DELETE", path: string): Promise<void> {
         const token = localStorage.getItem("authToken");
         if (!token) return;
 
-        libraryJobBusyIds.value = new Set(libraryJobBusyIds.value).add(job.id);
+        contentJobBusyIds.value = new Set(contentJobBusyIds.value).add(job.id);
         try {
             const response = await fetch(path, { method, headers: { "Authorization": `Bearer ${token}` } });
             if (!response.ok) throw new Error("요청에 실패했습니다.");
-            await loadLibraryJobs();
+            await loadContentJobs();
         } catch (error) {
             console.error(error);
-            libraryJobsStatus.value = (error as Error).message || "요청에 실패했습니다.";
+            contentJobsStatus.value = (error as Error).message || "요청에 실패했습니다.";
         } finally {
-            const next = new Set(libraryJobBusyIds.value);
+            const next = new Set(contentJobBusyIds.value);
             next.delete(job.id);
-            libraryJobBusyIds.value = next;
+            contentJobBusyIds.value = next;
         }
     }
 
-    function retryLibraryJob(job: LibraryJob): Promise<void> {
-        return sendJobAction(job, "POST", `/api/admin/library/jobs/${job.id}/retry`);
+    function retryContentJob(job: ContentJob): Promise<void> {
+        return sendJobAction(job, "POST", `/api/admin/content-jobs/${job.id}/retry`);
     }
 
-    function dismissLibraryJob(job: LibraryJob): Promise<void> {
-        return sendJobAction(job, "DELETE", `/api/admin/library/jobs/${job.id}`);
+    function dismissContentJob(job: ContentJob): Promise<void> {
+        return sendJobAction(job, "DELETE", `/api/admin/content-jobs/${job.id}`);
     }
 
     function openStatusMenu(item: LibraryAdminItem): void {
@@ -302,7 +303,7 @@ export function useAdminLogic(
 
     return {
         formatMetric, loadMetrics, selectTab, validateJson, submitNews, submitLibrary,
-        loadLibraryItems, loadLibraryJobs, retryLibraryJob, dismissLibraryJob,
+        loadLibraryItems, loadContentJobs, retryContentJob, dismissContentJob,
         openStatusMenu, closeStatusMenu, toggleLibraryStatus,
         openInputSheet, closeInputSheet,
     };

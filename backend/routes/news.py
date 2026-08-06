@@ -14,6 +14,7 @@ from fastapi import APIRouter, BackgroundTasks, Header, HTTPException
 
 from state import _supabase_or_503, require_admin_user, AUDIOBOOK_BUCKET, _object_paths
 from routes.audiobooks import audiobook_items_with_urls
+from routes.content_jobs import queue_jobs, run_jobs, progress_callback_for
 from routes.tts import synthesize_document
 from tts_providers.voice_catalog import DEFAULT_VOICE_KEY
 from push_notifications import send_news_ready_broadcast
@@ -76,9 +77,10 @@ def _parse_news_payload(raw_text: str) -> list[dict]:
     return parsed
 
 
-async def _store_news_item(supabase, admin_user_id: str, item: dict) -> str:
+async def store_news_item(supabase, admin_user_id: str, item: dict, job_id: str) -> str:
+    """content_jobs 처리기가 호출하는 저장 함수(kind='news')."""
     audio_bytes, sentences, _headings = await synthesize_document(
-        item["content"], DEFAULT_VOICE_KEY, "+5%", "+0Hz"
+        item["content"], DEFAULT_VOICE_KEY, "+5%", "+0Hz", progress_callback=progress_callback_for(job_id)
     )
     if not audio_bytes:
         raise RuntimeError("음성 합성 결과가 비어 있습니다.")
@@ -109,8 +111,8 @@ async def _store_news_item(supabase, admin_user_id: str, item: dict) -> str:
         "storage_path": audio_path,
         "duration_seconds": duration_seconds,
         "is_news": True,
-        "news_category": item["category"],
-        "news_source": item["source"],
+        "news_category": item.get("category"),
+        "news_source": item.get("source"),
     }).execute()
     return audiobook_id
 
@@ -145,18 +147,11 @@ def _cleanup_stale_news(supabase) -> int:
     return len(stale_rows)
 
 
-async def _process_news_batch(admin_user_id: str, items: list[dict]) -> None:
+async def _process_news_batch(job_ids: list[str]) -> None:
     """항목마다 TTS 합성이 걸려 전체가 수십 초~수 분 걸릴 수 있다.
     관리자가 응답을 기다리지 않도록 백그라운드로 돌리고, 다 끝나면
     구독한 모든 사용자에게 새 뉴스가 왔다고 한 번만 알린다."""
-    supabase = _supabase_or_503()
-    created = []
-    for item in items:
-        try:
-            audiobook_id = await _store_news_item(supabase, admin_user_id, item)
-            created.append({"id": audiobook_id, "title": item["title"]})
-        except Exception:
-            logger.exception("뉴스 항목 등록 실패 title=%s", item["title"])
+    created = await run_jobs(job_ids)
 
     if created:
         try:
@@ -165,7 +160,7 @@ async def _process_news_batch(admin_user_id: str, items: list[dict]) -> None:
             logger.exception("경제 뉴스 등록 완료 알림 발송 실패")
 
     try:
-        _cleanup_stale_news(supabase)
+        _cleanup_stale_news(_supabase_or_503())
     except Exception:
         logger.exception("오래된 뉴스 정리 실패")
 
@@ -175,8 +170,9 @@ async def add_news(payload: dict, background_tasks: BackgroundTasks, authorizati
     admin_user_id = require_admin_user(authorization)
     items = _parse_news_payload(payload.get("text") or "")[:NEWS_LIST_LIMIT]
 
-    background_tasks.add_task(_process_news_batch, admin_user_id, items)
-    return {"queued": len(items)}
+    job_ids = queue_jobs(_supabase_or_503(), "news", admin_user_id, items)
+    background_tasks.add_task(_process_news_batch, job_ids)
+    return {"queued": len(job_ids)}
 
 
 @router.get("/api/news")

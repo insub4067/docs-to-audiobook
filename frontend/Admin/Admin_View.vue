@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted } from "vue";
-import { useAdminState, type LibraryJob } from "./Admin_State.vue";
+import { useAdminState, type ContentJob } from "./Admin_State.vue";
 import { useAdminLogic } from "./Admin_Logic.vue";
 import ThemeSheetView from "../Sheet/ThemeSheet_View.vue";
 import { useThemeState } from "../Theme/Theme_State.vue";
@@ -10,18 +10,18 @@ const {
     status, contentVisible, metrics, activeAdminTab, newsInputText, newsStatus, newsSubmitting,
     libraryInputText, libraryStatus, librarySubmitting,
     libraryItems, libraryItemsStatus, libraryTogglingIds, statusMenuItem, activeInputSheet,
-    libraryJobs, libraryJobsStatus, libraryJobBusyIds,
+    contentJobs, contentJobsStatus, contentJobBusyIds,
 } = useAdminState();
 const {
     formatMetric, loadMetrics, selectTab, validateJson, submitNews, submitLibrary,
-    loadLibraryItems, loadLibraryJobs, retryLibraryJob, dismissLibraryJob,
+    loadLibraryItems, loadContentJobs, retryContentJob, dismissContentJob,
     openStatusMenu, closeStatusMenu, toggleLibraryStatus,
     openInputSheet, closeInputSheet,
 } = useAdminLogic({
     status, contentVisible, metrics, activeAdminTab, newsInputText, newsStatus, newsSubmitting,
     libraryInputText, libraryStatus, librarySubmitting,
     libraryItems, libraryItemsStatus, libraryTogglingIds, statusMenuItem, activeInputSheet,
-    libraryJobs, libraryJobsStatus, libraryJobBusyIds,
+    contentJobs, contentJobsStatus, contentJobBusyIds,
 });
 const themeState = useThemeState();
 const themeLogic = useThemeLogic(themeState);
@@ -40,7 +40,7 @@ const librarySubmitLabel = computed(() => submitLabel(libraryInputText.value, li
 const newsCanSubmit = computed(() => !newsSubmitting.value && !!newsInputText.value.trim() && newsValidation.value.errors.length === 0);
 const libraryCanSubmit = computed(() => !librarySubmitting.value && !!libraryInputText.value.trim() && libraryValidation.value.errors.length === 0);
 
-function jobStatusLine(job: LibraryJob): string {
+function jobStatusLine(job: ContentJob): string {
     if (job.status === "error") return `실패 · ${job.error || "원인을 알 수 없습니다."}`;
     if (job.status === "queued") return "등록 대기";
     return job.progress === null ? "음성 생성 중" : `음성 생성 중 · ${job.progress}%`;
@@ -48,16 +48,16 @@ function jobStatusLine(job: LibraryJob): string {
 
 // 진행 중인 작업이 하나라도 있는 동안만 폴링한다. 실패로 굳은 작업만
 // 남으면 더 볼 게 없으므로 멈춘다(관리자가 다시 시도를 누르면 재개된다).
-const hasRunningJobs = computed(() => libraryJobs.value.some((job) => job.status !== "error"));
+const hasRunningJobs = computed(() => contentJobs.value.some((job) => job.status !== "error"));
 let jobPollTimer: ReturnType<typeof setInterval> | null = null;
 
 onMounted(() => {
     loadMetrics();
     loadLibraryItems();
-    loadLibraryJobs();
+    loadContentJobs();
     jobPollTimer = setInterval(() => {
-        if (hasRunningJobs.value) loadLibraryJobs();
-    }, 5000);
+        if (hasRunningJobs.value) loadContentJobs();
+    }, 3000);
 });
 
 onUnmounted(() => {
@@ -161,11 +161,11 @@ onUnmounted(() => {
                     <p class="section-kicker">LIBRARY · 등록 진행</p>
                     <h2 id="libraryJobsHeading">등록 작업</h2>
                 </div>
-                <p class="dashboard-subtitle" v-if="libraryJobsStatus">{{ libraryJobsStatus }}</p>
-                <ul class="library-review-list" v-if="libraryJobs.length">
-                    <li v-for="job in libraryJobs" :key="job.id" class="library-review-row">
+                <p class="dashboard-subtitle" v-if="contentJobsStatus">{{ contentJobsStatus }}</p>
+                <ul class="library-review-list" v-if="contentJobs.length">
+                    <li v-for="job in contentJobs" :key="job.id" class="library-review-row">
                         <div class="library-review-info">
-                            <strong>{{ job.title }}</strong>
+                            <strong><span class="content-job-kind">{{ job.kind === "news" ? "뉴스" : "작품" }}</span>{{ job.title }}</strong>
                             <span :class="{ 'library-job-error': job.status === 'error' }">{{ jobStatusLine(job) }}</span>
                         </div>
                         <div class="library-review-actions">
@@ -173,20 +173,20 @@ onUnmounted(() => {
                                 v-if="job.status === 'error'"
                                 type="button"
                                 class="library-job-btn"
-                                :disabled="libraryJobBusyIds.has(job.id)"
-                                @click="retryLibraryJob(job)"
+                                :disabled="contentJobBusyIds.has(job.id)"
+                                @click="retryContentJob(job)"
                             >다시 시도</button>
                             <button
                                 v-if="job.status === 'error'"
                                 type="button"
                                 class="library-job-btn"
-                                :disabled="libraryJobBusyIds.has(job.id)"
-                                @click="dismissLibraryJob(job)"
+                                :disabled="contentJobBusyIds.has(job.id)"
+                                @click="dismissContentJob(job)"
                             >삭제</button>
                         </div>
                     </li>
                 </ul>
-                <p class="dashboard-subtitle" v-else-if="!libraryJobsStatus">진행 중이거나 실패한 등록 작업이 없습니다.</p>
+                <p class="dashboard-subtitle" v-else-if="!contentJobsStatus">진행 중이거나 실패한 등록 작업이 없습니다.</p>
             </section>
 
             <section v-show="activeAdminTab === 'publishing'" class="metric-section" aria-labelledby="libraryReviewHeading">
