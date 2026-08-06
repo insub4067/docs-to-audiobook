@@ -223,3 +223,30 @@ def test_reader_sentence_padding_closes_gaps_between_wrapped_lines():
     assert "'--reader-glyph-height'" in reader_view
     # 명조/고딕의 실측값이 다르므로 하나로 고정하면 한쪽에 틈이나 겹침이 남는다.
     assert "1.46em" in reader_view and "1.52em" in reader_view
+
+def test_progress_bar_touch_area_is_larger_than_the_visible_line():
+    """진행 바의 실제 터치 영역이 보이는 선(4px)보다 넓은지 확인한다.
+
+    손가락으로 4px를 정확히 누를 수는 없다. 보이는 두께는 그대로 두고
+    ::before로 위아래만 넓힌다. 12px보다 더 넓히면 바로 위 본문 문장의
+    터치를 뺏는다(실측: -14px 지점이 이미 .reader-sentence).
+    """
+    css = STYLE_CSS.read_text(encoding="utf-8")
+
+    assert ".player-progress-bar::before" in css
+    hit_area = css.split(".player-progress-bar::before {", 1)[1].split("}", 1)[0]
+    assert "position: absolute" in hit_area
+    assert "inset:" in hit_area
+
+def test_light_reader_theme_is_not_pure_white():
+    """라이트 테마 읽기 배경이 순백이 아닌지 확인한다.
+
+    순백(#fff)은 장시간 읽기에 눈이 부시다. 미색으로 낮춰도 본문 대비는
+    16:1로 WCAG AAA를 크게 넘는다.
+    """
+    css = STYLE_CSS.read_text(encoding="utf-8")
+    light_theme = css.split('[data-app-theme="light"] .reader-container', 1)[1].split("}", 1)[0]
+
+    assert "--reader-bg:" in light_theme
+    background = light_theme.split("--reader-bg:", 1)[1].split(";", 1)[0].strip().lower()
+    assert background not in ("#fff", "#ffffff", "white")

@@ -2058,8 +2058,10 @@ input[type="range"]::-webkit-slider-thumb:active {
 
 :root[data-app-theme="light"] .reader-container,
 :root[data-app-theme="light"] .theme-preview {
-    --reader-bg: #ffffff;
-    --reader-surface: rgba(255, 255, 255, 0.88);
+    /* 순백(#fff)은 장시간 읽기에 눈이 부시다. 웜보다는 확실히 밝게 두되
+       아주 옅은 미색을 섞어 눈부심만 덜어낸다(본문 대비는 17:1로 유지). */
+    --reader-bg: #F8F6F1;
+    --reader-surface: rgba(248, 246, 241, 0.88);
     --reader-text: #1a1a1a;
     --reader-text-muted: #6b6b6b;
     --reader-accent: #8a6d3b;
@@ -2688,6 +2690,15 @@ input[type="range"]::-webkit-slider-thumb:active {
     position: relative;
     cursor: pointer;
     margin: -8px -20px 10px;
+}
+
+/* 보이는 선은 4px지만 손가락으로 4px를 정확히 누를 수는 없다. 실제로
+   누를 수 있는 영역만 위아래로 넓힌다(총 28px). 아래쪽은 재생 시간
+   텍스트와 겹치는데, 그쪽은 누를 일이 없어 문제되지 않는다. */
+.player-progress-bar::before {
+    content: "";
+    position: absolute;
+    inset: -12px 0;
 }
 
 .player-progress-fill {
