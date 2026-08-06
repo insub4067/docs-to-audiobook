@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useAdminState } from "./Admin_State.vue";
 import { useAdminLogic } from "./Admin_Logic.vue";
 import ThemeSheetView from "../Sheet/ThemeSheet_View.vue";
@@ -37,9 +37,44 @@ const librarySubmitLabel = computed(() => submitLabel(libraryInputText.value, li
 const newsCanSubmit = computed(() => !newsSubmitting.value && !!newsInputText.value.trim() && newsValidation.value.errors.length === 0);
 const libraryCanSubmit = computed(() => !librarySubmitting.value && !!libraryInputText.value.trim() && libraryValidation.value.errors.length === 0);
 
+// ⚠️ 임시 진단용. /admin?vpdebug 로 접속했을 때만 화면에 실측값을 띄운다.
+// 실기기(iOS)에서만 재현되는 시트 하단 여백 문제의 원인을 좁히기 위한 것으로,
+// 원인을 찾으면 이 블록은 통째로 제거한다.
+const vpDebug = ref("");
+const showVpDebug = typeof location !== "undefined" && location.search.includes("vpdebug");
+
+function collectVpDebug(): void {
+    const probe = document.createElement("div");
+    probe.style.cssText = "position:fixed;bottom:0;height:env(safe-area-inset-bottom);width:1px;";
+    document.body.appendChild(probe);
+    const safeBottom = probe.getBoundingClientRect().height;
+    probe.remove();
+
+    const backdrop = document.querySelector(".action-sheet-backdrop.show");
+    const card = backdrop?.querySelector(".action-sheet");
+    const b = backdrop?.getBoundingClientRect();
+    const c = card?.getBoundingClientRect();
+    const vv = window.visualViewport;
+
+    vpDebug.value = [
+        `standalone=${(navigator as any).standalone} innerH=${window.innerHeight}`,
+        `docClientH=${document.documentElement.clientHeight} screenH=${screen.height}`,
+        `visualVP h=${vv?.height?.toFixed(1)} offTop=${vv?.offsetTop?.toFixed(1)} scale=${vv?.scale}`,
+        `safeAreaBottom=${safeBottom}`,
+        `backdrop top=${b?.top?.toFixed(1)} bottom=${b?.bottom?.toFixed(1)} h=${b?.height?.toFixed(1)}`,
+        `card top=${c?.top?.toFixed(1)} bottom=${c?.bottom?.toFixed(1)} h=${c?.height?.toFixed(1)}`,
+        `card gapFromScreenBottom=${c ? (window.innerHeight - c.bottom).toFixed(1) : "-"}`,
+    ].join("\n");
+}
+
 onMounted(() => {
     loadMetrics();
     loadLibraryItems();
+    if (showVpDebug) {
+        setInterval(collectVpDebug, 500);
+        window.visualViewport?.addEventListener("resize", collectVpDebug);
+        window.visualViewport?.addEventListener("scroll", collectVpDebug);
+    }
 });
 </script>
 
@@ -258,4 +293,12 @@ onMounted(() => {
             <button type="button" class="action-sheet-btn action-sheet-btn-cancel" @click="closeInputSheet">닫기</button>
         </div>
     </div>
+
+    <!-- ⚠️ 임시 진단 오버레이 (/admin?vpdebug). 원인 확인 후 제거한다. -->
+    <pre
+        v-if="showVpDebug"
+        style="position:fixed;top:0;left:0;right:0;z-index:9999;margin:0;padding:6px 8px;
+               background:rgba(0,0,0,0.85);color:#0f0;font:600 10px/1.35 ui-monospace,monospace;
+               white-space:pre-wrap;pointer-events:none;"
+    >{{ vpDebug }}</pre>
 </template>
