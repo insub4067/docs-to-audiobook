@@ -17,12 +17,16 @@ export interface LibraryItem {
     sentences_url: string | null;
 }
 
+export type LibrarySortKey = "recent" | "duration-asc" | "duration-desc" | "listening";
+
 export interface LibraryState {
     items: Ref<LibraryItem[]>;
     loaded: Ref<boolean>;
     savedIds: Ref<Set<string>>;
     savedItems: Ref<LibraryItem[]>;
     activeCategory: Ref<string | null>;
+    searchQuery: Ref<string>;
+    sortKey: Ref<LibrarySortKey>;
     detailItem: Ref<LibraryItem | null>;
     isDetailOpen: Ref<boolean>;
     /** audiobook_id → 마지막 재생 위치(초). 목록 카드의 진행률에 쓴다. */
@@ -35,6 +39,8 @@ const state: LibraryState = {
     savedIds: ref(new Set()),
     savedItems: ref([]),
     activeCategory: ref(null),
+    searchQuery: ref(""),
+    sortKey: ref("recent"),
     detailItem: ref(null),
     isDetailOpen: ref(false),
     playbackSeconds: ref({}),

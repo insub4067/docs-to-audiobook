@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, watch } from "vue";
 import type { ReaderLogic } from "../Reader/Reader_Logic.vue";
-import { useLibraryState, type LibraryItem } from "./Library_State.vue";
+import { useLibraryState, type LibraryItem, type LibrarySortKey } from "./Library_State.vue";
 import { useLibraryLogic } from "./Library_Logic.vue";
 
 const props = defineProps<{ logic: ReaderLogic; hasMiniPlayer?: boolean; active?: boolean; readerOpen?: boolean }>();
@@ -14,9 +14,46 @@ const categories = computed(() => {
     return [...set];
 });
 
+/** 제목만으로는 원하는 판본을 찾기 어렵다 — 번역자·출처·설명까지 훑는다. */
+function matchesQuery(item: LibraryItem, query: string): boolean {
+    const haystack = [
+        item.title, item.library_category, item.library_edition,
+        item.library_translator, item.library_source, item.library_description,
+    ].filter(Boolean).join(" ").toLowerCase();
+    return query.split(/\s+/).every((word) => haystack.includes(word));
+}
+
+const SORT_LABELS: Record<LibrarySortKey, string> = {
+    recent: "최근 추가",
+    listening: "듣는 중",
+    "duration-asc": "짧은 작품",
+    "duration-desc": "긴 작품",
+};
+const SORT_KEYS = Object.keys(SORT_LABELS) as LibrarySortKey[];
+
 const filteredItems = computed(() => {
-    if (!state.activeCategory.value) return state.items.value;
-    return state.items.value.filter((item) => item.library_category === state.activeCategory.value);
+    let items = state.items.value;
+    if (state.activeCategory.value) {
+        items = items.filter((item) => item.library_category === state.activeCategory.value);
+    }
+    const query = state.searchQuery.value.trim().toLowerCase();
+    if (query) items = items.filter((item) => matchesQuery(item, query));
+
+    // 원본 배열을 정렬하면 서버가 준 순서를 잃는다.
+    const sorted = [...items];
+    const key = state.sortKey.value;
+    if (key === "duration-asc") sorted.sort((a, b) => (a.duration_seconds || 0) - (b.duration_seconds || 0));
+    else if (key === "duration-desc") sorted.sort((a, b) => (b.duration_seconds || 0) - (a.duration_seconds || 0));
+    else if (key === "listening") {
+        // 듣던 작품을 위로. 다 들은 것은 아래로 내린다.
+        const rank = (item: LibraryItem) => {
+            const progress = libraryLogic.getProgress(item);
+            if (!progress) return 1;
+            return progress.isFinished ? 2 : 0;
+        };
+        sorted.sort((a, b) => rank(a) - rank(b));
+    }
+    return sorted;
 });
 
 function metaLine(item: LibraryItem): string {
@@ -78,6 +115,28 @@ watch(() => props.readerOpen, (open, wasOpen) => {
             </div>
             <p class="action-sheet-hint" style="padding: 0 0 16px;">무료로 듣는 고전과 경전</p>
 
+            <div class="library-search">
+                <i data-lucide="search" class="library-search-icon"></i>
+                <input
+                    v-model="state.searchQuery.value"
+                    type="search"
+                    class="library-search-input"
+                    placeholder="작품·번역자·출처 검색"
+                    aria-label="라이브러리 검색"
+                >
+            </div>
+
+            <div class="library-category-chips">
+                <button
+                    v-for="key in SORT_KEYS"
+                    :key="key"
+                    type="button"
+                    class="library-chip library-sort-chip"
+                    :class="{ active: state.sortKey.value === key }"
+                    @click="state.sortKey.value = key"
+                >{{ SORT_LABELS[key] }}</button>
+            </div>
+
             <div v-if="categories.length > 1" class="library-category-chips">
                 <button
                     type="button"
@@ -97,8 +156,14 @@ watch(() => props.readerOpen, (open, wasOpen) => {
 
             <div v-if="state.loaded.value && filteredItems.length === 0" class="library-empty">
                 <i data-lucide="book-open"></i>
-                <p>아직 등록된 작품이 없어요.</p>
-                <span>곧 새로운 작품이 추가될 예정이에요.</span>
+                <template v-if="state.searchQuery.value.trim()">
+                    <p>검색 결과가 없어요.</p>
+                    <span>다른 낱말로 찾아보세요.</span>
+                </template>
+                <template v-else>
+                    <p>아직 등록된 작품이 없어요.</p>
+                    <span>곧 새로운 작품이 추가될 예정이에요.</span>
+                </template>
             </div>
 
             <div class="audio-list">

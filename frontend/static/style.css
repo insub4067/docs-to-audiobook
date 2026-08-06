@@ -1981,6 +1981,45 @@ input[type="range"]::-webkit-slider-thumb:active {
     color: #fff;
 }
 
+/* 정렬 칩은 카테고리 칩과 나란히 놓이므로 한눈에 구분되게 조금 작게. */
+.library-sort-chip {
+    padding: 6px 13px;
+    font-size: 0.82rem;
+}
+
+.library-search {
+    position: relative;
+    margin-bottom: 12px;
+}
+
+.library-search-icon {
+    position: absolute;
+    top: 50%;
+    left: 12px;
+    width: 17px;
+    height: 17px;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    pointer-events: none;
+}
+
+.library-search-input {
+    width: 100%;
+    /* iOS는 글자가 16px보다 작으면 입력할 때 화면을 확대해 버린다. */
+    padding: 11px 14px 11px 37px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    color: var(--text-color);
+    background: var(--card-bg-solid, transparent);
+    font-family: inherit;
+    font-size: 16px;
+}
+
+.library-search-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
 /* 라이브러리 작품 상세는 리더처럼 전체화면으로 뜨지만(판본/목차 등
    내용이 많아 시트로는 좁음) 리더보다 아래 레이어에 둔다 — 상세에서
    재생을 누르면 리더가 그 위로 열려야 하므로. */
