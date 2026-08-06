@@ -45,13 +45,27 @@ const vpDebug = ref("");
 // 바로 그 PWA에서만 재현된다. 그래서 잠시 조건 없이 켜 둔다 — 관리자만
 // 보는 화면이라 영향 범위가 좁다. 원인 확인 후 이 블록은 통째로 제거한다.
 const showVpDebug = true;
+// 입력 시트에서만 뷰포트가 852→793으로 줄어드는데, 두 시트의 유일한 차이가
+// textarea다. 키보드가 한 번이라도 떴다가 닫힌 뒤 iOS가 레이아웃 뷰포트를
+// 복구하지 않는 것인지 확인하려고, 입력 요소에 포커스가 간 적이 있는지
+// 기록한다(탭하기 전/후 값을 비교하기 위해).
+const everFocusedInput = ref(false);
+
+function measureCss(height: string): number {
+    const probe = document.createElement("div");
+    probe.style.cssText = `position:fixed;top:0;left:0;width:1px;visibility:hidden;height:${height};`;
+    document.body.appendChild(probe);
+    const h = probe.getBoundingClientRect().height;
+    probe.remove();
+    return Math.round(h * 10) / 10;
+}
 
 function collectVpDebug(): void {
-    const probe = document.createElement("div");
-    probe.style.cssText = "position:fixed;bottom:0;height:env(safe-area-inset-bottom);width:1px;";
-    document.body.appendChild(probe);
-    const safeBottom = probe.getBoundingClientRect().height;
-    probe.remove();
+    const safeBottom = measureCss("env(safe-area-inset-bottom)");
+    // 웹뷰(innerHeight)가 화면보다 짧을 때, 화면 끝까지 닿는 단위가 있는지
+    // 확인한다. 852(screen.height)와 같아지는 단위를 찾으면 그걸로 시트
+    // 백드롭 높이를 잡을 수 있다.
+    const units = `vh=${measureCss("100vh")} dvh=${measureCss("100dvh")} svh=${measureCss("100svh")} lvh=${measureCss("100lvh")}`;
 
     const backdrop = document.querySelector(".action-sheet-backdrop.show");
     const card = backdrop?.querySelector(".action-sheet");
@@ -67,6 +81,8 @@ function collectVpDebug(): void {
         `backdrop top=${b?.top?.toFixed(1)} bottom=${b?.bottom?.toFixed(1)} h=${b?.height?.toFixed(1)}`,
         `card top=${c?.top?.toFixed(1)} bottom=${c?.bottom?.toFixed(1)} h=${c?.height?.toFixed(1)}`,
         `card gapFromScreenBottom=${c ? (window.innerHeight - c.bottom).toFixed(1) : "-"}`,
+        units,
+        `focused=${document.activeElement?.tagName} everFocused=${everFocusedInput.value}`,
     ].join("\n");
 }
 
@@ -74,6 +90,10 @@ onMounted(() => {
     loadMetrics();
     loadLibraryItems();
     if (showVpDebug) {
+        document.addEventListener("focusin", (e) => {
+            const tag = (e.target as HTMLElement)?.tagName;
+            if (tag === "TEXTAREA" || tag === "INPUT") everFocusedInput.value = true;
+        });
         setInterval(collectVpDebug, 500);
         window.visualViewport?.addEventListener("resize", collectVpDebug);
         window.visualViewport?.addEventListener("scroll", collectVpDebug);
