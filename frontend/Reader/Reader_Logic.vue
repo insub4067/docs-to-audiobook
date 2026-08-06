@@ -5,7 +5,7 @@ import type { RepeatMode } from "./ReaderControls/ReaderControls_State.vue";
 import type { AudioListLogic } from "../components/Library/AudioList_Logic.vue";
 import { useWebSpeech } from "./webSpeech";
 import { buildDisplayItems, findActiveSentenceIndex, type ReaderSentence } from "./sentenceDisplay";
-import { saveAudiobookToDB, updateAudiobookPosition, type AudiobookRecord } from "../services/indexedDb";
+import { saveAudiobookToDB, updateAudiobookPosition, saveAudiobookDuration, type AudiobookRecord } from "../services/indexedDb";
 import { getAudiobookDisplayTitle, formatTime, getReaderScrollTarget } from "../utils/format";
 import { useToastLogic, setReaderOpenForToast } from "../components/Toast/Toast_Logic.vue";
 import { useToastState } from "../components/Toast/Toast_State.vue";
@@ -223,6 +223,11 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
             if (el.duration && !isNaN(el.duration)) {
                 state.durationLabel.value = formatTime(el.duration);
                 state.durationSeconds.value = el.duration;
+                // 목록에서 진행률을 보여주려면 총 길이가 필요한데, 이걸 알려면
+                // 오디오를 디코딩해야 한다. 어차피 여기서 알게 되므로 한 번만
+                // 저장해 두고 목록은 그 값을 읽어 쓴다.
+                audio.durationSeconds = audio.durationSeconds || el.duration;
+                saveAudiobookDuration(audio.id, el.duration).catch((error) => console.error("재생시간 저장 실패:", error));
             }
             if (audio.lastPosition && audio.lastPosition > 0) el.currentTime = audio.lastPosition;
             el.playbackRate = readerControls.getPlaybackSettings().playbackSpeed;
@@ -513,6 +518,10 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         lastPositionSaveSecond = -1;
         state.isOpen.value = false;
         setReaderOpenForToast(false);
+        // 목록이 들고 있는 레코드는 리더가 쓰는 것과 다른 사본이다
+        // (openItem이 IndexedDB에서 새로 읽어 넘긴다). 방금 들은 만큼과
+        // 이번에 알아낸 총 길이가 목록 진행률에 반영되도록 다시 읽는다.
+        audioListLogic.refresh().catch((error) => console.error("목록 갱신 실패:", error));
     }
 
     // 미니 플레이어를 눌러 같은 재생 세션으로 되돌아간다 — open()과 달리

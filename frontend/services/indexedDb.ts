@@ -30,6 +30,9 @@ export interface AudiobookRecord {
     shareId?: string;
     shareExpiry?: number;
     lastPosition?: number;
+    /** 총 재생시간(초). 리더가 메타데이터를 읽는 순간 채운다 —
+     *  오디오를 디코딩해야 알 수 있어 목록에서 매번 계산할 수 없다. */
+    durationSeconds?: number;
     playbackSpeed?: number;
     repeatMode?: string;
     playbackUpdatedAt?: number;
@@ -141,6 +144,25 @@ export function updateAudiobookPosition(id: string, lastPosition: number): Promi
                 store.put(data);
             }
             resolve(data);
+        };
+        request.onerror = (e) => reject((e.target as IDBRequest).error);
+    });
+}
+
+/** 총 재생시간을 한 번만 기록한다. 이미 있으면 건드리지 않는다. */
+export function saveAudiobookDuration(id: string, durationSeconds: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const transaction = requireDb().transaction(["audiobooks"], "readwrite");
+        const store = transaction.objectStore("audiobooks");
+        const request = store.get(id);
+
+        request.onsuccess = (e) => {
+            const data = (e.target as IDBRequest).result;
+            if (data && !data.durationSeconds) {
+                data.durationSeconds = durationSeconds;
+                store.put(data);
+            }
+            resolve();
         };
         request.onerror = (e) => reject((e.target as IDBRequest).error);
     });

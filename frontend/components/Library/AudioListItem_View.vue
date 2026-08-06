@@ -28,9 +28,26 @@ const hasSentences = !!(props.audio.sentences && props.audio.sentences.length > 
 const needsDownload = !props.audio.audioData && !!props.audio.audioUrl;
 const isOpenable = hasSentences || needsDownload;
 
-// 목록에서 파일을 구분하기 쉽도록 생성 날짜를 짧게 보여준다. 재생 시간은
-// 오디오 데이터를 실제로 디코딩해야 알 수 있어(저장돼 있지 않음) 목록
-// 전체에서 매번 계산하기엔 비용이 커 넣지 않았다.
+// 한 번이라도 열어 본 오디오북은 리더가 총 길이를 저장해 둔다. 그 전에는
+// 진행률을 계산할 수 없으므로(길이를 알려면 오디오를 디코딩해야 한다)
+// 아무것도 보여주지 않는다 — 서점 카드와 같은 규칙이다.
+const FINISHED_RATIO = 0.97;
+
+const progress = computed(() => {
+    const seconds = props.audio.lastPosition;
+    const total = props.audio.durationSeconds;
+    if (!seconds || !total) return null;
+
+    const ratio = Math.min(seconds / total, 1);
+    const remainingMinutes = Math.round((total - seconds) / 60);
+    return {
+        percent: Math.round(ratio * 100),
+        isFinished: ratio >= FINISHED_RATIO,
+        remainingLabel: remainingMinutes > 0 ? `약 ${remainingMinutes}분 남음` : "1분 미만 남음",
+    };
+});
+
+// 목록에서 파일을 구분하기 쉽도록 생성 날짜를 짧게 보여준다.
 const subtitleLabel = computed(() => {
     if (!props.audio.timestamp) return "";
     const date = new Date(props.audio.timestamp);
@@ -142,6 +159,17 @@ onUnmounted(() => document.removeEventListener("touchstart", onDocumentTouchStar
                 <div class="audio-title-col">
                     <span class="audio-title" :title="getAudiobookDisplayTitle(audio.title)">{{ getAudiobookDisplayTitle(audio.title) }}</span>
                     <span v-if="subtitleLabel" class="audio-subtitle">{{ subtitleLabel }}</span>
+
+                    <!-- 행을 누르면 마지막 위치에서 이어지므로 별도 버튼은 두지 않는다. -->
+                    <template v-if="progress">
+                        <span v-if="progress.isFinished" class="library-progress-done">모두 들음</span>
+                        <div v-else class="library-progress">
+                            <div class="library-progress-track">
+                                <div class="library-progress-fill" :style="{ width: progress.percent + '%' }"></div>
+                            </div>
+                            <span class="audio-subtitle">{{ progress.percent }}% · {{ progress.remainingLabel }}</span>
+                        </div>
+                    </template>
                 </div>
                 <span v-if="audio.isDefault" class="default-badge" title="기본 제공 오디오북">기본 제공</span>
                 <svg v-if="audio.isBookmarked" class="bookmark-star" width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none" title="즐겨찾기"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
