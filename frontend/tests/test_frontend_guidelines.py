@@ -173,18 +173,19 @@ def test_admin_metric_cards_link_to_dedicated_detail_pages():
     assert 'function renderPeople(people)' in detail_source
     assert 'fetch("/api/admin/metrics"' in detail_source
 
-def test_admin_html_declares_standalone_web_app_like_the_main_app():
-    # admin.html은 app.html과 별개의 문서(별도 Vite 진입점)라, 메인 앱
-    # 안에서 "관리자 페이지" 링크를 눌러 이동하면 같은 standalone PWA
-    # 세션이 이어지는 게 아니라 완전히 새 문서가 로드된다. 이 문서가
-    # 스스로 "나도 standalone web app"이라고 선언하지 않으면 iOS가 일반
-    # 웹뷰로 취급해 하단 safe-area 계산이 어긋난다(입력 시트 닫기 버튼이
-    # 하단에 붙지 않고 떠 보이는 문제로 실제 확인됨). app.html에 있는
-    # 이 메타 태그들이 admin.html에서 빠지면 다시 조용히 재발한다.
-    admin_html = ADMIN_HTML.read_text(encoding="utf-8")
-    app_html = APP_HTML.read_text(encoding="utf-8")
+def test_admin_html_is_standalone_capable_but_not_translucent_status_bar():
+    """admin.html은 standalone을 선언하되 black-translucent는 쓰지 않는다.
 
-    for tag in ('name="apple-mobile-web-app-capable"', 'name="apple-mobile-web-app-status-bar-style"'):
-        assert tag in app_html, f"app.html 기준선에 {tag}가 없다 — 테스트 전제가 깨짐"
-        assert tag in admin_html, f"admin.html에 {tag}가 빠졌다"
+    실기기 계측으로 확인한 내용이다. status-bar-style을 black-translucent로
+    두면 iOS가 웹뷰를 화면 맨 위(y=0)에 붙이면서도 높이는 상태바를 뺀
+    793pt(852-59)로 잡는다. 그러면 화면 아래 59pt가 웹뷰 바깥이 되어,
+    bottom:0으로 붙인 시트 아래에 웹뷰가 그릴 수 없는 띠가 남는다
+    (innerHeight=793 / screen.height=852 / 카드 실제 렌더 끝 793으로 실측).
+    translucent를 빼면 웹뷰가 상태바 아래에서 시작해 화면 바닥과 맞는다.
+    """
+    admin_html = ADMIN_HTML.read_text(encoding="utf-8")
+
+    assert 'name="apple-mobile-web-app-capable"' in admin_html
     assert 'viewport-fit=cover' in admin_html
+    # 주석에도 이 단어가 나오므로 실제 meta 태그만 본다.
+    assert not re.search(r'<meta[^>]*apple-mobile-web-app-status-bar-style', admin_html)
