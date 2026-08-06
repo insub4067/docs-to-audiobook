@@ -162,10 +162,15 @@ export function useNotificationsLogic(state: NotificationsState): NotificationsL
                 if (!syncResult?.ok || currentUserId() !== userId) return;
                 forgetBackgroundJob(jobId, userId);
                 (window as any).__removeBackgroundJobLoading?.(jobId);
+                // 백그라운드 생성은 즉시 응답 후 종료되므로 Generation_Logic의
+                // generation_completed를 타지 않는다. 여기서 찍지 않으면
+                // generation_started만 쌓여 생성 성공률이 실제보다 낮게 보인다.
+                authLogic.trackProductEvent("generation_completed");
                 showToast("오디오북 생성이 완료되었습니다.", "success");
             } else if (job.status === "error") {
                 forgetBackgroundJob(jobId, userId);
                 (window as any).__removeBackgroundJobLoading?.(jobId);
+                authLogic.trackProductEvent("generation_failed");
                 showToast(job.error || "오디오북 생성에 실패했습니다.", "error");
             }
         } catch {

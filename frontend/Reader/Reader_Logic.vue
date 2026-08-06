@@ -71,6 +71,16 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
     let lastPositionSaveSecond = -1;
     let lastPlaybackSyncTime = 0;
     let lastToggleTime = 0;
+    // "첫 재생" 지표(playback_started)는 콘텐츠를 열어 재생을 시작한 횟수다.
+    // 일시정지 후 다시 누른 것은 새로운 시작이 아니므로, 리더를 열 때마다
+    // 한 번만 찍는다.
+    let playbackStartTracked = false;
+
+    function trackPlaybackStartOnce(): void {
+        if (playbackStartTracked) return;
+        playbackStartTracked = true;
+        authLogic.trackProductEvent("playback_started");
+    }
     // 우리가 직접 부른 scrollTo(smooth)가 끝나기 전에 scroll 이벤트가
     // 튀어서 "사용자가 스크롤해서 벗어났다"로 오인하지 않도록 잠깐 무시한다.
     let suppressScrollAwayUntil = 0;
@@ -187,6 +197,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         sentences = (audio.sentences || []) as ReaderSentence[];
 
         lastPositionSaveSecond = -1;
+        playbackStartTracked = false;
         readerControls.applyPlaybackSettings({ playbackSpeed: audio.playbackSpeed, repeatMode: audio.repeatMode });
         state.title.value = getAudiobookDisplayTitle(audio.title);
         state.isPlaying.value = false;
@@ -215,7 +226,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
                 state.isPlaying.value = true;
             }
         };
-        el.onplay = () => { state.isPlaying.value = true; };
+        el.onplay = () => { state.isPlaying.value = true; trackPlaybackStartOnce(); };
         el.onpause = () => { state.isPlaying.value = false; };
         // 반복 모드 처리. resetAudioHandlers()가 onended를 지우므로 매번 다시
         // 걸어야 한다 — 이걸 빠뜨려서 "전체 문서 반복"을 골라도 재생이 그냥
@@ -266,6 +277,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         sharedAudiobookId = audiobookId;
         state.currentAudioObject.value = null;
         sentences = sharedSentences;
+        playbackStartTracked = false;
 
         state.title.value = getAudiobookDisplayTitle(title);
         state.isPlaying.value = false;
@@ -292,7 +304,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
             el.play().catch((error) => console.log("Autoplay blocked:", error));
             state.isPlaying.value = true;
         };
-        el.onplay = () => { state.isPlaying.value = true; };
+        el.onplay = () => { state.isPlaying.value = true; trackPlaybackStartOnce(); };
         el.onpause = () => { state.isPlaying.value = false; };
         el.ontimeupdate = () => {
             const currentSec = el.currentTime;
