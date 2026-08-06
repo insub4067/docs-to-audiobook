@@ -4,6 +4,11 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  # push 이벤트로 실행이 생성되지 않는 일이 있었다(설정은 정상인데 4번
+  # 연속 무시됨). 그럴 때 손으로라도 테스트를 돌릴 수 있게 열어둔다.
+  # 배포는 이 워크플로가 아니라 Fly의 GitHub 연동이 별도로 하므로,
+  # 수동 실행에서는 테스트만 돈다(deploy 잡의 event_name 조건 참고).
+  workflow_dispatch:
 
 jobs:
   # 🧪 병렬 작업 1: 테스트 (배포와 무관하게 돌아감)
