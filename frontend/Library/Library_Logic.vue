@@ -5,9 +5,18 @@ import { useAuthLogic } from "../Auth/Auth_Logic.vue";
 import { useToastLogic } from "../components/Toast/Toast_Logic.vue";
 import { useToastState } from "../components/Toast/Toast_State.vue";
 
+/** 목록 카드에 보여줄 청취 상태. 재생 이력이 없으면 null. */
+export interface LibraryProgress {
+    percent: number;
+    isFinished: boolean;
+    remainingLabel: string;
+}
+
 export interface LibraryLogic {
     loadLibrary(): Promise<void>;
     loadSaves(): Promise<void>;
+    loadPlaybackPositions(): Promise<void>;
+    getProgress(item: LibraryItem): LibraryProgress | null;
     selectCategory(category: string | null): void;
     openDetail(item: LibraryItem): void;
     closeDetail(): void;
@@ -55,6 +64,40 @@ export function useLibraryLogic(state: LibraryState, readerLogic: ReaderLogic): 
         } catch (error) {
             console.error("내 서재 목록을 불러오지 못했습니다:", error);
         }
+    }
+
+    async function loadPlaybackPositions(): Promise<void> {
+        if (!authLogic.isLoggedIn()) {
+            state.playbackSeconds.value = {};
+            return;
+        }
+        try {
+            const response = await fetch("/api/library/playback", { headers: authLogic.authHeaders() });
+            if (response.ok) {
+                const data = await response.json();
+                state.playbackSeconds.value = data.positions || {};
+            }
+        } catch (error) {
+            console.error("재생 위치를 불러오지 못했습니다:", error);
+        }
+    }
+
+    // 끝까지 들어도 마지막 몇 초는 안 채워지는 경우가 흔하다(문장 끝에서
+    // 멈추거나, 저장이 30초 간격이라). 97%를 넘으면 다 들은 것으로 본다.
+    const FINISHED_RATIO = 0.97;
+
+    function getProgress(item: LibraryItem): LibraryProgress | null {
+        const seconds = state.playbackSeconds.value[item.id];
+        const total = item.duration_seconds;
+        if (!seconds || !total) return null;
+
+        const ratio = Math.min(seconds / total, 1);
+        const remainingMinutes = Math.round((total - seconds) / 60);
+        return {
+            percent: Math.round(ratio * 100),
+            isFinished: ratio >= FINISHED_RATIO,
+            remainingLabel: remainingMinutes > 0 ? `약 ${remainingMinutes}분 남음` : "1분 미만 남음",
+        };
     }
 
     function selectCategory(category: string | null): void {
@@ -141,7 +184,8 @@ export function useLibraryLogic(state: LibraryState, readerLogic: ReaderLogic): 
     }
 
     return {
-        loadLibrary, loadSaves, selectCategory, openDetail, closeDetail, isSaved, toggleSave,
+        loadLibrary, loadSaves, loadPlaybackPositions, getProgress,
+        selectCategory, openDetail, closeDetail, isSaved, toggleSave,
         loadSentences: fetchSentences, getLastPosition: fetchLastPosition,
         playFromStart, playFromLastPosition, playFromChapter,
     };

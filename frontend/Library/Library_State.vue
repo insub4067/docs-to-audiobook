@@ -25,6 +25,8 @@ export interface LibraryState {
     activeCategory: Ref<string | null>;
     detailItem: Ref<LibraryItem | null>;
     isDetailOpen: Ref<boolean>;
+    /** audiobook_id → 마지막 재생 위치(초). 목록 카드의 진행률에 쓴다. */
+    playbackSeconds: Ref<Record<string, number>>;
 }
 
 const state: LibraryState = {
@@ -35,6 +37,7 @@ const state: LibraryState = {
     activeCategory: ref(null),
     detailItem: ref(null),
     isDetailOpen: ref(false),
+    playbackSeconds: ref({}),
 };
 
 export function useLibraryState(): LibraryState {

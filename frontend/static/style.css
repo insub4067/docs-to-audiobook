@@ -338,6 +338,58 @@ html {
     color: var(--primary-color);
 }
 
+/* 목록 카드의 청취 진행률. 라이브러리 작품은 몇 시간짜리라 "얼마나
+   남았는지"가 저장 여부보다 훨씬 중요한 정보다. */
+.library-progress {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.library-progress-track {
+    flex: 1;
+    min-width: 0;
+    height: 4px;
+    border-radius: 4px;
+    background-color: var(--border-color);
+    overflow: hidden;
+}
+
+.library-progress-fill {
+    height: 100%;
+    border-radius: 4px;
+    background-color: var(--primary-color);
+}
+
+.library-progress .audio-subtitle {
+    flex-shrink: 0;
+}
+
+.library-progress-done {
+    margin-top: 8px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+.library-resume-btn {
+    flex-shrink: 0;
+    padding: 6px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    color: var(--text-color);
+    background: transparent;
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.library-resume-btn:active {
+    background-color: var(--card-bg);
+}
+
 .library-source-badge {
     flex-shrink: 0;
     padding: 3px 8px;

@@ -39,16 +39,24 @@ function statsLine(item: LibraryItem): string {
     return parts.join(" · ");
 }
 
+function progressOf(item: LibraryItem) {
+    return libraryLogic.getProgress(item);
+}
+
 onMounted(() => {
     if (!state.loaded.value) libraryLogic.loadLibrary();
     libraryLogic.loadSaves();
+    libraryLogic.loadPlaybackPositions();
 });
 
 // v-show로 항상 마운트돼 있는 탭이라 onMounted는 앱 실행 중 딱 한 번만
 // 불린다 — 관리자가 앱을 새로 열지 않고 작품을 발행해도 목록에 바로
 // 반영되도록, 탭이 다시 활성화될 때마다 새로 불러온다.
 watch(() => props.active, (active) => {
-    if (active) libraryLogic.loadLibrary();
+    if (!active) return;
+    libraryLogic.loadLibrary();
+    // 듣다가 돌아온 경우 진행률이 바로 반영돼야 한다.
+    libraryLogic.loadPlaybackPositions();
 });
 </script>
 
@@ -85,12 +93,17 @@ watch(() => props.active, (active) => {
             </div>
 
             <div class="audio-list">
-                <button
+                <!-- "이어 듣기"를 안에 넣어야 해서 행 자체는 button이 아니다
+                     — button 안에 button은 중첩할 수 없다. -->
+                <div
                     v-for="item in filteredItems"
                     :key="item.id"
-                    type="button"
                     class="audio-item audio-item-news"
+                    role="button"
+                    tabindex="0"
                     @click="libraryLogic.openDetail(item)"
+                    @keydown.enter="libraryLogic.openDetail(item)"
+                    @keydown.space.prevent="libraryLogic.openDetail(item)"
                 >
                     <div class="audio-item-front">
                         <div class="audio-title-group">
@@ -100,11 +113,26 @@ watch(() => props.active, (active) => {
                                 <span v-if="item.library_description" class="library-card-description">{{ item.library_description }}</span>
                                 <span class="audio-subtitle">{{ metaLine(item) }}</span>
                                 <span v-if="statsLine(item)" class="audio-subtitle">{{ statsLine(item) }}</span>
+
+                                <template v-if="progressOf(item)">
+                                    <span v-if="progressOf(item)!.isFinished" class="library-progress-done">모두 들음</span>
+                                    <div v-else class="library-progress">
+                                        <div class="library-progress-track">
+                                            <div class="library-progress-fill" :style="{ width: progressOf(item)!.percent + '%' }"></div>
+                                        </div>
+                                        <span class="audio-subtitle">{{ progressOf(item)!.percent }}% · {{ progressOf(item)!.remainingLabel }}</span>
+                                        <button
+                                            type="button"
+                                            class="library-resume-btn"
+                                            @click.stop="libraryLogic.playFromLastPosition(item)"
+                                        >이어 듣기</button>
+                                    </div>
+                                </template>
                             </div>
                             <i v-if="libraryLogic.isSaved(item)" data-lucide="check-circle-2" class="library-saved-badge" aria-label="내 서재에 있음"></i>
                         </div>
                     </div>
-                </button>
+                </div>
             </div>
         </div>
     </main>

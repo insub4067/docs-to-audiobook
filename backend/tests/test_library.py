@@ -260,3 +260,45 @@ async def test_unsave_library_item():
 
     assert response.status_code == 200
     assert response.json() == {"saved": False}
+
+
+# ── 목록 카드 진행률 ────────────────────────────────────────────────────
+# 카드마다 /api/audiobooks/{id}/playback을 부르면 작품 수만큼 요청이 나간다.
+# 목록은 스크롤하며 보는 화면이라 한 번에 받아와야 한다.
+
+@pytest.mark.asyncio
+async def test_list_library_playback_requires_login():
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/library/playback")
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_list_library_playback_returns_positions_keyed_by_audiobook(mock_supabase):
+    mock_supabase.table().select().eq().execute.return_value = MagicMock(data=[
+        {"audiobook_id": "book-1", "current_time_seconds": 1800},
+        {"audiobook_id": "book-2", "current_time_seconds": 0},
+    ])
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/library/playback", headers=_auth_headers())
+
+    assert response.status_code == 200
+    assert response.json()["positions"] == {"book-1": 1800, "book-2": 0}
+
+
+@pytest.mark.asyncio
+async def test_list_library_playback_is_not_shadowed_by_the_id_route(mock_supabase):
+    """⚠️ /api/library/{audiobook_id}가 먼저 등록되면 "playback"이 id로 잡힌다.
+
+    library_saves가 실제로 이 함정에 걸려 추가된 이후 한 번도 동작하지
+    않았다. 같은 실수를 반복하지 않도록 라우트가 살아 있는지 확인한다.
+    """
+    mock_supabase.table().select().eq().execute.return_value = MagicMock(data=[])
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/library/playback", headers=_auth_headers())
+
+    # id 라우트로 새면 published 필터에 걸려 404가 난다.
+    assert response.status_code == 200
+    assert response.json() == {"positions": {}}

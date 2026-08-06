@@ -210,6 +210,25 @@ async def list_library_saves(authorization: str = Header(None)):
     return {"library": items}
 
 
+# ⚠️ 이 라우트도 "/api/library/{audiobook_id}"보다 먼저 등록해야 한다(saves와 같은 이유).
+@router.get("/api/library/playback")
+async def list_library_playback(authorization: str = Header(None)):
+    """내 재생 위치를 audiobook_id로 묶어 한 번에 돌려준다.
+
+    목록 카드마다 /api/audiobooks/{id}/playback을 부르면 작품 수만큼
+    요청이 나간다(N+1). 목록은 스크롤하면서 보는 화면이라 그만큼 느려진다.
+    """
+    user_id = require_user_id(authorization)
+    supabase = _supabase_or_503()
+    try:
+        rows = supabase.table("playback_history") \
+            .select("audiobook_id, current_time_seconds") \
+            .eq("user_id", user_id).execute().data or []
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"재생 위치를 불러오지 못했습니다: {e}")
+    return {"positions": {row["audiobook_id"]: row.get("current_time_seconds") or 0 for row in rows}}
+
+
 @router.get("/api/library/{audiobook_id}")
 async def get_library_item(audiobook_id: str):
     """작품 상세. published 상태인 작품만 조회할 수 있다."""
