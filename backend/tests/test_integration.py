@@ -401,3 +401,23 @@ async def test_save_playback_state_truncates_fractional_seconds(mock_supabase, m
     saved = mock_supabase.table().upsert.call_args.args[0]
     assert saved["current_time_seconds"] == 78
     assert isinstance(saved["current_time_seconds"], int)
+
+
+@pytest.mark.asyncio
+async def test_save_playback_state_accepts_chapter_repeat_mode(mock_supabase, mock_auth):
+    """"현재 장 반복"이 서버 허용값에 있는지 확인한다.
+
+    허용값에서 빠지면 400이 나고, 클라이언트는 저장 실패를 조용히 무시하므로
+    그 모드를 켠 사용자만 이어 듣기가 조용히 망가진다.
+    """
+    mock_supabase.table().upsert().execute.return_value = MagicMock(data=[])
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.put(
+            "/api/audiobooks/book1/playback",
+            json={"current_time_seconds": 10, "playback_speed": 1.0, "repeat_mode": "chapter"},
+            headers={"Authorization": "Bearer fake_token"},
+        )
+
+    assert response.status_code == 200
+    assert mock_supabase.table().upsert.call_args.args[0]["repeat_mode"] == "chapter"

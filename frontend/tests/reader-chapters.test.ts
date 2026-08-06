@@ -125,3 +125,95 @@ describe("장 단위 이동", () => {
         expect(el.currentTime).toBe(42);
     });
 });
+
+describe("장 경계 처리", () => {
+    /** ontimeupdate를 흉내 낸다. 시각을 옮기고 핸들러를 부른다. */
+    function tick(el: HTMLAudioElement, seconds: number) {
+        el.currentTime = seconds;
+        el.ontimeupdate?.(new Event("timeupdate"));
+    }
+
+    function openWork(controlsLogic: ReturnType<typeof useReaderControlsLogic>, logic: ReturnType<typeof useReaderLogic>, state: ReturnType<typeof useReaderState>, el: HTMLAudioElement) {
+        logic.openSharedReaderMode("작품", [{ text: "문장", start: 0, end: 1000 }], "blob:fake", {});
+        state.headings.value = [...CHAPTERS];
+        return { controlsLogic, el };
+    }
+
+    it("'현재 장 반복'은 장이 끝나면 그 장 처음으로 되돌린다", () => {
+        const readerState = useReaderState();
+        const controlsState = useReaderControlsState();
+        const controlsLogic = useReaderControlsLogic(controlsState, readerState.audioEl);
+        const logic = useReaderLogic(readerState, controlsLogic, {} as AudioListLogic);
+        const el = document.createElement("audio");
+        el.load = vi.fn();
+        el.play = vi.fn().mockResolvedValue(undefined);
+        Object.defineProperty(el, "duration", { value: 180, configurable: true });
+        readerState.audioEl.value = el;
+        openWork(controlsLogic, logic, readerState, el);
+        controlsLogic.selectRepeatMode("chapter");
+
+        tick(el, 70);   // 2장 안
+        tick(el, 121);  // 3장으로 넘어가는 순간
+
+        expect(el.currentTime).toBe(60); // 2장 처음
+    });
+
+    it("'이 장이 끝나면'은 장 끝에서 멈추고 스스로 해제된다", () => {
+        const readerState = useReaderState();
+        const controlsState = useReaderControlsState();
+        const controlsLogic = useReaderControlsLogic(controlsState, readerState.audioEl);
+        const logic = useReaderLogic(readerState, controlsLogic, {} as AudioListLogic);
+        const el = document.createElement("audio");
+        el.load = vi.fn();
+        el.play = vi.fn().mockResolvedValue(undefined);
+        el.pause = vi.fn();
+        Object.defineProperty(el, "duration", { value: 180, configurable: true });
+        readerState.audioEl.value = el;
+        openWork(controlsLogic, logic, readerState, el);
+        controlsLogic.toggleStopAtChapterEnd();
+
+        tick(el, 70);
+        tick(el, 121);
+
+        expect(el.pause).toHaveBeenCalled();
+        expect(controlsLogic.isStopAtChapterEnd()).toBe(false);
+    });
+
+    it("장 중간에서는 아무것도 하지 않는다", () => {
+        const readerState = useReaderState();
+        const controlsState = useReaderControlsState();
+        const controlsLogic = useReaderControlsLogic(controlsState, readerState.audioEl);
+        const logic = useReaderLogic(readerState, controlsLogic, {} as AudioListLogic);
+        const el = document.createElement("audio");
+        el.load = vi.fn();
+        el.play = vi.fn().mockResolvedValue(undefined);
+        Object.defineProperty(el, "duration", { value: 180, configurable: true });
+        readerState.audioEl.value = el;
+        openWork(controlsLogic, logic, readerState, el);
+        controlsLogic.selectRepeatMode("chapter");
+
+        tick(el, 70);
+        tick(el, 90);
+
+        expect(el.currentTime).toBe(90);
+    });
+
+    it("반복도 정지도 꺼져 있으면 경계를 그냥 지나간다", () => {
+        const readerState = useReaderState();
+        const controlsState = useReaderControlsState();
+        const controlsLogic = useReaderControlsLogic(controlsState, readerState.audioEl);
+        const logic = useReaderLogic(readerState, controlsLogic, {} as AudioListLogic);
+        const el = document.createElement("audio");
+        el.load = vi.fn();
+        el.play = vi.fn().mockResolvedValue(undefined);
+        Object.defineProperty(el, "duration", { value: 180, configurable: true });
+        readerState.audioEl.value = el;
+        openWork(controlsLogic, logic, readerState, el);
+        controlsLogic.selectRepeatMode("off");
+
+        tick(el, 70);
+        tick(el, 121);
+
+        expect(el.currentTime).toBe(121);
+    });
+});

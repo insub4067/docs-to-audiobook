@@ -18,6 +18,9 @@ export interface ReaderControlsLogic {
     selectRepeatMode(mode: RepeatMode): void;
     selectSpeed(value: number): void;
     selectTimerMinutes(minutes: number): void;
+    toggleStopAtChapterEnd(): void;
+    clearStopAtChapterEnd(): void;
+    isStopAtChapterEnd(): boolean;
     selectFontFamily(value: ReaderFontFamily): void;
     selectFontSize(value: number): void;
     selectLineHeight(value: number): void;
@@ -26,8 +29,8 @@ export interface ReaderControlsLogic {
     onEnded(): void;
 }
 
-export const REPEAT_MODES: RepeatMode[] = ["off", "all", "one"];
-export const REPEAT_LABELS: Record<RepeatMode, string> = { off: "반복 안 함", all: "전체 문서 반복", one: "현재 오디오 반복" };
+export const REPEAT_MODES: RepeatMode[] = ["off", "all", "one", "chapter"];
+export const REPEAT_LABELS: Record<RepeatMode, string> = { off: "반복 안 함", all: "전체 문서 반복", one: "현재 오디오 반복", chapter: "현재 장 반복" };
 export const SPEED_OPTIONS = [0.75, 1.0, 1.25, 1.5, 2.0];
 export const TIMER_OPTIONS_MIN = [0, 15, 30, 60];
 export const TIMER_LABELS: Record<number, string> = { 0: "해제", 15: "15분", 30: "30분", 60: "60분" };
@@ -73,6 +76,27 @@ export function useReaderControlsLogic(state: ReaderControlsState, audioEl: Ref<
         if (timerInterval) clearInterval(timerInterval);
         timerInterval = null;
         state.isTimerActive.value = false;
+        state.timerLabel.value = "사용 안 함";
+        state.stopAtChapterEnd.value = false;
+    }
+
+    // 분 단위 타이머와 동시에 켜 두면 어느 쪽이 먼저 멈출지 헷갈린다.
+    // 취침 수단은 하나만 활성화한다.
+    function toggleStopAtChapterEnd(): void {
+        const next = !state.stopAtChapterEnd.value;
+        clearSleepTimer();
+        state.stopAtChapterEnd.value = next;
+        state.timerLabel.value = next ? "이 장이 끝나면" : "사용 안 함";
+        showToast(next ? "이 장이 끝나면 멈춥니다." : "취침 타이머가 해제되었습니다.", "info");
+        closeSheet();
+    }
+
+    function isStopAtChapterEnd(): boolean {
+        return state.stopAtChapterEnd.value;
+    }
+
+    function clearStopAtChapterEnd(): void {
+        state.stopAtChapterEnd.value = false;
         state.timerLabel.value = "사용 안 함";
     }
 
@@ -178,6 +202,7 @@ export function useReaderControlsLogic(state: ReaderControlsState, audioEl: Ref<
     return {
         getPlaybackSettings, applyPlaybackSettings, clearSleepTimer,
         openSheet, closeSheet, selectRepeatMode, selectSpeed, selectTimerMinutes,
+        toggleStopAtChapterEnd, clearStopAtChapterEnd, isStopAtChapterEnd,
         selectFontFamily, selectFontSize, selectLineHeight,
         skipBack, skipForward, onEnded,
     };

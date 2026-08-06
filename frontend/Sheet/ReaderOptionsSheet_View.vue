@@ -64,10 +64,15 @@ const options = computed<OptionRow[]>(() => {
         const presets: OptionRow[] = TIMER_OPTIONS_MIN.map((minutes) => ({
             key: String(minutes),
             label: TIMER_LABELS[minutes],
-            isSelected: minutes === 0 ? !props.state.isTimerActive.value : false,
+            isSelected: minutes === 0 ? (!props.state.isTimerActive.value && !props.state.stopAtChapterEnd.value) : false,
             select: () => props.logic.selectTimerMinutes(minutes),
         }));
         return [...presets, {
+            key: "chapter-end",
+            label: "이 장이 끝나면",
+            isSelected: props.state.stopAtChapterEnd.value,
+            select: () => props.logic.toggleStopAtChapterEnd(),
+        }, {
             key: "custom",
             label: "사용자 지정",
             isSelected: false,

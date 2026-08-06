@@ -147,7 +147,7 @@ def _validate_playback_state(payload: dict) -> tuple[int, float, str]:
         raise HTTPException(status_code=400, detail="재생 위치가 올바르지 않습니다.")
     if speed not in (0.75, 1.0, 1.25, 1.5, 2.0):
         raise HTTPException(status_code=400, detail="재생 속도가 올바르지 않습니다.")
-    if repeat_mode not in ("off", "all", "one"):
+    if repeat_mode not in ("off", "all", "one", "chapter"):
         raise HTTPException(status_code=400, detail="반복 모드가 올바르지 않습니다.")
     # ⚠️ current_time_seconds 컬럼은 INTEGER다. 클라이언트는 audio.currentTime을
     # 그대로 보내므로 78.63075268650299 같은 실수가 온다. 이걸 그대로 넘기면

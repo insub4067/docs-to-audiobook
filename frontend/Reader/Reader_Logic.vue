@@ -72,6 +72,8 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
     const authLogic = useAuthLogic();
     let lastPositionSaveSecond = -1;
     let lastPlaybackSyncTime = 0;
+    // 장 경계를 "넘어선 순간"을 잡으려면 직전 시각이 필요하다.
+    let previousTimeSecond = 0;
     let lastToggleTime = 0;
     // "첫 재생" 지표(playback_started)는 콘텐츠를 열어 재생을 시작한 횟수다.
     // 일시정지 후 다시 누른 것은 새로운 시작이 아니므로, 리더를 열 때마다
@@ -160,6 +162,8 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
             const duration = el.duration || 0;
             state.currentTimeLabel.value = formatTime(currentSec);
             if (duration > 0) state.progressPercent.value = (currentSec / duration) * 100;
+            handleChapterBoundary(el, previousTimeSecond);
+            previousTimeSecond = currentSec;
             updateHighlight(currentMs);
 
             const currentSecond = Math.floor(currentSec);
@@ -200,6 +204,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
 
         lastPositionSaveSecond = -1;
         playbackStartTracked = false;
+        previousTimeSecond = 0;
         readerControls.applyPlaybackSettings({ playbackSpeed: audio.playbackSpeed, repeatMode: audio.repeatMode });
         state.title.value = getAudiobookDisplayTitle(audio.title);
         state.isPlaying.value = false;
@@ -288,6 +293,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         state.currentAudioObject.value = null;
         sentences = sharedSentences;
         playbackStartTracked = false;
+        previousTimeSecond = 0;
 
         state.title.value = getAudiobookDisplayTitle(title);
         state.isPlaying.value = false;
@@ -324,6 +330,8 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
             const duration = el.duration || 0;
             state.currentTimeLabel.value = formatTime(currentSec);
             if (duration > 0) state.progressPercent.value = (currentSec / duration) * 100;
+            handleChapterBoundary(el, previousTimeSecond);
+            previousTimeSecond = currentSec;
             updateHighlight(currentSec * 1000);
 
             const currentSecond = Math.floor(currentSec);
@@ -407,6 +415,49 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         el.play().catch((error) => console.log("Play failed:", error));
         state.isScrolledAway.value = false;
         requestAnimationFrame(() => scrollToSentence(heading.sentIndex));
+    }
+
+    /** 그 시각에 재생 중인 장의 인덱스. 없으면 -1. */
+    function chapterIndexAtSecond(second: number): number {
+        const headings = state.headings.value;
+        for (let i = headings.length - 1; i >= 0; i--) {
+            if (headings[i].startMs / 1000 <= second) return i;
+        }
+        return -1;
+    }
+
+    /** 장의 끝(초). 마지막 장은 오디오 끝까지다. */
+    function chapterEndSecond(index: number, el: HTMLAudioElement): number {
+        const next = state.headings.value[index + 1];
+        return next ? next.startMs / 1000 : (el.duration || 0);
+    }
+
+    /** "현재 장 반복"과 "이 장이 끝나면 정지"를 처리한다.
+     *
+     * 장 판정에 activeIndex를 쓰면 안 된다 — 경계에서는 강조가 이미 다음
+     * 장으로 넘어가 있어 엉뚱한 장을 반복하게 된다. 직전 시각(previousSecond)이
+     * 아직 그 장 안에 있으므로 그걸로 판정하고, 경계를 "넘어선 순간"만 잡는다. */
+    function handleChapterBoundary(el: HTMLAudioElement, previousSecond: number): void {
+        const settings = readerControls.getPlaybackSettings();
+        const repeatChapter = settings.repeatMode === "chapter";
+        const stopAtEnd = readerControls.isStopAtChapterEnd();
+        if (!repeatChapter && !stopAtEnd) return;
+
+        const index = chapterIndexAtSecond(previousSecond);
+        if (index < 0) return;
+        const endSecond = chapterEndSecond(index, el);
+        if (!endSecond) return;
+        if (previousSecond >= endSecond || el.currentTime < endSecond) return;
+
+        if (repeatChapter) {
+            el.currentTime = state.headings.value[index].startMs / 1000;
+            el.play().catch((error) => console.log("Play failed:", error));
+            return;
+        }
+        el.pause();
+        el.currentTime = endSecond;
+        readerControls.clearStopAtChapterEnd();
+        showToast("이 장이 끝나 멈췄습니다.", "info");
     }
 
     /** 지금 재생 중인 장의 인덱스. 아직 첫 장 전이면 -1. */
