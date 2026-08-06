@@ -103,6 +103,10 @@ useSwipeToDismiss(props.state.containerEl, () => props.logic.closeReader(), head
                     fontFamily: controlsState.fontFamily.value === 'sans' ? 'var(--font-sans)' : 'var(--font-serif)',
                     '--reader-font-scale': controlsState.fontSize.value,
                     '--reader-line-height': controlsState.lineHeight.value,
+                    // 글꼴이 실제로 차지하는 세로 높이(em). 강조 배경이 줄마다
+                    // 끊기지 않게 여백을 계산하는 데 쓴다 — 실측값이라 글꼴을
+                    // 바꾸면 같이 바뀌어야 한다(style.css의 .reader-sentence).
+                    '--reader-glyph-height': controlsState.fontFamily.value === 'sans' ? '1.46em' : '1.52em',
                 }"
                 @scroll="logic.onReaderContentScroll"
             >

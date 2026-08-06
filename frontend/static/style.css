@@ -2234,9 +2234,14 @@ input[type="range"]::-webkit-slider-thumb:active {
 }
 
 /* Sentences styling */
+/* 세로 여백은 "줄 높이 - 글자가 실제로 차지하는 높이"의 절반이다. 인라인
+   요소의 배경은 글자 높이만큼만 칠해지므로, 여백 없이는 여러 줄로 감기는
+   문장의 강조 배경이 줄마다 뚝뚝 끊겨 본문이 조각난 것처럼 보였다. 여백을
+   이만큼 주면 위아래 줄의 배경이 정확히 맞닿아 한 덩어리로 보인다.
+   더 주면 겹치는데, 배경이 반투명이라 겹친 부분에 진한 띠가 생긴다. */
 .reader-sentence {
     cursor: pointer;
-    padding: 3px 5px;
+    padding: max(0px, calc((var(--reader-line-height, 2) * 1em - var(--reader-glyph-height, 1.52em)) / 2)) 5px;
     border-radius: 5px;
     transition: background-color 0.25s ease;
 }
@@ -3759,8 +3764,12 @@ input[type="range"]::-webkit-slider-thumb:active {
         background-color: rgba(217, 166, 111, 0.12);
     }
 
+    /* ⚠️ 여기에 color를 두면 안 된다. 위쪽 테마 규칙은 background-color만
+       덮어쓰므로(강조는 글자색을 바꾸지 않는다는 원칙), 여기 남은 color가
+       테마와 무관하게 살아남는다. 실제로 OS가 다크모드인 기기에서 라이트·웜
+       테마를 쓰면 밝은 금색 배경 위에 흰 글자가 찍혀 현재 문장을 거의 읽을
+       수 없었다. 글자색은 항상 테마의 --reader-text를 따르게 둔다. */
     .reader-sentence.highlight {
-        color: #fff5eb;
         background-color: rgba(217, 166, 111, 0.28);
     }
 }

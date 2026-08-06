@@ -189,3 +189,37 @@ def test_admin_html_is_standalone_capable_but_not_translucent_status_bar():
     assert 'viewport-fit=cover' in admin_html
     # 주석에도 이 단어가 나오므로 실제 meta 태그만 본다.
     assert not re.search(r'<meta[^>]*apple-mobile-web-app-status-bar-style', admin_html)
+
+def test_reader_highlight_never_overrides_body_text_color():
+    """재생 중 문장 강조가 글자색을 바꾸지 않는지 확인한다.
+
+    OS 다크모드용 폴백 블록에 color가 남아 있으면, 위쪽 테마 규칙이
+    background-color만 덮어쓰기 때문에 그 color가 테마와 무관하게 살아남는다.
+    실제로 OS 다크모드 기기에서 라이트·웜 테마를 쓰면 밝은 금색 배경 위에
+    흰 글자(#fff5eb)가 찍혀 대비가 1.1:1까지 떨어졌다(사실상 안 보임).
+    """
+    css = STYLE_CSS.read_text(encoding="utf-8")
+    dark_theme = css.split("@media (prefers-color-scheme: dark)", 1)[1]
+    highlight_rule = dark_theme.split(".reader-sentence.highlight {", 1)[1].split("}", 1)[0]
+
+    assert "background-color" in highlight_rule
+    assert "color:" not in highlight_rule.replace("background-color:", "")
+
+def test_reader_sentence_padding_closes_gaps_between_wrapped_lines():
+    """여러 줄로 감기는 문장의 강조 배경이 한 덩어리로 보이는지 확인한다.
+
+    인라인 요소의 배경은 글자 높이만큼만 칠해져서, 줄 간격이 넓으면 줄마다
+    배경이 끊겨 본문이 조각난 것처럼 보였다. 세로 여백을
+    "(줄 높이 - 글자 실제 높이) / 2"로 잡아야 위아래 줄 배경이 맞닿는다.
+    글꼴마다 실제 높이가 달라 --reader-glyph-height를 Reader_View가 넘겨준다.
+    """
+    css = STYLE_CSS.read_text(encoding="utf-8")
+    sentence_rule = css.split("\n.reader-sentence {", 1)[1].split("}", 1)[0]
+
+    assert "--reader-line-height" in sentence_rule
+    assert "--reader-glyph-height" in sentence_rule
+
+    reader_view = (ROOT_DIR / "frontend" / "Reader" / "Reader_View.vue").read_text(encoding="utf-8")
+    assert "'--reader-glyph-height'" in reader_view
+    # 명조/고딕의 실측값이 다르므로 하나로 고정하면 한쪽에 틈이나 겹침이 남는다.
+    assert "1.46em" in reader_view and "1.52em" in reader_view
