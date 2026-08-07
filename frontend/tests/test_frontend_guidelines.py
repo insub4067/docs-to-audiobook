@@ -479,3 +479,47 @@ def test_no_stylesheet_references_the_old_single_file():
     """분할 전 경로가 남아 있으면 404 요청이 조용히 계속 나간다."""
     for path in (APP_HTML, FRONTEND_STATIC / "sw.js"):
         assert "/static/style.css" not in path.read_text(encoding="utf-8"), path.name
+
+
+MINI_PLAYER_CSS = FRONTEND_STATIC / "css" / "08-mini-player.css"
+TAB_BAR_CSS = FRONTEND_STATIC / "css" / "02-files.css"
+HOME_VIEW = ROOT_DIR / "frontend" / "Home" / "Home_View.vue"
+
+
+def test_mini_player_does_not_position_itself_by_measured_tab_bar_height():
+    """미니 플레이어는 탭바 높이를 몰라야 한다.
+
+    예전에는 Home_View가 탭바 높이를 재서 --tab-bar-h에 넣고 미니 플레이어의
+    bottom으로 썼다. 그런데 탭바에는 padding-bottom: env(safe-area-inset-bottom)이
+    있어(아이폰에서 34px) 그 값이 safe-area 반영 전 높이로 굳으면 미니 플레이어가
+    딱 그만큼 아래로 내려앉는다. 탭바가 z-index로 더 위라 잘려 보였고, 그게
+    "미니 플레이어가 뜨다 마는" 증상이었다.
+
+    브라우저에서 실측한 값(탭바 94px, --tab-bar-h가 60px로 굳은 상태):
+      예전 구조 → 34px 겹침 / 스택 구조 → 0px.
+
+    ResizeObserver가 고쳐 주기를 기대할 수는 없다. 화면이 숨겨져 있는 동안에는
+    콜백이 전달되지 않아 낡은 값이 그대로 남는 경로가 실제로 있었다.
+    """
+    css = MINI_PLAYER_CSS.read_text(encoding="utf-8")
+    mini_rule = css.split(".mini-player {", 1)[1].split("}", 1)[0]
+
+    assert "--tab-bar-h" not in mini_rule
+    assert "position: fixed" not in mini_rule
+
+
+def test_bottom_bars_stack_owns_the_position_of_both_bars():
+    """미니 플레이어와 탭바가 한 스택에 있어야 서로의 높이를 몰라도 된다."""
+    home = HOME_VIEW.read_text(encoding="utf-8")
+    stack = re.search(r'<div class="bottom-bars">(.*?)</div>', home, re.S)
+
+    assert stack, "두 바를 감싸는 .bottom-bars가 없다"
+    # 순서가 뒤집히면 탭바가 미니 플레이어 위로 올라간다.
+    assert stack.group(1).index("<MiniPlayerView") < stack.group(1).index("<TabBarView")
+
+    tab_bar_rule = TAB_BAR_CSS.read_text(encoding="utf-8").split(".tab-bar {", 1)[1].split("}", 1)[0]
+    assert "position: fixed" not in tab_bar_rule
+
+    stack_rule = read_all_css().split(".bottom-bars {", 1)[1].split("}", 1)[0]
+    assert "position: fixed" in stack_rule
+    assert "flex-direction: column" in stack_rule

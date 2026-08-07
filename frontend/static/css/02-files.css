@@ -1,11 +1,8 @@
 /* 홈/내 파일 두 화면 전환용 하단 탭바. 읽기 모드에서는 숨긴다
    (Home_View.vue가 v-show로 제어). */
 .tab-bar {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 15;
+    /* 위치는 .bottom-bars가 잡는다(09-misc.css). 스스로 fixed면 미니
+       플레이어와 서로의 위치를 알아야 해서 JS 측정이 필요해진다. */
     display: flex;
     padding-bottom: env(safe-area-inset-bottom);
     /* --card-bg-solid(카드용 흰색)를 쓰면 --bg-color가 흰색과 다른

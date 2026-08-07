@@ -298,8 +298,17 @@ onMounted(async () => {
         :has-mini-player="hasMiniPlayer"
     />
 
-    <TabBarView v-show="!readerState.isOpen.value" :active-tab="activeTab" @select="(tab) => (activeTab = tab)" />
-    <MiniPlayerView :state="readerState" :logic="readerLogic" :audio-list-state="audioListState" />
+    <!-- ⚠️ 미니 플레이어는 탭바 위에 "얹히는" 게 아니라 같은 스택에 함께 있다.
+         예전에는 탭바 높이를 JS로 재서 --tab-bar-h에 넣고 미니 플레이어의
+         bottom으로 썼는데, 탭바에는 padding-bottom: env(safe-area-inset-bottom)이
+         있어(아이폰에서 ~34px) 그 값이 safe-area 반영 전에 굳으면 미니 플레이어가
+         그만큼 아래로 내려앉았다. 탭바가 z-index로 더 위라 잘려 보였고, 그게
+         "미니 플레이어가 뜨다 마는" 증상이었다. 스택으로 묶으면 잴 값이 없어져
+         이 실패가 아예 불가능해진다. -->
+    <div class="bottom-bars">
+        <MiniPlayerView :state="readerState" :logic="readerLogic" :audio-list-state="audioListState" />
+        <TabBarView v-show="!readerState.isOpen.value" :active-tab="activeTab" @select="(tab) => (activeTab = tab)" />
+    </div>
 
     <input
         ref="fileInput"

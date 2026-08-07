@@ -860,3 +860,20 @@
 .generating-listen-btn:active {
     transform: scale(0.95);
 }
+
+/* ===== 하단 고정 바 스택 (미니 플레이어 + 탭바) ===== */
+/* 둘을 한 스택에 넣어 서로의 높이를 몰라도 되게 한다. 예전에는 탭바 높이를
+   JS로 재서(--tab-bar-h) 미니 플레이어의 bottom으로 썼는데, 탭바에는
+   padding-bottom: env(safe-area-inset-bottom)이 있어 그 값이 safe-area
+   반영 전에 굳으면 미니 플레이어가 그만큼 내려앉아 탭바에 잘렸다.
+   ResizeObserver가 고쳐 주기를 기대했지만, 화면이 숨겨져 있는 동안에는
+   콜백이 전달되지 않아 낡은 값이 그대로 남는 경로가 있었다. */
+.bottom-bars {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 15;
+    display: flex;
+    flex-direction: column;
+}
