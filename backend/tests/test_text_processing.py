@@ -1,4 +1,3 @@
-import pytest
 from text_processing import clean_tts_text, extract_markdown_headings, preprocess_text
 
 def test_clean_tts_text():

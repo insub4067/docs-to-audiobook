@@ -72,7 +72,7 @@ describe("문장 북마크", () => {
     });
 
     it("목록은 문장 순서대로 돌려준다", () => {
-        const { state, logic, workId } = setup();
+        const { state, logic } = setup();
         state.activeIndex.value = 1;
         logic.toggleBookmarkForCurrentSentence();
         state.activeIndex.value = 0;
@@ -84,7 +84,7 @@ describe("문장 북마크", () => {
     });
 
     it("저장한 문장을 누르면 그 시각으로 이동한다", () => {
-        const { state, logic, el, workId } = setup();
+        const { state, logic, el } = setup();
         state.activeIndex.value = 1;
         logic.toggleBookmarkForCurrentSentence();
         logic.openBookmarkSheet();

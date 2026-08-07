@@ -14,7 +14,7 @@ import { useToastLogic } from "../Toast/Toast_Logic.vue";
 import { useToastState } from "../Toast/Toast_State.vue";
 import { usePromptSheetLogic } from "../../Sheet/PromptSheet_Logic.vue";
 import { usePromptSheetState } from "../../Sheet/PromptSheet_State.vue";
-import type { AudioListState, BackgroundJobItem } from "./AudioList_State.vue";
+import type { AudioListState } from "./AudioList_State.vue";
 import { reportClientError } from "../../services/clientErrors";
 
 export interface SyncResult {

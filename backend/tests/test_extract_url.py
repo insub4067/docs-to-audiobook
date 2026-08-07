@@ -12,7 +12,7 @@ patch 대상은 routes.extract_url이다 — 이 라우트가 직접 호출하�
 import pytest
 import httpx
 import requests
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from main import app
 from routes.extract_url import _is_safe_public_host, MAX_URL_FETCH_BYTES
 

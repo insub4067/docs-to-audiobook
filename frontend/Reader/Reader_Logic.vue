@@ -12,7 +12,6 @@ import { useToastLogic, setReaderOpenForToast } from "../components/Toast/Toast_
 import { useToastState } from "../components/Toast/Toast_State.vue";
 import { useAuthLogic } from "../Auth/Auth_Logic.vue";
 import { swallowed } from "../services/clientErrors";
-import { reportClientError } from "../services/clientErrors";
 
 export interface SharedReaderModeOptions {
     shareId?: string | null;

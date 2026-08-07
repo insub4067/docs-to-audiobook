@@ -6,7 +6,7 @@
 시도할 수도 없었다. 그래서 "실패해도 원문이 남는다"가 가장 중요한
 불변조건이다.
 """
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import httpx
 import pytest

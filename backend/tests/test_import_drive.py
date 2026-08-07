@@ -6,7 +6,7 @@ routes.import_drive다(이 모듈이 직접 부르는 이름이어야 적용된�
 import pytest
 import httpx
 import requests
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from main import app
 
 

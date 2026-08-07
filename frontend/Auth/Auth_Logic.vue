@@ -235,7 +235,7 @@ export function useAuthLogic(): AuthLogic {
         if (unsubscribePush) {
             try {
                 await unsubscribePush();
-            } catch (error) {
+            } catch {
                 console.warn("푸시 알림 구독 해제 실패");
             }
         }

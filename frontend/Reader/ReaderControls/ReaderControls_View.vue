@@ -2,7 +2,7 @@
 import type { ReaderControlsState } from "./ReaderControls_State.vue";
 import type { ReaderControlsLogic } from "./ReaderControls_Logic.vue";
 
-const props = defineProps<{
+defineProps<{
     state: ReaderControlsState;
     logic: ReaderControlsLogic;
 }>();

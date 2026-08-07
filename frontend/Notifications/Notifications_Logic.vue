@@ -253,7 +253,7 @@ export function useNotificationsLogic(state: NotificationsState): NotificationsL
             state.pushState.value = "on";
             showToast("완료 알림 켜짐", "success");
             return true;
-        } catch (error) {
+        } catch {
             if (createdSubscription && context.subscription) {
                 await Promise.allSettled([context.subscription.unsubscribe()]);
                 context.subscription = null;
@@ -319,7 +319,7 @@ export function useNotificationsLogic(state: NotificationsState): NotificationsL
                 return;
             }
             await requestPushNotificationSubscription();
-        } catch (error) {
+        } catch {
             console.warn("푸시 알림 설정 실패");
             showToast("완료 알림 설정에 실패했습니다.", "error");
         } finally {

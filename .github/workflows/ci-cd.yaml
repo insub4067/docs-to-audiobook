@@ -41,6 +41,12 @@ jobs:
       - run: npm test
         working-directory: frontend
       - run: pytest -v
+      # 린터는 테스트 뒤에 둔다. 실패했을 때 "테스트가 깨진 것"과 "스타일만
+      # 걸린 것"을 로그 순서만 보고도 구분할 수 있다. 규칙은 일부러 좁게
+      # 잡혀 있다 — ruff.toml, frontend/eslint.config.js의 주석 참고.
+      - run: ruff check backend/
+      - run: npm run lint
+        working-directory: frontend
 
   # 🚀 병렬 작업 2: Fly.io 배포 (테스트 성공 여부를 기다리지 않고 즉시 배포)
   deploy:

@@ -645,7 +645,7 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
         closeModal();
         try {
             await (window as any).__requestPushNotificationSubscription?.();
-        } catch (error) {
+        } catch {
             console.warn("완료 알림 요청 실패");
         }
         await generateAudiobook(generationArguments());

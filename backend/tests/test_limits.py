@@ -1,12 +1,10 @@
 import pytest
-from fastapi import Request
 from state import read_upload_limited, save_upload_limited, enforce_rate_limit
 from fastapi import HTTPException
 import os
 
 @pytest.mark.asyncio
 async def test_upload_limits():
-    from unittest.mock import MagicMock
     
     class MockUploadFile:
         def __init__(self, chunks):
@@ -25,7 +23,6 @@ async def test_upload_limits():
 
 @pytest.mark.asyncio
 async def test_save_upload_limited():
-    from unittest.mock import MagicMock
     
     test_file = "test_upload_limit.bin"
     class MockUploadFile:

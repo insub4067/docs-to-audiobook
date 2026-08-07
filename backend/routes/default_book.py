@@ -173,7 +173,7 @@ async def generate_default_book():
 
         default_book_state["status"] = "ready"
         default_book_state["error"] = None
-        print(f"Default book generated.")
+        print("Default book generated.")
         # 다음 부팅부터는 재합성 없이 이걸 그대로 쓴다
         await asyncio.to_thread(_upload_default_book_to_cloud, audio_path, meta_path)
     except Exception as e:

@@ -34,7 +34,7 @@ async def test_get_voice_preview():
             assert response.status_code == 404
 
     # Test generation failure mock
-    with patch("main.os.path.exists", return_value=False):
+    with patch("routes.tts.os.path.exists", return_value=False):
         with patch("routes.tts.synthesize_document", side_effect=Exception("Network error")):
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
                 response = await client.get("/api/voices/ko_female_calm/preview")
@@ -86,7 +86,7 @@ async def test_share_features():
                 share_id = response.json()["share_id"]
                 
     # Test get_share_meta
-    with patch("main.os.path.exists", return_value=True):
+    with patch("routes.share.os.path.exists", return_value=True):
         with patch("routes.share.open") as mock_open:
             mock_open.return_value.__enter__.return_value.read.return_value = '{"title": "Test Share", "sentences": [], "headings": []}'
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
