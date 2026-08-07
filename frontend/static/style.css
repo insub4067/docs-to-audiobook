@@ -4069,3 +4069,79 @@ input[type="range"]::-webkit-slider-thumb:active {
     background: transparent;
     cursor: pointer;
 }
+
+/* ===== 첫 방문 안내 카드 ===== */
+/* 홈 맨 위에 한 번만 나오는 카드라, 업로드 카드보다 조금 조용하게 둔다.
+   여기가 화면에서 제일 튀면 정작 눌러야 할 업로드가 뒤로 밀린다. */
+.onboarding-card {
+    position: relative;
+    padding: 24px 24px 20px;
+}
+
+.onboarding-title {
+    margin: 0 28px 10px 0; /* 오른쪽은 닫기 버튼 자리 */
+    font-family: var(--font-serif);
+    font-size: 1.25rem;
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--text-color);
+    word-break: keep-all;
+}
+
+.onboarding-body {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.65;
+    color: var(--text-muted);
+    word-break: keep-all;
+}
+
+.onboarding-sample {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 44px; /* 터치 영역 */
+    margin-top: 18px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--primary-color);
+    background: transparent;
+    border: 1px solid var(--border-hover);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.onboarding-sample i {
+    width: 17px;
+    height: 17px;
+}
+
+.onboarding-sample:active {
+    transform: scale(0.98);
+    background-color: var(--card-bg);
+}
+
+.onboarding-dismiss {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.onboarding-dismiss i {
+    width: 18px;
+    height: 18px;
+}

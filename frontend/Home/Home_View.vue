@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import HeaderView from "../components/Header/Header_View.vue";
 import UploadView from "../components/Upload/Upload_View.vue";
+import OnboardingView from "../components/Onboarding/Onboarding_View.vue";
 import UploadBlockingOverlayView from "../components/Upload/UploadBlockingOverlay_View.vue";
 import AuthLoadingOverlayView from "../Auth/AuthLoadingOverlay_View.vue";
 import AddSourceSheetView from "../Sheet/AddSourceSheet_View.vue";
@@ -243,6 +244,7 @@ onMounted(async () => {
 <template>
     <HeaderView :theme-logic="themeLogic" :active-tab="activeTab" />
     <main class="app-main" id="appMain" :class="{ 'has-mini-player': hasMiniPlayer }" v-show="activeTab === 'home'">
+        <OnboardingView :state="audioListState" :logic="audioListLogic" />
         <UploadView :state="generationState" :logic="generationLogic" />
         <TodayNewsView :logic="readerLogic" />
         <AudioListView
