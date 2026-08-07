@@ -3206,6 +3206,11 @@ input[type="range"]::-webkit-slider-thumb:active {
     right: 0;
     bottom: var(--tab-bar-h, calc(76px + env(safe-area-inset-bottom)));
     z-index: 14;
+    /* ⚠️ 이게 없으면 스와이프 제스처가 아예 동작하지 않는다. 기본값이면
+       브라우저가 손가락 움직임을 스크롤로 판정해 가져가 버리고, 우리에게는
+       pointermove 대신 pointercancel이 온다. 위아래·좌우를 우리가 직접
+       처리하므로 브라우저에 넘길 방향이 없다. */
+    touch-action: none;
     display: flex;
     flex-direction: column;
     gap: 6px;

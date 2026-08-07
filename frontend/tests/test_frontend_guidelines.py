@@ -372,3 +372,24 @@ def test_mini_player_is_placed_without_animation_on_first_entry():
     restore = home_view.split("async function restoreLastPlayedSession", 1)[1].split("\n}", 1)[0]
 
     assert "settleMiniPlayer" in restore
+
+def test_mini_player_claims_the_touch_gesture_for_swiping():
+    """미니 플레이어 스와이프가 실제로 동작할 조건을 갖췄는지 확인한다.
+
+    ⚠️ touch-action이 기본값이면 브라우저가 손가락 움직임을 스크롤로 판정해
+    가져가 버린다. 우리에게는 pointermove 대신 pointercancel이 오고, 스와이프가
+    통째로 죽는다(실제로 그렇게 배포됐다 — 진행 바 드래그만 되고 스와이프는
+    안 됐다).
+
+    setPointerCapture도 필요하다. 손가락이 미니 플레이어 밖으로 나가면 그
+    뒤의 move/up이 오지 않기 때문이다. 진행 바 드래그는 이걸 부르고 있어
+    혼자만 동작했다.
+    """
+    css = STYLE_CSS.read_text(encoding="utf-8")
+    view = (ROOT_DIR / "frontend" / "components" / "MiniPlayer" / "MiniPlayer_View.vue").read_text(encoding="utf-8")
+
+    rule = css.split(".mini-player {", 1)[1].split("}", 1)[0]
+    assert "touch-action: none" in rule
+
+    down = view.split("function onRootPointerDown", 1)[1].split("\n}", 1)[0]
+    assert "setPointerCapture" in down

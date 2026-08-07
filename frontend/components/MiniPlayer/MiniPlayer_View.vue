@@ -93,6 +93,9 @@ const swipeStyle = computed(() => {
 });
 
 function onRootPointerDown(event: PointerEvent): void {
+    // 포인터를 붙잡아 둬야 손가락이 미니 플레이어 밖으로 나가도 move/up이
+    // 계속 온다. 진행 바 드래그가 되고 스와이프가 안 되던 차이가 이것이었다.
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
     swipeStartX = event.clientX;
     swipeStartY = event.clientY;
     swipeAxis = "none";
