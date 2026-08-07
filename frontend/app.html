@@ -16,7 +16,19 @@
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="/static/textaudio-icon.png">
     <meta name="theme-color" content="#5d4b40">
-    <link rel="stylesheet" href="/static/style.css">
+    <!-- ⚠️ 순서가 곧 캐스케이드다. 뒤에 오는 파일이 앞을 덮어쓴다.
+         재배열하거나 하나만 빼면 눈에 잘 안 띄는 방식으로 화면이 깨진다.
+         파일 목록과 이 순서는 frontend/tests/test_frontend_guidelines.py가 고정한다. -->
+    <link rel="stylesheet" href="/static/css/00-tokens.css">
+    <link rel="stylesheet" href="/static/css/01-base.css">
+    <link rel="stylesheet" href="/static/css/02-files.css">
+    <link rel="stylesheet" href="/static/css/03-header-card.css">
+    <link rel="stylesheet" href="/static/css/04-upload-form.css">
+    <link rel="stylesheet" href="/static/css/05-audio-list.css">
+    <link rel="stylesheet" href="/static/css/06-reader.css">
+    <link rel="stylesheet" href="/static/css/07-modal-sheet.css">
+    <link rel="stylesheet" href="/static/css/08-mini-player.css">
+    <link rel="stylesheet" href="/static/css/09-misc.css">
 </head>
 <body>
     <div id="app"></div>

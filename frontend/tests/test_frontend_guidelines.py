@@ -7,7 +7,29 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parents[2]
 FRONTEND_STATIC = ROOT_DIR / "frontend" / "static"
 SW_JS = FRONTEND_STATIC / "sw.js"
-STYLE_CSS = FRONTEND_STATIC / "style.css"
+STYLE_SHEET_ORDER = [
+    "00-tokens.css",
+    "01-base.css",
+    "02-files.css",
+    "03-header-card.css",
+    "04-upload-form.css",
+    "05-audio-list.css",
+    "06-reader.css",
+    "07-modal-sheet.css",
+    "08-mini-player.css",
+    "09-misc.css",
+]
+
+STYLE_CSS_DIR = FRONTEND_STATIC / "css"
+# style.css는 화면 단위로 나뉘어 있다. 아래 STYLE_SHEET_ORDER가 app.html의
+# link 순서이자 곧 캐스케이드 순서이므로, 기존 CSS 테스트들은 그 순서대로
+# 이어 붙인 전체를 본다 — 나누기 전과 정확히 같은 것을 검사하게 된다.
+
+
+def read_all_css() -> str:
+    return "\n".join(
+        (STYLE_CSS_DIR / name).read_text(encoding="utf-8") for name in STYLE_SHEET_ORDER
+    )
 # admin 대시보드는 Vue SFC(View/State/Logic 분리)로 포팅되어 소스가
 # frontend/에 있다. static/admin.html·admin.js는 빌드 산출물(static/dist/admin)
 # 로 대체되어 더 이상 존재하지 않는다.
@@ -128,7 +150,7 @@ def test_service_worker_has_cache_version_and_no_dead_legacy_assets():
     assert '"/static/app.js"' not in source
 
 def test_css_supports_motion_and_dark_mode_preferences():
-    css = STYLE_CSS.read_text(encoding="utf-8")
+    css = read_all_css()
     body_rule = css.split("body {", 1)[1].split("}", 1)[0]
 
     assert "overflow-x: hidden" in body_rule
@@ -137,13 +159,13 @@ def test_css_supports_motion_and_dark_mode_preferences():
     assert "@media (prefers-color-scheme: dark)" in css
 
 def test_pull_refresh_spinner_moves_counterclockwise():
-    css = STYLE_CSS.read_text(encoding="utf-8")
+    css = read_all_css()
 
     assert "nth-child(1)  { animation-delay: -0.916s; }" in css
     assert "nth-child(12) { animation-delay: -0.000s; }" in css
 
 def test_dark_mode_keeps_upload_and_reader_surfaces_dark():
-    css = STYLE_CSS.read_text(encoding="utf-8")
+    css = read_all_css()
     dark_theme = css.split("@media (prefers-color-scheme: dark)", 1)[1]
 
     assert ".upload-dropzone" in dark_theme
@@ -200,7 +222,7 @@ def test_reader_highlight_never_overrides_body_text_color():
     실제로 OS 다크모드 기기에서 라이트·웜 테마를 쓰면 밝은 금색 배경 위에
     흰 글자(#fff5eb)가 찍혀 대비가 1.1:1까지 떨어졌다(사실상 안 보임).
     """
-    css = STYLE_CSS.read_text(encoding="utf-8")
+    css = read_all_css()
     dark_theme = css.split("@media (prefers-color-scheme: dark)", 1)[1]
     highlight_rule = dark_theme.split(".reader-sentence.highlight {", 1)[1].split("}", 1)[0]
 
@@ -215,7 +237,7 @@ def test_reader_sentence_padding_closes_gaps_between_wrapped_lines():
     "(줄 높이 - 글자 실제 높이) / 2"로 잡아야 위아래 줄 배경이 맞닿는다.
     글꼴마다 실제 높이가 달라 --reader-glyph-height를 Reader_View가 넘겨준다.
     """
-    css = STYLE_CSS.read_text(encoding="utf-8")
+    css = read_all_css()
     sentence_rule = css.split("\n.reader-sentence {", 1)[1].split("}", 1)[0]
 
     assert "--reader-line-height" in sentence_rule
@@ -233,7 +255,7 @@ def test_progress_bar_touch_area_is_larger_than_the_visible_line():
     ::before로 위아래만 넓힌다. 12px보다 더 넓히면 바로 위 본문 문장의
     터치를 뺏는다(실측: -14px 지점이 이미 .reader-sentence).
     """
-    css = STYLE_CSS.read_text(encoding="utf-8")
+    css = read_all_css()
 
     assert ".player-progress-bar::before" in css
     hit_area = css.split(".player-progress-bar::before {", 1)[1].split("}", 1)[0]
@@ -246,7 +268,7 @@ def test_light_reader_theme_is_not_pure_white():
     순백(#fff)은 장시간 읽기에 눈이 부시다. 미색으로 낮춰도 본문 대비는
     16:1로 WCAG AAA를 크게 넘는다.
     """
-    css = STYLE_CSS.read_text(encoding="utf-8")
+    css = read_all_css()
     light_theme = css.split('[data-app-theme="light"] .reader-container', 1)[1].split("}", 1)[0]
 
     assert "--reader-bg:" in light_theme
@@ -261,7 +283,7 @@ def test_reader_highlight_thickens_strokes_without_changing_glyph_width():
     끝이 330.9px → 328.8px로 밀려 글자 하나가 다음 줄로 넘어갔다).
     text-shadow는 획만 덧그려서 레이아웃이 전혀 바뀌지 않는다.
     """
-    css = STYLE_CSS.read_text(encoding="utf-8")
+    css = read_all_css()
     highlight_rule = css.split("\n.reader-sentence.highlight {", 1)[1].split("}", 1)[0]
 
     assert "text-shadow" in highlight_rule
@@ -276,7 +298,7 @@ def test_progress_bar_supports_dragging_with_a_time_tooltip():
     전까지는 실제로 옮기지 않아야 손을 뗄 곳을 보고 정할 수 있다.
     """
     reader_view = (ROOT_DIR / "frontend" / "Reader" / "Reader_View.vue").read_text(encoding="utf-8")
-    css = STYLE_CSS.read_text(encoding="utf-8")
+    css = read_all_css()
 
     assert "@pointerdown=" in reader_view
     assert "@pointermove=" in reader_view
@@ -293,7 +315,7 @@ def test_secondary_player_controls_are_not_dimmed_by_opacity():
     떨어져 UI 요소 기준(3:1)에 겨우 걸친다(웜 테마에서 실측). 활성/비활성은
     색과 배경으로 이미 구분되므로 투명도를 겹쳐 쓸 이유가 없다.
     """
-    css = STYLE_CSS.read_text(encoding="utf-8")
+    css = read_all_css()
     rule = css.split(".btn-reader-secondary {", 1)[1].split("}", 1)[0]
     # 주석에도 "opacity"라는 낱말이 나오므로 선언만 본다.
     declarations = re.sub(r"/\*.*?\*/", "", rule, flags=re.S)
@@ -308,7 +330,7 @@ def test_long_reader_title_can_be_expanded_by_tapping():
     툴팁이 없어 title 속성만으로는 부족하므로, 눌러서 펼치게 한다.
     """
     reader_view = (ROOT_DIR / "frontend" / "Reader" / "Reader_View.vue").read_text(encoding="utf-8")
-    css = STYLE_CSS.read_text(encoding="utf-8")
+    css = read_all_css()
 
     assert "isTitleExpanded" in reader_view
     assert "is-expanded" in reader_view
@@ -355,7 +377,7 @@ def test_mini_player_progress_bar_is_draggable_with_a_tooltip():
     stopPropagation이 빠지면 안 된다.
     """
     view = (ROOT_DIR / "frontend" / "components" / "MiniPlayer" / "MiniPlayer_View.vue").read_text(encoding="utf-8")
-    css = STYLE_CSS.read_text(encoding="utf-8")
+    css = read_all_css()
 
     assert "@pointerdown=" in view and "@pointermove=" in view and "@pointerup=" in view
     assert "@pointercancel=" in view
@@ -387,7 +409,7 @@ def test_mini_player_claims_the_touch_gesture_for_swiping():
     뒤의 move/up이 오지 않기 때문이다. 진행 바 드래그는 이걸 부르고 있어
     혼자만 동작했다.
     """
-    css = STYLE_CSS.read_text(encoding="utf-8")
+    css = read_all_css()
     view = (ROOT_DIR / "frontend" / "components" / "MiniPlayer" / "MiniPlayer_View.vue").read_text(encoding="utf-8")
 
     rule = css.split(".mini-player {", 1)[1].split("}", 1)[0]
@@ -404,7 +426,7 @@ def test_mini_player_slides_only_the_title_not_the_whole_bar():
     아래로 내릴 때는 반대로 바 전체가 내려가는 게 맞다.
     """
     view = (ROOT_DIR / "frontend" / "components" / "MiniPlayer" / "MiniPlayer_View.vue").read_text(encoding="utf-8")
-    css = STYLE_CSS.read_text(encoding="utf-8")
+    css = read_all_css()
 
     # 루트에는 세로(내리기) 스타일만, 제목에는 가로 스타일만 붙는다.
     assert ':style="dismissStyle"' in view
@@ -412,3 +434,40 @@ def test_mini_player_slides_only_the_title_not_the_whole_bar():
     assert "mini-player-title-slot" in view
     assert ".mini-title-next-enter-from" in css
     assert ".mini-title-prev-enter-from" in css
+
+
+# style.css는 4,176줄 한 덩어리였다. 컴포넌트는 78개로 잘 쪼개 놓고 스타일만
+# 통짜라, 어디를 고쳐야 하는지 찾는 데만 시간이 걸렸다. 화면 단위로 나눴다.
+#
+# 나누는 순간 새 위험이 생긴다 — CSS는 나중에 온 규칙이 앞을 덮으므로
+# **link 순서가 곧 캐스케이드**다. 파일 하나를 빼먹거나 순서를 바꾸면
+# 화면이 미묘하게 깨지는데, 이런 건 테스트가 없으면 몇 주 동안 아무도 모른다.
+
+
+def test_app_html_loads_every_stylesheet_in_cascade_order():
+    html = APP_HTML.read_text(encoding="utf-8")
+    loaded = re.findall(r'<link rel="stylesheet" href="/static/css/([^"]+)">', html)
+
+    assert loaded == STYLE_SHEET_ORDER
+
+
+def test_every_stylesheet_file_exists_and_none_is_orphaned():
+    """목록에 없는 파일이 css/에 남아 있으면 아무 화면에도 안 실린다 —
+    고쳐도 반영되지 않는 유령 파일이 되므로 양방향으로 확인한다."""
+    on_disk = sorted(path.name for path in (FRONTEND_STATIC / "css").glob("*.css"))
+
+    assert on_disk == sorted(STYLE_SHEET_ORDER)
+
+
+def test_service_worker_precaches_every_stylesheet():
+    """하나라도 빠지면 오프라인에서 그 화면만 스타일이 없는 채로 뜬다."""
+    sw = (FRONTEND_STATIC / "sw.js").read_text(encoding="utf-8")
+
+    for name in STYLE_SHEET_ORDER:
+        assert f'"/static/css/{name}"' in sw, name
+
+
+def test_no_stylesheet_references_the_old_single_file():
+    """분할 전 경로가 남아 있으면 404 요청이 조용히 계속 나간다."""
+    for path in (APP_HTML, FRONTEND_STATIC / "sw.js"):
+        assert "/static/style.css" not in path.read_text(encoding="utf-8"), path.name

@@ -1,0 +1,146 @@
+/* 읽기 화면을 닫아도 재생은 계속되는 경우, 탭바 바로 위에 떠서 제목/
+   진행 상황을 보여주고 누르면 다시 읽기 화면으로 돌아간다.
+   --tab-bar-h는 Home_View가 탭바의 실제 렌더 높이를 재서 넣어준다 —
+   safe-area가 기기마다 다르게 포함돼 있어 고정 상수(예: 76px)를 쓰면
+   탭바와의 사이에 틈이 생긴다. */
+.mini-player {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: var(--tab-bar-h, calc(76px + env(safe-area-inset-bottom)));
+    z-index: 14;
+    /* ⚠️ 이게 없으면 스와이프 제스처가 아예 동작하지 않는다. 기본값이면
+       브라우저가 손가락 움직임을 스크롤로 판정해 가져가 버리고, 우리에게는
+       pointermove 대신 pointercancel이 온다. 위아래·좌우를 우리가 직접
+       처리하므로 브라우저에 넘길 방향이 없다. */
+    touch-action: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+    max-width: 500px;
+    margin: 0 auto;
+    padding: 10px 20px;
+    background-color: var(--card-bg-solid);
+    border: none;
+    border-top: 1px solid var(--border-color);
+    text-align: left;
+    font-family: inherit;
+    cursor: pointer;
+    transform: translateY(100%);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.mini-player.show {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.mini-player-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* 제목이 좌우로 미끄러져도 바깥으로 삐져나오지 않게 가둔다. */
+.mini-player-title-slot {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+/* 넘긴 방향으로 이전 제목이 빠지고, 반대쪽에서 새 제목이 들어온다
+   (유튜브 뮤직과 같은 방향 규칙). */
+.mini-title-next-enter-active,
+.mini-title-next-leave-active,
+.mini-title-prev-enter-active,
+.mini-title-prev-leave-active {
+    transition: transform 0.18s ease, opacity 0.18s ease;
+}
+
+.mini-title-next-enter-from { transform: translateX(60%); opacity: 0; }
+.mini-title-next-leave-to { transform: translateX(-60%); opacity: 0; }
+.mini-title-prev-enter-from { transform: translateX(-60%); opacity: 0; }
+.mini-title-prev-leave-to { transform: translateX(60%); opacity: 0; }
+
+.mini-player-title {
+    display: block;
+    flex: 1;
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--text-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mini-player-play-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: none;
+    background-color: var(--primary-color);
+    color: #ffffff;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.mini-player-time {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    min-width: 32px;
+    flex-shrink: 0;
+}
+
+.mini-player-progress-bar {
+    flex: 1;
+    height: 3px;
+    border-radius: 2px;
+    background-color: var(--border-color);
+    position: relative;
+    cursor: pointer;
+}
+
+/* 보이는 선은 3px지만 손가락으로 3px를 정확히 짚을 수는 없다. 미니
+   플레이어는 위아래로 여유가 적어 읽기 화면(12px)보다 좁게 잡는다. */
+.mini-player-progress-bar::before {
+    content: "";
+    position: absolute;
+    inset: -9px 0;
+}
+
+.mini-player-progress-bar.is-dragging {
+    height: 5px;
+}
+
+.mini-player-progress-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    border-radius: 2px;
+    background-color: var(--primary-color);
+}
+
+/* 미니 플레이어가 떠 있는 동안 목록 마지막 줄이 그 밑에 가리지 않게
+   스크롤 영역에 여유를 더 준다. */
+.app-main.has-mini-player,
+.myfiles-root.has-mini-player {
+    padding-bottom: 70px;
+}
+
+.app-version-footer {
+    text-align: center;
+    padding: 12px 0 24px 0;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    opacity: 0.7;
+    font-family: var(--font-sans);
+}
+

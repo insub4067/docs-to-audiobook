@@ -1,0 +1,941 @@
+/* Full-Screen Synced Reader Overlay (Analog aesthetic) */
+.reader-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--bg-color);
+    z-index: 1500;
+    display: flex;
+    justify-content: center;
+    /* iOS fullScreenCover처럼 아래에서 위로 올라오고, 닫을 때 다시
+       아래로 사라진다. */
+    transform: translateY(100%);
+    pointer-events: none;
+    transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.reader-overlay.show {
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+.library-category-chips {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 16px;
+    -webkit-overflow-scrolling: touch;
+}
+.library-chip {
+    flex-shrink: 0;
+    padding: 8px 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    background: none;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.library-chip.active {
+    border-color: var(--primary-color);
+    background: var(--primary-color);
+    color: #fff;
+}
+
+/* 정렬 칩은 카테고리 칩과 나란히 놓이므로 한눈에 구분되게 조금 작게. */
+.library-sort-chip {
+    padding: 6px 13px;
+    font-size: 0.82rem;
+}
+
+.library-search {
+    position: relative;
+    margin-bottom: 12px;
+}
+
+.library-search-icon {
+    position: absolute;
+    top: 50%;
+    left: 12px;
+    width: 17px;
+    height: 17px;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    pointer-events: none;
+}
+
+.library-search-input {
+    width: 100%;
+    /* iOS는 글자가 16px보다 작으면 입력할 때 화면을 확대해 버린다. */
+    padding: 11px 14px 11px 37px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    color: var(--text-color);
+    background: var(--card-bg-solid, transparent);
+    font-family: inherit;
+    font-size: 16px;
+}
+
+.library-search-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+/* 라이브러리 작품 상세는 리더처럼 전체화면으로 뜨지만(판본/목차 등
+   내용이 많아 시트로는 좁음) 리더보다 아래 레이어에 둔다 — 상세에서
+   재생을 누르면 리더가 그 위로 열려야 하므로. */
+.library-detail-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: var(--bg-color);
+    z-index: 1400;
+    display: flex;
+    justify-content: center;
+    transform: translateY(100%);
+    pointer-events: none;
+    transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.library-detail-overlay.show {
+    transform: translateY(0);
+    pointer-events: auto;
+}
+.library-detail-container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 500px;
+    height: 100%;
+}
+.library-detail-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: max(16px, env(safe-area-inset-top)) 16px 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+.library-detail-content {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 20px 20px calc(40px + env(safe-area-inset-bottom));
+}
+.library-detail-meta {
+    margin: 0 0 12px;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+.library-detail-description {
+    margin: 0 0 24px;
+    line-height: 1.7;
+    color: var(--text-color);
+}
+.library-detail-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 32px;
+}
+.library-detail-actions .action-sheet-btn {
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 14px 18px;
+}
+.library-detail-actions .action-sheet-btn-primary {
+    border-color: var(--primary-color);
+}
+.library-detail-actions .library-saved-state {
+    border-color: var(--primary-color);
+    background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+    color: var(--primary-color);
+    font-weight: 600;
+}
+.library-detail-section {
+    margin-bottom: 28px;
+}
+.library-detail-section h4 {
+    margin: 0 0 8px;
+    font-family: var(--font-serif);
+    font-size: 1rem;
+    color: var(--primary-color);
+}
+.library-detail-section .index-sheet-list {
+    max-height: none;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+}
+.library-detail-rights p {
+    margin: 0 0 8px;
+    font-size: 0.88rem;
+    line-height: 1.6;
+    color: var(--text-muted);
+}
+.library-detail-rights p b {
+    color: var(--text-color);
+    font-weight: 600;
+    margin-right: 4px;
+}
+
+.reader-container,
+.theme-preview {
+    /* 리더 전용 색상 테마. 앱 전체(홈/보관함/관리자)와 같은 4가지
+       라이트/다크/웜/그레이를 공유하지만, 읽는 화면은 장시간 독서에
+       맞춘 별도 톤(대비/테두리 등)을 쓴다. 기본값은 웜(warm)이다.
+       .theme-preview(테마 시트 안의 짧은 미리보기 문구)도 같은 변수를
+       써서 실제 리더 화면과 똑같은 색으로 보인다. */
+    --reader-bg: #FAF5E6;
+    --reader-surface: rgba(250, 245, 230, 0.88);
+    --reader-text: #2C1F1A;
+    --reader-text-muted: #7A6559;
+    --reader-accent: #A67C52;
+    --reader-border: rgba(120, 90, 60, 0.1);
+    --reader-highlight-bg: rgba(198, 154, 88, 0.15);
+}
+
+.reader-container {
+    width: 100%;
+    max-width: 760px;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background-color: var(--reader-bg);
+    overflow: hidden;
+    /* 상단바를 끌어내리다 놓았을 때(닫을 만큼 안 끌었으면) 제자리로
+       부드럽게 되돌아간다 — 드래그 중에는 .ui-dragging이 이 transition을
+       꺼서 손가락을 그대로 따라간다(다른 바텀시트류와 같은 패턴). */
+    transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+:root[data-app-theme="light"] .reader-container,
+:root[data-app-theme="light"] .theme-preview {
+    /* 순백(#fff)은 장시간 읽기에 눈이 부시다. 웜보다는 확실히 밝게 두되
+       아주 옅은 미색을 섞어 눈부심만 덜어낸다(본문 대비는 17:1로 유지). */
+    --reader-bg: #F8F6F1;
+    --reader-surface: rgba(248, 246, 241, 0.88);
+    --reader-text: #1a1a1a;
+    --reader-text-muted: #6b6b6b;
+    --reader-accent: #8a6d3b;
+    --reader-border: rgba(0, 0, 0, 0.1);
+    --reader-highlight-bg: rgba(138, 109, 59, 0.10);
+}
+
+:root[data-app-theme="dark"] .reader-container,
+:root[data-app-theme="dark"] .theme-preview {
+    --reader-bg: #121212;
+    --reader-surface: rgba(24, 24, 24, 0.88);
+    --reader-text: #e8e4de;
+    --reader-text-muted: #a3a3a3;
+    --reader-accent: #d9a66f;
+    --reader-border: rgba(255, 255, 255, 0.12);
+    --reader-highlight-bg: rgba(217, 166, 111, 0.16);
+}
+
+:root[data-app-theme="gray"] .reader-container,
+:root[data-app-theme="gray"] .theme-preview {
+    --reader-bg: #1c1c1e;
+    --reader-surface: rgba(28, 28, 30, 0.88);
+    --reader-text: #e5e5e7;
+    --reader-text-muted: #98989d;
+    --reader-accent: #a8a8ad;
+    --reader-border: rgba(255, 255, 255, 0.14);
+    --reader-highlight-bg: rgba(168, 168, 173, 0.12);
+}
+
+/* OS 다크모드(@media prefers-color-scheme: dark) 쪽에 있는 예전
+   바닐라 리더용 하드코딩 배색과 이 변수 기반 규칙은 같은 속성(예:
+   background-color)을 두고 경쟁한다 — specificity가 같으면 소스 순서상
+   나중에 오는 다크모드 쪽이 이겨서 사용자가 고른 테마색이 무시된다.
+   Vue 앱은 항상 <html>에 data-app-theme 속성을 달고 있으므로(기본값
+   "warm") 조상 속성 선택자를 더해 specificity를 한 단계 올려 테마
+   변수가 항상 이기게 한다. 이 속성이 없는 예전 바닐라 리더는 영향을
+   받지 않고 OS 다크모드를 그대로 따른다. */
+:root[data-app-theme] .reader-container {
+    background-color: var(--reader-bg);
+}
+
+:root[data-app-theme] .reader-container::before {
+    background-color: var(--reader-surface);
+}
+
+:root[data-app-theme] .reader-header,
+:root[data-app-theme] .reader-controls {
+    border-color: var(--reader-border);
+    background-color: var(--reader-surface);
+}
+
+:root[data-app-theme] .reader-content {
+    color: var(--reader-text);
+    background-color: var(--reader-bg);
+}
+
+:root[data-app-theme] .reader-sentence:hover {
+    background-color: color-mix(in srgb, var(--reader-accent) 10%, transparent);
+}
+
+:root[data-app-theme] .reader-sentence.highlight {
+    background-color: var(--reader-highlight-bg);
+    box-shadow: inset 3px 0 0 var(--reader-accent);
+}
+
+/* 상단 안전영역 고정 블러 스트립. 헤더가 접혀도 본문이 다이나믹
+   아일랜드 밑으로 드러나지 않게 항상 덮는다. */
+.reader-container::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: env(safe-area-inset-top);
+    background-color: var(--reader-surface);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    z-index: 9;
+    pointer-events: none;
+}
+
+/* 상/하단 바는 absolute 오버레이다. */
+.reader-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
+    /* 우측 칸은 버튼이 2개(재생목록·더보기)라 좌측(닫기 1개)보다 넓다 —
+       제목이 수학적으로 정확히 중앙은 아니지만 실사용 폭 차이는
+       미미하고, 대신 좌우 칸 너비를 고정해 텍스트 길이에 따라
+       칸 자체가 밀리는 것만 막는다. */
+    display: grid;
+    grid-template-columns: 44px 1fr auto;
+    align-items: center;
+    padding: calc(16px + env(safe-area-inset-top)) 20px 16px;
+    border-bottom: 1px solid var(--reader-border);
+    background-color: var(--reader-surface);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+}
+
+/* 눌러서 전체 제목을 펼칠 수 있다. 접힌 상태에서만 말줄임한다. */
+.reader-book-title.is-expanded {
+    overflow: visible;
+    white-space: normal;
+    text-overflow: clip;
+    word-break: keep-all;
+    line-height: 1.35;
+}
+
+.reader-book-title {
+    cursor: pointer;
+    font-family: var(--font-serif);
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--reader-accent);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+    justify-self: center;
+    max-width: 100%;
+}
+
+.reader-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    justify-self: end;
+}
+
+.btn-reader-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    padding: 8px;
+    min-width: 44px;
+    min-height: 44px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    position: relative;
+    z-index: 20;
+    touch-action: manipulation; /* iOS: 300ms 탭 딜레이 제거 */
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.btn-reader-close:hover {
+    background-color: rgba(93, 75, 64, 0.05);
+    color: var(--text-color);
+}
+
+.btn-reader-close.is-active {
+    color: var(--reader-accent);
+}
+
+/* 본문도 absolute. 바가 오버레이라 문서 처음/끝이 가려지지 않게 바
+   높이만큼 패딩을 확보한다. 이 패딩은 접힘과 무관하게 고정이다 —
+   여기가 바뀌면 리플로우가 나서 스크롤이 튄다. */
+.reader-content {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    overflow-y: auto;
+    padding: calc(var(--reader-header-h, 96px) + 24px) 32px
+             calc(var(--reader-controls-h, 120px) + 24px);
+    font-family: var(--font-serif);
+    font-size: calc(1.15rem * var(--reader-font-scale, 1));
+    line-height: var(--reader-line-height, 2.0);
+    color: var(--reader-text);
+    background-color: var(--reader-bg);
+    letter-spacing: 0.01em;
+    word-spacing: 0.05em;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Sentences styling */
+/* 세로 여백은 "줄 높이 - 글자가 실제로 차지하는 높이"의 절반이다. 인라인
+   요소의 배경은 글자 높이만큼만 칠해지므로, 여백 없이는 여러 줄로 감기는
+   문장의 강조 배경이 줄마다 뚝뚝 끊겨 본문이 조각난 것처럼 보였다. 여백을
+   이만큼 주면 위아래 줄의 배경이 정확히 맞닿아 한 덩어리로 보인다.
+   더 주면 겹치는데, 배경이 반투명이라 겹친 부분에 진한 띠가 생긴다. */
+.reader-sentence {
+    cursor: pointer;
+    padding: max(0px, calc((var(--reader-line-height, 2) * 1em - var(--reader-glyph-height, 1.52em)) / 2)) 5px;
+    border-radius: 5px;
+    transition: background-color 0.25s ease;
+}
+
+/* Dynamic Markdown Headings in Reader — 본문 글꼴(명조/고딕) 선택과 무관하게
+   제목은 항상 명조체로 고정해 본문과 시각적으로 구분되게 한다. */
+.reader-heading {
+    display: block;
+    margin-top: 1.8rem;
+    margin-bottom: 0.8rem;
+    font-family: var(--font-serif);
+    font-weight: 700;
+    color: var(--reader-accent);
+    letter-spacing: -0.01em;
+    line-height: 1.3;
+}
+.reader-heading.h1 {
+    font-size: calc(1.7rem * var(--reader-font-scale, 1));
+    border-bottom: 2px solid color-mix(in srgb, var(--reader-accent) 40%, transparent);
+    padding-bottom: 6px;
+}
+.reader-heading.h2 {
+    font-size: calc(1.45rem * var(--reader-font-scale, 1));
+    border-bottom: 1px solid color-mix(in srgb, var(--reader-accent) 30%, transparent);
+    padding-bottom: 4px;
+}
+.reader-heading.h3 {
+    font-size: calc(1.25rem * var(--reader-font-scale, 1));
+}
+
+/* 리더 테마 선택 시트 (Aa 버튼) */
+.theme-preview {
+    margin: 4px 24px 16px;
+    padding: 18px 20px;
+    border-radius: 16px;
+    border: 1px solid var(--reader-border);
+    background-color: var(--reader-bg);
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.theme-preview-heading {
+    font-family: var(--font-serif);
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--reader-accent);
+    margin-bottom: 6px;
+}
+
+.theme-preview-text {
+    font-family: var(--font-serif);
+    font-size: 0.92rem;
+    line-height: 1.6;
+    color: var(--reader-text);
+}
+
+/* 글꼴/글자크기/줄간격 시트 미리보기 — .reader-content와 같은 계산식을
+   써서 실제 리더 화면과 동일한 크기·간격으로 보이게 한다. */
+.reader-options-preview {
+    margin: 4px 24px 16px;
+    padding: 18px 20px;
+    border-radius: 16px;
+    border: 1px solid var(--reader-border);
+    background-color: var(--reader-bg);
+    color: var(--reader-text);
+    font-size: calc(1.15rem * var(--reader-font-scale, 1));
+    line-height: var(--reader-line-height, 2.0);
+    letter-spacing: 0.01em;
+    word-spacing: 0.05em;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.reader-theme-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    padding: 8px 24px 20px;
+}
+
+.reader-theme-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    border: 2px solid var(--border-color);
+    background: var(--card-bg-solid);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.reader-theme-card.is-selected {
+    border-color: var(--primary-color);
+}
+
+.reader-theme-swatch {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.reader-theme-label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+/* Index ActionSheet Styling */
+.index-sheet {
+    max-height: 70vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.index-sheet-header {
+    padding: 12px 16px 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.index-sheet-header h3 {
+    font-family: var(--font-serif);
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    margin: 0;
+}
+
+.action-sheet-subtitle {
+    margin: 4px 0 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.action-sheet-hint {
+    padding: 10px 20px 12px;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.action-sheet-section-label {
+    padding: 12px 20px 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.action-sheet-divider {
+    height: 1px;
+    margin: 8px 20px 0;
+    background-color: rgba(0, 0, 0, 0.06);
+}
+
+.action-sheet-btn-detailed {
+    align-items: flex-start;
+    padding-top: 12px;
+    padding-bottom: 12px;
+}
+
+.action-sheet-btn-detailed svg {
+    margin-top: 2px;
+}
+
+.action-sheet-btn-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    text-align: left;
+}
+
+.action-sheet-btn-title {
+    font-size: 1.05rem;
+    color: var(--text-color);
+}
+
+.action-sheet-btn-desc {
+    font-size: 0.78rem;
+    font-weight: 400;
+    color: var(--text-muted);
+}
+
+.index-sheet-list {
+    overflow-y: auto;
+    max-height: 50vh;
+    padding: 8px 0;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+}
+
+.index-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 20px;
+    font-family: var(--font-serif);
+    font-size: 0.98rem;
+    color: var(--text-color);
+    border-bottom: 1px solid rgba(120, 90, 60, 0.06);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.index-item:hover {
+    background-color: rgba(198, 154, 88, 0.08);
+}
+
+.index-item-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.index-item-duration {
+    flex-shrink: 0;
+    margin-left: 12px;
+    font-family: var(--font-sans);
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+/* 지금 듣고 있는 장. 목차를 열면 여기로 스크롤되므로, 눈에 바로
+   들어오도록 왼쪽 포인트 라인과 배경을 함께 준다. */
+.index-item.is-current {
+    background-color: rgba(198, 154, 88, 0.14);
+    box-shadow: inset 3px 0 0 var(--primary-color);
+    font-weight: 700;
+}
+
+.index-item.h1 { font-weight: 700; padding-left: 20px; color: var(--primary-color); }
+.index-item.h2 { font-weight: 600; padding-left: 36px; }
+.index-item.h3 { font-weight: 400; padding-left: 52px; color: var(--text-muted); }
+
+.reader-sentence:hover {
+    background-color: color-mix(in srgb, var(--reader-accent) 10%, transparent);
+}
+
+/* Synced Highlighter: 재생 중인 문장 강조. 색상은 리더 테마를 따른다.
+   은은한 배경 틴트 + 왼쪽 포인트 라인 + 살짝 두꺼운 획으로 강조하고,
+   글자색은 바꾸지 않는다 — 문장 전체가 너무 튀어 보이지 않게 하기 위함.
+
+   ⚠️ 두께를 font-weight로 올리면 안 된다. 글자 폭이 함께 바뀌어 줄바꿈이
+   밀리는데, 재생 중 문장이 넘어갈 때마다 그러면 본문이 들썩인다(실측:
+   weight 700에서 첫 줄 끝이 330.9px → 328.8px로 밀려 글자 하나가 다음
+   줄로 넘어갔다). text-shadow는 획만 덧그려서 글자 폭이 그대로다.
+   px가 아니라 em이라 글자 크기를 키워도 두께 비율이 유지된다. */
+.reader-sentence.highlight {
+    background-color: var(--reader-highlight-bg);
+    border-radius: 5px;
+    box-shadow: inset 3px 0 0 var(--reader-accent);
+    text-shadow: 0 0 0.02em currentColor;
+}
+
+.reader-table {
+    width: 100%;
+    margin: 18px 0;
+    border-collapse: separate;
+    border-spacing: 0;
+    overflow: hidden;
+    border: 1px solid var(--glass-border);
+    border-radius: 14px;
+    font-size: 0.82em;
+    line-height: 1.5;
+}
+
+.reader-table th,
+.reader-table td {
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid var(--glass-border);
+}
+
+.reader-table th {
+    color: var(--reader-accent);
+    background: var(--glass-bg);
+    font-weight: 700;
+}
+
+.reader-table tr:last-child td {
+    border-bottom: 0;
+}
+
+.reader-table .reader-sentence {
+    display: inline;
+}
+
+/* 재생 중인 문장이 위로 스크롤해서 화면 밖으로 벗어나면 뜬다 — 눌러서
+   현재 읽고 있는 위치로 바로 돌아간다. */
+.reader-back-to-current {
+    position: absolute;
+    left: 50%;
+    bottom: calc(var(--reader-controls-h, 120px) + 16px);
+    transform: translateX(-50%);
+    z-index: 15;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 18px;
+    border: none;
+    border-radius: 30px;
+    background-color: var(--reader-accent);
+    color: #ffffff;
+    font-size: 0.85rem;
+    font-weight: 600;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+    cursor: pointer;
+}
+
+.reader-back-to-current i {
+    width: 16px;
+    height: 16px;
+}
+
+/* 하단 바는 접혀도 사라지지 않고 재생 컨트롤만 남는 컴팩트 상태가 된다.
+   오디오북에서 일시정지와 재생 위치는 읽는 중 가장 자주 쓰는 컨트롤이라
+   완전히 숨기면 매번 스크롤을 되돌려야 한다. */
+.reader-controls {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
+    /* 터치 영역은 홈 인디케이터를 비켜야 한다. 배경은 화면 끝까지 full-bleed로
+       깔리고(부모가 뷰포트 하단까지 닿음) 버튼만 인셋만큼 올라온다. */
+    padding: 8px 20px max(12px, env(safe-area-inset-bottom));
+    border-top: 1px solid var(--reader-border);
+    background-color: var(--reader-surface);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+}
+
+
+.reader-player-ui {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.reader-player-buttons {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.btn-player-play {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    background-color: var(--primary-color);
+    color: #ffffff;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(93, 75, 64, 0.15);
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 20;
+    touch-action: manipulation; /* iOS: 300ms 탭 딜레이 제거 */
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.btn-player-play:hover {
+    background-color: var(--primary-hover);
+    transform: scale(1.05);
+}
+
+.btn-player-play:active {
+    transform: scale(0.95);
+}
+
+.btn-player-play svg {
+    width: 22px;
+    height: 22px;
+}
+
+.btn-player-skip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background-color: rgba(93, 75, 64, 0.1);
+    color: var(--primary-color);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.btn-player-skip:hover {
+    background-color: rgba(93, 75, 64, 0.2);
+    transform: scale(1.05);
+}
+
+.btn-player-skip:active {
+    transform: scale(0.95);
+}
+
+.btn-player-skip svg {
+    width: 20px;
+    height: 20px;
+}
+
+.reader-secondary-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* 이전/재생/다음 같은 핵심 조작보다 시각적으로 한 단계 낮은 비중으로
+   보이도록 스킵 버튼(36px)보다 작고, 켜져 있지 않을 땐 옅게 보이게 한다. */
+.btn-reader-secondary {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: 50%;
+    /* ⚠️ 여기에 opacity를 걸면 안 된다. 이미 muted 색이라 대비가 5.03:1인데
+       0.75를 곱하면 3.09:1까지 떨어져 UI 요소 기준(3:1)에 겨우 걸친다.
+       활성/비활성은 색(muted ↔ primary)과 배경으로 이미 구분되므로
+       투명도로 한 번 더 흐리게 할 이유가 없다. */
+    transition: all 0.2s ease;
+}
+
+.btn-reader-secondary i {
+    width: 18px;
+    height: 18px;
+}
+
+.btn-reader-secondary:hover {
+    background: rgba(93, 75, 64, 0.05);
+    color: var(--text-color);
+}
+
+.btn-reader-secondary.active {
+    color: var(--primary-color);
+    background: rgba(93, 75, 64, 0.1);
+}
+
+.reader-time-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.player-time {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    min-width: 40px;
+    text-align: center;
+}
+
+/* 하단바 맨 위에 얇게 걸치는 전체 폭 진행바. .reader-controls의
+   padding(8px 20px)을 음수 마진으로 상쇄해 가장자리까지 채운다. */
+.player-progress-bar {
+    height: 4px;
+    background-color: var(--border-color);
+    border-radius: 0;
+    position: relative;
+    cursor: pointer;
+    margin: -8px -20px 10px;
+}
+
+/* 보이는 선은 4px지만 손가락으로 4px를 정확히 누를 수는 없다. 실제로
+   누를 수 있는 영역만 위아래로 넓힌다(총 28px). 아래쪽은 재생 시간
+   텍스트와 겹치는데, 그쪽은 누를 일이 없어 문제되지 않는다. */
+.player-progress-bar::before {
+    content: "";
+    position: absolute;
+    inset: -12px 0;
+}
+
+.player-progress-fill {
+    width: 0%;
+    height: 100%;
+    background-color: var(--accent-color);
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+/* 끄는 동안에는 굵게 해서 "지금 조작 중"임을 드러낸다. */
+.player-progress-bar.is-dragging {
+    height: 6px;
+}
+
+.player-progress-tooltip {
+    position: absolute;
+    bottom: 14px;
+    transform: translateX(-50%);
+    padding: 4px 9px;
+    border-radius: 8px;
+    color: var(--bg-color);
+    background: var(--text-color);
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+@media (max-width: 480px) {
+    .reader-container {
+        border-left: none;
+        border-right: none;
+    }
+    
+    .reader-content {
+        /* 좌우만 좁히고 상/하는 바 높이 확보를 유지해야 한다 —
+           여기서 padding을 통째로 덮으면 문서 처음/끝이 바에 가려진다 */
+        padding: calc(var(--reader-header-h, 96px) + 30px) 22px
+                 calc(var(--reader-controls-h, 120px) + 30px);
+        font-size: calc(1.12rem * var(--reader-font-scale, 1));
+        line-height: calc(var(--reader-line-height, 2.0) - 0.2);
+    }
+}

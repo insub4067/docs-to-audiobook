@@ -1,0 +1,422 @@
+/* 홈/내 파일 두 화면 전환용 하단 탭바. 읽기 모드에서는 숨긴다
+   (Home_View.vue가 v-show로 제어). */
+.tab-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 15;
+    display: flex;
+    padding-bottom: env(safe-area-inset-bottom);
+    /* --card-bg-solid(카드용 흰색)를 쓰면 --bg-color가 흰색과 다른
+       테마(예: warm의 크림색)에서 하단 바만 색이 붕 뜬다. 페이지
+       배경색을 그대로 써서 경계선+블러만으로 구분되게 한다. */
+    background-color: var(--bg-color);
+    border-top: 1px solid var(--border-color);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+}
+
+.tab-bar-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 10px 0 8px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-family: var(--font-sans);
+    font-size: 0.72rem;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.tab-bar-btn i {
+    width: 22px;
+    height: 22px;
+}
+
+.tab-bar-btn.active {
+    color: var(--primary-color);
+}
+
+/* 내 파일 화면 — iOS 섹션(카드박스) 대신 평평한 목록으로 보여준다.
+   타이틀은 헤더의 큰 타이틀 하나로 충분해 여기선 반복하지 않는다. */
+.myfiles-root {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.myfiles-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 44px;
+}
+
+.myfiles-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.myfiles-library-saves {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+.myfiles-library-saves-label {
+    margin: 4px 0 4px;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+.library-card-description {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin-top: 2px;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    color: var(--text-muted);
+}
+.library-saved-badge {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    color: var(--primary-color);
+}
+
+/* 목록 카드의 청취 진행률. 라이브러리 작품은 몇 시간짜리라 "얼마나
+   남았는지"가 저장 여부보다 훨씬 중요한 정보다. */
+.library-progress {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.library-progress-track {
+    flex: 1;
+    min-width: 0;
+    height: 4px;
+    border-radius: 4px;
+    background-color: var(--border-color);
+    overflow: hidden;
+}
+
+.library-progress-fill {
+    height: 100%;
+    border-radius: 4px;
+    background-color: var(--primary-color);
+}
+
+.library-progress .audio-subtitle {
+    flex-shrink: 0;
+}
+
+.library-progress-done {
+    margin-top: 8px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+.library-resume-btn {
+    flex-shrink: 0;
+    padding: 6px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    color: var(--text-color);
+    background: transparent;
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.library-resume-btn:active {
+    background-color: var(--card-bg);
+}
+
+.library-source-badge {
+    flex-shrink: 0;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    color: var(--text-muted);
+    font-size: 0.7rem;
+}
+
+.myfiles-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 20px;
+    background-color: var(--card-bg-solid);
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+/* .myfiles-row는 원래 <div>에만 쓰여 브라우저 기본 버튼 테두리/배경을
+   신경 쓸 필요가 없었다 — 프로필 탭의 설정 행처럼 <button>에 쓸 때는
+   기본 UA 스타일(테두리 등)을 지워야 한다. */
+button.myfiles-row {
+    width: 100%;
+    border: none;
+    font: inherit;
+    text-align: left;
+}
+
+a.myfiles-row {
+    color: inherit;
+    text-decoration: none;
+}
+
+.myfiles-row:last-child {
+    border-bottom: none;
+}
+
+@media (hover: hover) {
+    .myfiles-row:hover {
+        background-color: #f5f5f5;
+    }
+}
+.myfiles-row:active {
+    background-color: #f0f0f0;
+}
+
+.myfiles-row.drag-over {
+    background-color: var(--primary-color);
+    opacity: 0.85;
+}
+
+.myfiles-row-parent .myfiles-row-icon,
+.myfiles-row-parent .myfiles-row-title {
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.myfiles-row.drag-over .myfiles-row-icon,
+.myfiles-row.drag-over .myfiles-row-title {
+    color: #fff;
+}
+
+/* "따라오는" 미리보기는 .drag-ghost(테두리 밖으로도 잘리지 않게 body에
+   teleport)가 담당한다. 원래 자리의 .audio-item-front는 opacity를 쓰면
+   안 된다 — 아래 깔린 .audio-item-bg(스와이프 삭제용 빨간 배경)가
+   그대로 비쳐 보인다. */
+.drag-ghost {
+    position: fixed;
+    transform: translate(-50%, -50%) scale(0.9);
+    left: 0;
+    top: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 70vw;
+    padding: 12px 18px;
+    border-radius: 16px;
+    background-color: var(--card-bg-solid);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
+    color: var(--text-color);
+    font-family: var(--font-serif);
+    font-size: 0.95rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 0.75;
+    pointer-events: none;
+}
+
+.drag-ghost i {
+    width: 18px;
+    height: 18px;
+    color: var(--primary-color);
+    flex-shrink: 0;
+}
+
+.myfiles-row-icon {
+    width: 24px;
+    height: 24px;
+    color: var(--primary-color);
+    flex-shrink: 0;
+}
+
+.myfiles-row-title {
+    flex: 1;
+    min-width: 0;
+    font-family: var(--font-serif);
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--text-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.myfiles-row-value {
+    flex-shrink: 0;
+    color: var(--text-muted);
+    font-size: 0.88rem;
+}
+
+.myfiles-row-chevron {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    color: var(--text-muted);
+    opacity: 0.6;
+}
+
+/* 프로필 탭 계정 정보 — 헤더 우측 상단 프로필 아바타와 정보가 중복
+   표시되지 않도록(Header_View.vue에서 profile 탭일 때 숨김), 카드
+   자체도 기본 glass-card보다 여백을 좁혀 첫 화면 정보 밀도를 높인다. */
+.profile-account-card {
+    padding: 26px;
+}
+
+.profile-account-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 16px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.profile-avatar {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--primary-color) 65%, var(--bg-color) 35%);
+    color: var(--bg-color);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.profile-account-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.profile-account-info strong {
+    font-family: var(--font-serif);
+    font-size: 1.1rem;
+    color: var(--text-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.profile-account-info span {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 내 파일 화면의 경로 표시(빵부스러기) */
+.folder-breadcrumb {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 0 4px 4px;
+    font-size: 0.85rem;
+}
+
+.folder-breadcrumb-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    cursor: pointer;
+    padding: 4px;
+}
+
+.folder-breadcrumb-btn:last-child {
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+.folder-breadcrumb-sep {
+    color: var(--text-muted);
+    opacity: 0.5;
+}
+
+/* 폴더로 이동 시트의 하위 폴더 목록/빈 상태 */
+.folder-picker-list {
+    max-height: 40vh;
+    overflow-y: auto;
+}
+
+.folder-picker-empty {
+    padding: 16px 24px;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    text-align: center;
+}
+
+.action-sheet-btn-primary {
+    color: var(--primary-color);
+    font-weight: 700;
+}
+
+.text-input-textarea {
+    display: block;
+    width: calc(100% - 40px);
+    margin: 4px 20px 16px;
+    min-height: 38vh;
+    max-height: 55vh;
+    padding: 14px 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    background: var(--card-bg);
+    color: var(--text-color);
+    font-family: var(--font-sans);
+    font-size: 16px; /* iOS 자동 확대 방지 */
+    line-height: 1.6;
+    resize: none;
+}
+
+.text-input-textarea:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.prompt-sheet-input {
+    display: block;
+    width: calc(100% - 40px);
+    margin: 4px 20px 16px;
+    padding: 12px 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    background: var(--card-bg);
+    color: var(--text-color);
+    font-family: var(--font-sans);
+    font-size: 16px; /* iOS 자동 확대 방지 */
+}
+
+.prompt-sheet-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}

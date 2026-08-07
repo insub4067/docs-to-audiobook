@@ -1,0 +1,452 @@
+/* Dropzone */
+.upload-dropzone {
+    border: 2px dashed rgba(60, 60, 67, 0.15);
+    border-radius: 16px;
+    padding: 40px 24px;
+    text-align: center;
+    cursor: pointer;
+    background-color: #F9F9FB;
+    transition: all 0.2s ease;
+}
+
+.upload-dropzone:hover, .upload-dropzone.dragover {
+    border-color: var(--primary-color);
+    background-color: rgba(0, 122, 255, 0.03);
+}
+
+.url-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 16px 0;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.url-divider::before, .url-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background-color: var(--border-color);
+}
+
+.url-input-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+}
+
+.url-input-wrapper {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+}
+
+.url-input-row input,
+.url-input-row textarea {
+    width: 100%;
+    padding: 12px 52px 12px 16px;
+    font-size: 16px; /* iOS 자동 확대 방지 */
+    font-family: var(--font-sans);
+    color: var(--text-color);
+    background-color: var(--card-bg-solid);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+}
+
+.url-input-row textarea {
+    padding-right: 16px;
+    resize: vertical;
+    min-height: 44px;
+}
+
+.url-input-row input:focus,
+.url-input-row textarea:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.dropzone-icon {
+    width: 32px;
+    height: 32px;
+    color: var(--accent-color);
+    margin-bottom: 8px;
+}
+
+.dropzone-text {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--text-color);
+    word-break: keep-all;
+}
+
+.dropzone-hint {
+    display: block;
+    margin-top: 2px;
+    font-size: 0.8rem;
+    font-weight: 400;
+    color: var(--text-muted);
+}
+
+/* File info block after selection */
+.file-details {
+    background-color: var(--card-bg-solid);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: 16px;
+    margin-top: 16px;
+}
+
+.file-info-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.file-icon {
+    width: 24px;
+    height: 24px;
+    color: var(--primary-color);
+}
+
+.file-meta {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+.file-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.file-size {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.btn-icon {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    padding: 10px; /* 아이콘(24px) + 패딩으로 44pt 터치 타겟 확보 */
+    border-radius: 50%;
+    transition: all 0.2s ease;
+}
+
+.btn-icon:hover {
+    color: #b33939;
+    background-color: rgba(179, 57, 57, 0.05);
+}
+
+/* Settings Form Controls */
+.settings-form {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.form-group > label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+/* iOS-optimized select drop down with custom arrow overlay */
+.select-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+/* 목소리 선택 + 미리듣기 버튼을 한 줄에 둔다 */
+.voice-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-voice-preview {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background-color: var(--card-bg-solid);
+    border: 1px solid var(--border-color);
+    color: var(--primary-color);
+    font-family: var(--font-sans);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.2s ease, opacity 0.2s ease;
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.btn-voice-preview:hover {
+    background-color: rgba(93, 75, 64, 0.06);
+}
+
+.btn-voice-preview:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+.btn-voice-preview svg {
+    width: 17px;
+    height: 17px;
+}
+
+@media (max-width: 480px) {
+    /* 좁은 화면에서는 아이콘만 남겨 선택 박스 폭을 확보한다 */
+    .btn-voice-preview span {
+        display: none;
+    }
+    .btn-voice-preview {
+        padding: 12px;
+    }
+}
+
+.select-wrapper select {
+    width: 100%;
+    font-size: 16px; /* Block iOS Auto-Zoom */
+    font-family: var(--font-sans);
+    color: var(--text-color);
+    padding: 12px 40px 12px 16px;
+    background-color: var(--card-bg-solid);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    box-shadow: var(--inner-shadow);
+    transition: border-color 0.2s ease;
+}
+
+.select-wrapper select:focus {
+    border-color: var(--primary-color);
+}
+
+.select-arrow {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    color: var(--primary-color);
+    pointer-events: none; /* Let clicks pass through to select */
+}
+
+/* Voice description box */
+.voice-desc {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    background-color: rgba(167, 139, 117, 0.04);
+    border-left: 2px solid var(--accent-color);
+    padding: 10px 14px;
+    border-radius: 0 10px 10px 0;
+    line-height: 1.5;
+    word-break: keep-all;
+}
+
+/* Sliders */
+.label-with-val {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2px;
+}
+
+.label-with-val label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.slider-val {
+    font-size: 0.8rem;
+    color: var(--primary-color);
+    font-weight: 700;
+}
+
+/* 1. 슬라이더 본체 초기화 */
+input[type="range"] {
+    -webkit-appearance: none; /* 구버전 웹킷 호환 */
+    appearance: none;         /* 최신 iOS Safari 필수 */
+    width: 100%;
+    background: transparent;  /* 본체 배경을 투명하게 처리 */
+    outline: none;
+    margin: 12px 0;           /* 썸(Thumb) 크기를 고려해 위아래 여백 넉넉히 확보 */
+}
+
+/* 터치 시 발생하는 파란색 포커스 테두리 제거 */
+input[type="range"]:focus {
+    outline: none;
+}
+
+/* 2. 트랙(가로선) 명시적 스타일링 */
+input[type="range"]::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 6px;
+    background: rgba(60, 60, 67, 0.1);
+    border-radius: 3px;
+}
+
+/* 3. 썸(조절 동그라미) 스타일링 및 위치 보정 */
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #FFFFFF;
+    border: 0.5px solid rgba(0, 0, 0, 0.04);
+    cursor: pointer;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 1px rgba(0,0,0,0.16), 0 3px 1px rgba(0,0,0,0.1);
+    
+    /* 중요: 썸이 트랙의 중앙에 오도록 높이 차이를 보정 */
+    /* 계산식: (트랙 높이 6px - 썸 높이 28px) / 2 = -11px */
+    margin-top: -11px; 
+}
+
+/* 터치 반응성 (기존 코드 유지) */
+input[type="range"]::-webkit-slider-thumb:active {
+    transform: scale(1.1);
+}
+
+.slider-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-weight: 500;
+    padding: 0 2px;
+}
+
+/* Primary Generation Button */
+.btn-primary {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    font-size: 17px; /* Anti-zoom Safari, standard iOS button text size */
+    font-weight: 600;
+    color: #ffffff;
+    background-color: var(--primary-color);
+    border: none;
+    border-radius: 14px; /* iOS standard corner radius for large buttons */
+    padding: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background-color: var(--primary-hover);
+}
+
+.btn-primary:active:not(:disabled) {
+    transform: scale(0.97);
+    opacity: 0.8;
+}
+
+.btn-primary:disabled {
+    background-color: rgba(60, 60, 67, 0.1);
+    color: rgba(60, 60, 67, 0.3);
+    cursor: not-allowed;
+}
+
+/* Right Side: Preview & Library */
+.grid-right {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+}
+
+/* Preview Section */
+.preview-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.char-badge {
+    font-size: 0.75rem;
+    font-weight: 700;
+    background-color: var(--primary-color);
+    color: #ffffff;
+    padding: 4px 10px;
+    border-radius: 30px;
+}
+
+.preview-box {
+    min-height: 180px;
+    max-height: 240px;
+    overflow-y: auto;
+    padding: 16px;
+    background-color: var(--card-bg-solid);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    font-family: var(--font-serif);
+    font-size: 0.95rem;
+    color: var(--text-color);
+    line-height: 1.7;
+    white-space: pre-wrap;
+    box-shadow: var(--inner-shadow);
+    -webkit-overflow-scrolling: touch; /* Smooth iOS kinetic scroll */
+}
+
+/* Custom scrollbars for clean paper aesthetic */
+.preview-box::-webkit-scrollbar {
+    width: 6px;
+}
+
+.preview-box::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.preview-box::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 10px;
+}
+
+.placeholder-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    height: 180px;
+    color: var(--text-muted);
+    border: 1px dashed var(--border-color);
+    border-radius: 14px;
+    background-color: rgba(254, 253, 251, 0.3);
+}
+
+.placeholder-icon {
+    width: 32px;
+    height: 32px;
+    opacity: 0.4;
+}

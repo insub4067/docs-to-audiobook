@@ -1,0 +1,210 @@
+/* App Header Styling (Literary Bookshop vibe) */
+.app-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
+    flex-wrap: wrap;
+}
+
+.header-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.app-header .logo {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 0;
+}
+
+.logo-icon {
+    width: 20px;
+    height: 20px;
+    color: var(--primary-color);
+    flex-shrink: 0;
+}
+
+.app-header h1 {
+    font-family: var(--font-serif);
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    letter-spacing: -0.5px;
+    margin: 0;
+}
+
+.app-header h1 span {
+    font-weight: 300;
+    color: var(--accent-color);
+    font-style: italic;
+}
+
+.app-header .subtitle {
+    font-family: var(--font-serif);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    font-style: italic;
+    margin: 0;
+    line-height: 1.3;
+    word-break: keep-all;
+    display: none;
+}
+
+@media (min-width: 768px) {
+    .app-header {
+        flex-direction: column;
+        padding: 24px 32px;
+        gap: 14px;
+    }
+
+    .app-header .logo {
+        margin-bottom: 14px;
+        gap: 12px;
+    }
+
+    .logo-icon {
+        width: 28px;
+        height: 28px;
+    }
+
+    .app-header h1 {
+        font-size: 2.4rem;
+    }
+
+    .app-header .subtitle {
+        font-size: 1.05rem;
+        display: block;
+        margin: 0 auto;
+        max-width: 560px;
+        line-height: 1.6;
+    }
+}
+
+/* Main Layout */
+.app-main {
+    max-width: 680px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    width: 100%;
+}
+
+/* Cards (iOS Module Style) */
+.glass-card {
+    background-color: var(--card-bg-solid);
+    border-radius: 20px; /* iOS Settings Grouped list radius */
+    padding: 32px;
+    box-shadow: var(--card-shadow);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.glass-card:hover {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+}
+
+/* Card Headers */
+.card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* 접힌 상태에서 카드 안에 불필요한 빈 공간이 남지 않도록 이 카드만
+   기본 glass-card보다 여백을 좁힌다. */
+.profile-settings-card {
+    padding: 24px 26px;
+}
+
+.profile-settings-toggle {
+    width: 100%;
+    border: none;
+    background: none;
+    padding: 0;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.profile-settings-toggle-chevron {
+    margin-left: auto;
+    width: 20px;
+    height: 20px;
+    color: var(--text-muted);
+}
+
+/* grid-template-rows를 0fr↔1fr로 트랜지션하는 방식 — 목록 높이가
+   가변적이어도(옵션 7개) JS로 실제 높이를 재지 않고 순수 CSS만으로
+   자연스러운 펼침/접힘 애니메이션을 만들 수 있다. */
+.profile-settings-collapse {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.25s ease;
+}
+.profile-settings-collapse.is-expanded {
+    grid-template-rows: 1fr;
+}
+.profile-settings-collapse-inner {
+    overflow: hidden;
+    min-height: 0;
+}
+
+/* 프로필 탭은 콘텐츠 양이 거의 고정(계정 카드+설정 카드)인데도 항상
+   로그아웃 버튼이 화면 맨 아래에 붙어 있어야 한다(iOS 설정 앱과 동일한
+   배치). --header-h/--tab-bar-h는 Home_View가 헤더/탭바의 실제 렌더
+   높이를 재서 넣어준다. */
+.profile-root {
+    min-height: calc(100dvh - var(--header-h, 76px) - var(--tab-bar-h, 76px));
+}
+/* 미니 플레이어가 떠 있을 땐 그만큼 더 빼야 로그아웃 버튼이 미니
+   플레이어 밑에 가려지지 않는다 — --mini-player-h도 Home_View가 재서
+   넣어준다. */
+.profile-root.has-mini-player {
+    min-height: calc(100dvh - var(--header-h, 76px) - var(--tab-bar-h, 76px) - var(--mini-player-h, 70px));
+}
+.profile-spacer {
+    flex: 1;
+}
+
+/* 로그아웃 — 사용 빈도가 낮은 세션 종료 기능이라 계정 카드가 아닌
+   화면 최하단에 낮은 강조도로 별도 배치한다. */
+.profile-logout-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    margin-top: 20px;
+    padding: 16px;
+    border: none;
+    border-top: 1px solid var(--border-color);
+    background: none;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+.profile-logout-btn i { width: 18px; height: 18px; }
+
+.header-icon {
+    width: 20px;
+    height: 20px;
+    color: var(--primary-color);
+}
+
+.card-header h2 {
+    font-family: var(--font-serif);
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}

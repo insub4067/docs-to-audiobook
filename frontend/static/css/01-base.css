@@ -1,0 +1,57 @@
+/* Reset & General Styles */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent; /* Remove blue highlight delay on iOS Safari */
+}
+
+body {
+    font-family: var(--font-sans);
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    min-height: 100vh;
+    min-height: 100dvh;
+    position: relative;
+    
+    /* Native App Feel: Disable text selection and callouts */
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    overflow-x: hidden;
+    overscroll-behavior-y: none;
+    line-height: 1.6;
+}
+
+html {
+    height: 100%;
+    /* iOS Safari의 텍스트 자동 확대(text autosizer)가 회전 후 리더처럼
+       긴 본문에서 폰트 크기를 임의로 키운다 — CSS font-size가 항상
+       그대로 적용되도록 끈다. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    /* iOS WebKit은 실제 스크롤 요소를 html로 취급할 때가 있어, body에만
+       걸어둔 overscroll-behavior로는 풀투리프레시(당겨서 새로고침)가
+       안 막힐 수 있다 — html에도 동일하게 걸어야 확실히 막힌다. */
+    overscroll-behavior-y: none;
+}
+
+/* Background Decor - Removed for flat iOS look */
+.background-decor {
+    display: none;
+}
+
+/* App Container Layout */
+.app-container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 48px 24px;
+    /* 하단 탭바(홈/내 파일) 높이만큼 여유를 둬서 콘텐츠 마지막 줄이
+       탭바에 가리지 않게 한다. */
+    padding-bottom: calc(48px + 76px + env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    gap: 36px;
+}

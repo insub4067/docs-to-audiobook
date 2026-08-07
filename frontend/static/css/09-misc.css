@@ -1,0 +1,832 @@
+/* ============================================================
+   Authentication UI Styles
+   ============================================================ */
+
+.app-header {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+}
+
+.user-info {
+    position: relative;
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+}
+
+/* 구글 공식 버튼이 들어가는 자리. 버튼 자체의 모양은 구글이 그리므로
+   위치만 잡아준다. */
+.header-login {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+}
+
+.profile-trigger {
+    width: 44px; /* 44pt 터치 타겟 하한 — 시각적 무게만 낮추고 크기는 유지 */
+    height: 44px;
+    border-radius: 50%;
+    padding: 0;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--primary-color) 65%, var(--bg-color) 35%);
+    border: 1px solid color-mix(in srgb, var(--primary-color) 65%, var(--bg-color) 35%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--bg-color);
+    font-family: var(--font-sans);
+    font-size: 0.9rem;
+    font-weight: 700;
+    transition: all 0.3s ease;
+}
+
+.profile-trigger:hover,
+.profile-trigger:focus-visible {
+    box-shadow: 0 0 0 3px rgba(225, 164, 111, 0.34);
+    outline: none;
+}
+
+.profile-trigger img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.profile-menu {
+    position: absolute;
+    z-index: 30;
+    top: calc(100% + 8px);
+    right: 0;
+    min-width: 180px;
+    padding: 8px;
+    border: 1px solid var(--glass-border);
+    border-radius: 14px;
+    background: var(--card-bg-solid);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.18);
+}
+
+.profile-email {
+    overflow: hidden;
+    margin: 4px 8px 8px;
+    color: var(--text-muted);
+    font-family: var(--font-sans);
+    font-size: 0.78rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.profile-menu-link,
+.btn-logout {
+    width: 100%;
+    min-height: 40px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--text-color);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 8px;
+    font: inherit;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.profile-menu-link[hidden] {
+    display: none;
+}
+
+.profile-menu-link:hover,
+.profile-menu-link:focus-visible,
+.btn-logout:hover,
+.btn-logout:focus-visible {
+    background: rgba(166, 124, 82, 0.12);
+    color: var(--primary-color);
+    outline: none;
+}
+
+.profile-menu-link svg,
+.btn-logout svg {
+    width: 17px;
+    height: 17px;
+}
+
+.btn-logout:hover,
+.btn-logout:focus-visible {
+    background: rgba(255, 107, 107, 0.12);
+    color: #d85b5b;
+}
+
+.auth-container {
+    width: 100%;
+    max-width: 100%;
+    padding: 24px;
+}
+
+.auth-card {
+    max-width: 400px;
+    margin: 0 auto;
+    padding: 32px 24px;
+}
+
+
+
+.auth-message {
+    font-size: 0.8rem;
+    margin-top: 8px;
+    text-align: center;
+    color: var(--text-muted);
+    font-family: var(--font-sans);
+}
+
+.auth-message.error {
+    color: #e74c3c;
+}
+
+.auth-message.success {
+    color: #27ae60;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .auth-card {
+        padding: 24px 16px;
+    }
+
+    .form-group input {
+        font-size: 16px;
+    }
+}
+
+/* ============================================================
+   Compact Header (Mobile Optimized)
+   ============================================================ */
+
+.app-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    /* 이 파일에는 .app-header padding 선언이 여러 개 있고 실제로 이기는 것은
+       이 규칙(모바일/태블릿)과 아래 min-width:768 규칙이다. 앞쪽 76행의
+       safe-area 처리가 여기에 덮여 죽어 있어 헤더가 노치와 겹쳤다. */
+    padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
+    /* 애플 네이티브 앱처럼 배경은 항상 페이지 배경색과 같아 평소엔 안
+       보이다가, 스크롤을 내리면 경계선/블러가 나타나 카드와 분리된다
+       (.scrolled는 JS가 토글) — 배경 자체를 transparent로 두면 제목/
+       프로필이 카드 위에 그냥 떠 있는 것처럼 보여서 페이지 배경색으로
+       바꿈. */
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background-color: var(--bg-color);
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.25s ease, backdrop-filter 0.25s ease;
+}
+
+.app-header.scrolled {
+    border-bottom-color: var(--border-color);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+}
+
+.header-left {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.logo h1 {
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin: 0;
+}
+
+/* 애플 네이티브 설정 앱처럼 좌측 상단에 현재 화면 이름(홈/내 파일)을 큰
+   타이틀로 보여준다(예전 "TEXTAUDIO" 워드마크 대신). 관리자 3연속 탭
+   진입점(handleLogoTap)도 그대로 유지된다. */
+.logo .page-title {
+    color: var(--text-color);
+    font-family: var(--font-serif);
+    font-size: 1.7rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 44px;
+    transition: font-size 0.25s ease;
+}
+
+.app-header.scrolled .logo .page-title {
+    font-size: 1.05rem;
+}
+
+.logo .page-title[data-admin="true"] {
+    cursor: pointer;
+}
+
+.logo-icon {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+}
+
+.subtitle {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin: 0;
+    line-height: 1.3;
+    display: none;
+}
+
+/* Desktop: show subtitle */
+@media (min-width: 768px) {
+    .app-header {
+        padding: calc(24px + env(safe-area-inset-top)) 32px 24px;
+    }
+
+    .header-left {
+        gap: 12px;
+    }
+
+    .logo h1 {
+        font-size: 1.8rem;
+    }
+
+    .logo .page-title {
+        font-size: 2rem;
+    }
+
+    .logo-icon {
+        width: 32px;
+        height: 32px;
+    }
+
+    .subtitle {
+        display: block;
+        font-size: 0.9rem;
+    }
+}
+
+/* Google Login Styles */
+.auth-header {
+    text-align: center;
+    margin-bottom: 24px;
+}
+
+.auth-header h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0 0 8px 0;
+    color: var(--text-color);
+}
+
+.auth-header p {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+.btn-google {
+    width: 100%;
+    padding: 14px 16px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    background: white;
+    color: #333;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-family: var(--font-sans);
+}
+
+.btn-google:hover {
+    border-color: #d0d0d0;
+    background: #f8f8f8;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.btn-google:active {
+    transform: scale(0.98);
+}
+
+.btn-google svg {
+    width: 20px;
+    height: 20px;
+}
+
+/* ===================== iOS PWA Install Prompt ===================== */
+.ios-pwa-prompt {
+    position: fixed;
+    bottom: max(24px, calc(16px + env(safe-area-inset-bottom)));
+    left: 50%;
+    transform: translateX(-50%) translateY(150%);
+    width: calc(100% - 32px);
+    max-width: 400px;
+    background-color: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0,0,0,0.05);
+    z-index: 9999;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.6s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.4s ease;
+}
+
+.ios-pwa-prompt.show {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.pwa-close-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(0,0,0,0.05);
+    border: none;
+    width: 26px;
+    height: 26px;
+    border-radius: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text-muted);
+}
+
+/* 시각적 크기(26px)는 유지하되, 탭 영역만 44pt로 넓힌다 */
+.pwa-close-btn::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    transform: translate(-50%, -50%);
+}
+
+.pwa-close-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+.pwa-prompt-content {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-top: 4px;
+}
+
+.pwa-icon {
+    flex-shrink: 0;
+}
+
+.pwa-text {
+    flex-grow: 1;
+    font-size: 0.85rem;
+    color: var(--text-color);
+    line-height: 1.4;
+}
+
+.pwa-text p {
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--primary-color);
+}
+
+.pwa-text span {
+    color: var(--text-muted);
+}
+
+/* ===================== 당겨서 새로고침 (Pull to Refresh) ===================== */
+/* 당긴 만큼 콘텐츠도 함께 내려온다. iOS처럼 화면 전체가 손가락을 따라오고
+   그 위 여백에서 스피너가 드러난다.
+
+   주의: .app-container에는 transform을 걸면 안 된다. 그 안에 모달/리더/
+   액션시트 같은 position: fixed 오버레이가 들어 있어서, transform이 걸리는
+   순간 그것들의 기준이 뷰포트가 아니라 컨테이너가 되어 화면이 어긋난다.
+   그래서 실제 콘텐츠 요소만 골라서 움직인다. */
+/* 당기는 동안에만 transform을 건다. 평상시에도 걸어두면 불필요한 스택
+   컨텍스트와 GPU 레이어가 계속 남는다. */
+/* .app-header(sticky)는 여기서 뺀다 — position: sticky 요소에 transform을
+   같이 걸면 iOS Safari가 당기는 도중 "고정된" 판정을 잃고 문서 맨 위
+   기준으로 다시 배치해버려, 헤더가 본문(예: 이어 듣기 카드)보다 아래로
+   밀려나 상단바를 침범하는 것처럼 보이는 버그가 있었다. 헤더는 항상
+   제자리에 고정하고, 그 아래 실제 콘텐츠만 당긴 만큼 내려온다 — 다른
+   앱들의 표준적인 풀투리프레시 모양과도 같다. */
+.pull-active .app-main,
+.pull-active .auth-container,
+.pull-active .app-version-footer,
+.pull-active .myfiles-root {
+    transform: translateY(var(--pull-y, 0px));
+}
+
+/* 손을 뗀 뒤 되돌아갈 때만 애니메이션한다. 당기는 중에는 손가락을 그대로
+   따라와야 하므로 transition이 없어야 한다. */
+.pull-settling .app-main,
+.pull-settling .auth-container,
+.pull-settling .app-version-footer,
+.pull-settling .myfiles-root {
+    transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.pull-refresh {
+    position: fixed;
+    top: calc(env(safe-area-inset-top) + 8px);
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 900;
+    opacity: 0;
+    /* --pull-y: 당긴 거리, --pull-p: 0~1 진행도. JS가 갱신한다. 40px 미만일
+       땐 0으로 고정해 top(safe-area 기준 앵커)보다 위로 — 즉 상단바 쪽으로
+       — 올라가지 않게 한다. */
+    transform: translateY(max(0px, calc(var(--pull-y, 0px) - 40px)));
+}
+
+/* 손을 뗀 뒤 되돌아가거나 자리를 잡을 때만 애니메이션한다.
+   당기는 중에는 손가락을 그대로 따라와야 하므로 transition이 없어야 한다. */
+.pull-refresh.settling {
+    transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.25s ease;
+}
+
+.pull-spinner {
+    position: relative;
+    width: 28px;
+    height: 28px;
+}
+
+.pull-spinner i {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 2px;
+    height: 8px;
+    margin-left: -1px;
+    border-radius: 1px;
+    background: var(--text-muted);
+    transform-origin: 1px 14px;
+    opacity: 0.15;
+}
+
+/* 12개 스포크를 시계 방향으로 배치 */
+.pull-spinner i:nth-child(1)  { transform: rotate(0deg); }
+.pull-spinner i:nth-child(2)  { transform: rotate(30deg); }
+.pull-spinner i:nth-child(3)  { transform: rotate(60deg); }
+.pull-spinner i:nth-child(4)  { transform: rotate(90deg); }
+.pull-spinner i:nth-child(5)  { transform: rotate(120deg); }
+.pull-spinner i:nth-child(6)  { transform: rotate(150deg); }
+.pull-spinner i:nth-child(7)  { transform: rotate(180deg); }
+.pull-spinner i:nth-child(8)  { transform: rotate(210deg); }
+.pull-spinner i:nth-child(9)  { transform: rotate(240deg); }
+.pull-spinner i:nth-child(10) { transform: rotate(270deg); }
+.pull-spinner i:nth-child(11) { transform: rotate(300deg); }
+.pull-spinner i:nth-child(12) { transform: rotate(330deg); }
+
+/* 당기는 중: 진행도만큼 스포크가 차례로 켜진다 (--lit 개수) */
+.pull-spinner i { transition: opacity 0.12s linear; }
+
+/* 새로고침 중: 스포크 밝기가 순환하며 도는 것처럼 보인다.
+   컨테이너를 돌리지 않고 opacity를 순환시켜야 iOS 특유의 느낌이 난다. */
+.pull-refresh.refreshing .pull-spinner i {
+    transition: none;
+    animation: pull-spoke 1s linear infinite;
+}
+.pull-refresh.refreshing .pull-spinner i:nth-child(1)  { animation-delay: -0.916s; }
+.pull-refresh.refreshing .pull-spinner i:nth-child(2)  { animation-delay: -0.833s; }
+.pull-refresh.refreshing .pull-spinner i:nth-child(3)  { animation-delay: -0.750s; }
+.pull-refresh.refreshing .pull-spinner i:nth-child(4)  { animation-delay: -0.666s; }
+.pull-refresh.refreshing .pull-spinner i:nth-child(5)  { animation-delay: -0.583s; }
+.pull-refresh.refreshing .pull-spinner i:nth-child(6)  { animation-delay: -0.500s; }
+.pull-refresh.refreshing .pull-spinner i:nth-child(7)  { animation-delay: -0.416s; }
+.pull-refresh.refreshing .pull-spinner i:nth-child(8)  { animation-delay: -0.333s; }
+.pull-refresh.refreshing .pull-spinner i:nth-child(9)  { animation-delay: -0.250s; }
+.pull-refresh.refreshing .pull-spinner i:nth-child(10) { animation-delay: -0.166s; }
+.pull-refresh.refreshing .pull-spinner i:nth-child(11) { animation-delay: -0.083s; }
+.pull-refresh.refreshing .pull-spinner i:nth-child(12) { animation-delay: -0.000s; }
+
+@keyframes pull-spoke {
+    0%   { opacity: 1; }
+    100% { opacity: 0.15; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg-color: #211d1b;
+        --card-bg: rgba(47, 41, 38, 0.9);
+        --card-bg-solid: #2f2926;
+        --text-color: #f7f0e9;
+        --text-muted: #d3c2b4;
+        --primary-color: #d9a66f;
+        --primary-hover: #ebbb87;
+        --accent-color: #b88d63;
+        --border-color: rgba(247, 240, 233, 0.16);
+        --border-hover: rgba(247, 240, 233, 0.3);
+    }
+
+    .upload-dropzone {
+        background-color: #3a332f;
+        border-color: rgba(217, 166, 111, 0.38);
+    }
+
+    .upload-dropzone:hover,
+    .upload-dropzone.dragover {
+        background-color: #443a35;
+    }
+
+    .audio-item:hover .audio-item-front,
+    .audio-item:active .audio-item-front {
+        background-color: #3a332f;
+    }
+
+    .myfiles-row:hover,
+    .myfiles-row:active {
+        background-color: #3a332f;
+    }
+
+    .action-sheet {
+        background-color: #2f2926;
+    }
+
+    .action-sheet-handle {
+        background-color: rgba(247, 240, 233, 0.26);
+    }
+
+    .action-sheet-btn:hover {
+        background-color: rgba(247, 240, 233, 0.06);
+    }
+
+    .action-sheet-btn:active {
+        background-color: rgba(217, 166, 111, 0.16);
+    }
+
+    .action-sheet-btn-cancel {
+        border-color: rgba(247, 240, 233, 0.12);
+    }
+
+    /* data-reader-theme이 아직 안 붙은 리더(첫 페인트 등)의 OS 다크모드
+       기본 배색. 리더는 마운트되면 항상 data-reader-theme을 달고, 위쪽
+       [data-reader-theme] 부스터 규칙(.reader-container 정의 부근)이
+       specificity로 이 규칙을 이겨서 사용자가 고른 테마색을 유지한다. */
+    .reader-container,
+    .reader-content {
+        background-color: #211d1b;
+    }
+
+    .reader-container::before,
+    .reader-header,
+    .reader-controls {
+        background-color: rgba(33, 29, 27, 0.9);
+        border-color: rgba(247, 240, 233, 0.12);
+    }
+
+    .reader-content {
+        color: #f7f0e9;
+    }
+
+    .reader-sentence:hover {
+        background-color: rgba(217, 166, 111, 0.12);
+    }
+
+    /* ⚠️ 여기에 color를 두면 안 된다. 위쪽 테마 규칙은 background-color만
+       덮어쓰므로(강조는 글자색을 바꾸지 않는다는 원칙), 여기 남은 color가
+       테마와 무관하게 살아남는다. 실제로 OS가 다크모드인 기기에서 라이트·웜
+       테마를 쓰면 밝은 금색 배경 위에 흰 글자가 찍혀 현재 문장을 거의 읽을
+       수 없었다. 글자색은 항상 테마의 --reader-text를 따르게 둔다. */
+    .reader-sentence.highlight {
+        background-color: rgba(217, 166, 111, 0.28);
+    }
+}
+
+.landscape-lock {
+    display: none;
+}
+
+@media (orientation: landscape) {
+    .landscape-lock {
+        display: flex;
+        position: fixed;
+        inset: 0;
+        z-index: 999999;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        background: var(--bg-color);
+        color: var(--text-color);
+        text-align: center;
+        padding: 24px;
+    }
+    .landscape-lock svg {
+        width: 48px;
+        height: 48px;
+    }
+}
+
+/* 구글 드라이브 Picker — 구글이 자체 스타일(.picker-dialog)로 그리는
+   위젯이라 공식 테마 API가 없다. 앱의 다른 시트처럼 하단에서 올라오는
+   모양으로 보이도록 좌표/모서리만 강제로 덮어쓴다. 구글이 내부 클래스명을
+   바꾸면 이 오버라이드는 조용히 무효화되고 Picker는 기본 모양으로
+   돌아간다(기능 자체는 영향 없음). */
+.picker-dialog {
+    top: auto !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    margin: 0 auto !important;
+    max-width: 500px !important;
+    width: 100% !important;
+    border-radius: 20px 20px 0 0 !important;
+    overflow: hidden !important;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.25) !important;
+}
+
+/* 저장한 문장 목록. 문장은 길 수 있으므로 세 줄까지만 보여주고,
+   시각과 삭제 버튼은 옆에 고정한다. */
+.bookmark-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 12px 20px;
+    border-bottom: 1px solid rgba(120, 90, 60, 0.06);
+}
+
+.bookmark-row-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+}
+
+.bookmark-row-text {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    color: var(--text-color);
+    font-family: var(--font-serif);
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.bookmark-row-time {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.bookmark-row-remove {
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 50%;
+    color: var(--text-muted);
+    background: transparent;
+    cursor: pointer;
+}
+
+/* ===== 첫 방문 안내 카드 ===== */
+/* 홈 맨 위에 한 번만 나오는 카드라, 업로드 카드보다 조금 조용하게 둔다.
+   여기가 화면에서 제일 튀면 정작 눌러야 할 업로드가 뒤로 밀린다. */
+.onboarding-card {
+    position: relative;
+    padding: 24px 24px 20px;
+}
+
+.onboarding-title {
+    margin: 0 28px 10px 0; /* 오른쪽은 닫기 버튼 자리 */
+    font-family: var(--font-serif);
+    font-size: 1.25rem;
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--text-color);
+    word-break: keep-all;
+}
+
+.onboarding-body {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.65;
+    color: var(--text-muted);
+    word-break: keep-all;
+}
+
+.onboarding-sample {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 44px; /* 터치 영역 */
+    margin-top: 18px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--primary-color);
+    background: transparent;
+    border: 1px solid var(--border-hover);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.onboarding-sample i {
+    width: 17px;
+    height: 17px;
+}
+
+.onboarding-sample:active {
+    transform: scale(0.98);
+    background-color: var(--card-bg);
+}
+
+.onboarding-dismiss {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.onboarding-dismiss i {
+    width: 18px;
+    height: 18px;
+}
+
+/* 장 이동. 10초 이동보다 한 단계 조용하게 둔다 — 거친 이동이라 자주
+   누르지 않고, 여기가 튀면 가운데 재생 버튼의 무게가 흐려진다. */
+.btn-player-chapter {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: transparent;
+    color: var(--text-muted);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    touch-action: manipulation;
+}
+
+.btn-player-chapter i,
+.btn-player-chapter svg {
+    width: 20px;
+    height: 20px;
+}
+
+.btn-player-chapter:active {
+    transform: scale(0.92);
+    color: var(--primary-color);
+}

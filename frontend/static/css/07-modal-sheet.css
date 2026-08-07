@@ -1,0 +1,319 @@
+/* Generation Modal Overlay */
+.generation-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(44, 37, 32, 0.6);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 2000;
+    display: flex;
+    justify-content: center;
+    align-items: flex-end; /* Bottom sheet style on mobile */
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.generation-modal.show {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.generation-modal .modal-content {
+    width: 100%;
+    max-width: 680px;
+    /* 노치/다이나믹 아일랜드 아래로만 올라오도록 상단 인셋만큼 더 깎는다 */
+    max-height: calc(90vh - env(safe-area-inset-top));
+    /* --card-bg(반투명)를 쓰면 뒤에 있는 페이지 내용이 블러된 채로
+       비쳐 보여서, 미리보기 텍스트 위에 배경 글자가 겹쳐 읽기 힘들어
+       진다. 다른 시트(액션시트 등)처럼 완전 불투명한 --card-bg-solid를 쓴다. */
+    background-color: var(--card-bg-solid);
+    border-radius: 24px 24px 0 0; /* Rounded top corners */
+    display: flex;
+    flex-direction: column;
+    transform: translateY(100%);
+    transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1);
+    box-shadow: 0 -10px 40px rgba(0,0,0,0.1);
+    padding: 0; /* Reset glass-card padding */
+}
+
+.generation-modal.show .modal-content {
+    transform: translateY(0);
+}
+
+@media (min-width: 768px) {
+    .generation-modal {
+        align-items: center; /* Center on desktop */
+    }
+    .generation-modal .modal-content {
+        border-radius: 24px;
+        max-height: 85vh;
+        transform: translateY(20px) scale(0.95);
+    }
+    .generation-modal.show .modal-content {
+        transform: translateY(0) scale(1);
+    }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.modal-header h2 {
+    font-size: 1.25rem;
+    color: var(--primary-color);
+    font-family: var(--font-serif);
+    margin: 0;
+}
+
+
+.modal-scroll-area {
+    padding: 24px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+}
+
+.modal-section {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.modal-section .section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-color);
+}
+
+.modal-footer {
+    /* 터치 영역은 홈 인디케이터를 비켜야 한다. 배경은 화면 끝까지 full-bleed로
+       깔리고 버튼만 인셋만큼 올라온다. */
+    padding: 12px 20px max(12px, env(safe-area-inset-bottom));
+    border-top: 1px solid var(--border-color);
+    background-color: var(--card-bg-solid);
+}
+
+/* ===================== ActionSheet ===================== */
+.action-sheet-backdrop {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.35);
+    z-index: 2000;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.action-sheet-backdrop.show {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.action-sheet {
+    width: 100%;
+    max-width: 500px;
+    background: var(--card-bg-solid);
+    border-radius: 20px 20px 0 0;
+    padding: 8px 0 max(12px, env(safe-area-inset-bottom));
+    /* 항목이 많은 시트(문서 추가 등)가 iPhone SE처럼 짧은 화면에서
+       위쪽이 화면 밖으로 밀려 안 보이고 스크롤도 안 되던 문제 —
+       뷰포트 높이를 넘지 않게 하고 넘치면 내부 스크롤로 처리한다. */
+    max-height: 85vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    transform: translateY(100%);
+    transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.action-sheet-backdrop.show .action-sheet {
+    transform: translateY(0);
+}
+
+.ui-dragging {
+    transition: none !important;
+}
+
+.action-sheet-handle {
+    width: 36px;
+    height: 4px;
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 2px;
+    margin: 8px auto 12px;
+}
+
+.action-sheet-btn {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    padding: 16px 24px;
+    border: none;
+    background: none;
+    font-size: 1.05rem;
+    font-family: var(--font-sans);
+    color: var(--text-color);
+    cursor: pointer;
+    transition: background-color 0.15s ease, transform 0.1s ease;
+    touch-action: manipulation;
+}
+
+.action-sheet-btn:hover {
+    background-color: rgba(0, 0, 0, 0.04);
+}
+
+.action-sheet-btn:active {
+    background-color: rgba(0, 0, 0, 0.08);
+    transform: scale(0.98);
+}
+
+.action-sheet-btn svg {
+    flex-shrink: 0;
+    color: var(--primary-color);
+}
+
+.action-sheet-btn.is-selected {
+    color: var(--primary-color);
+    font-weight: 700;
+}
+
+.option-check-slot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    flex-shrink: 0;
+}
+
+.action-sheet-btn-danger {
+    color: #c0392b;
+}
+
+.action-sheet-btn-danger svg {
+    color: #c0392b;
+}
+
+.login-prompt-body {
+    padding: 4px 24px 18px;
+    text-align: center;
+}
+
+.login-prompt-title {
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--text-color);
+    margin-bottom: 6px;
+}
+
+.login-prompt-desc {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.generate-hint {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+.action-sheet-btn-cancel {
+    justify-content: center;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-top: 4px;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.action-sheet-btn:disabled {
+    /* 0.4는 골드 계열 primary 색과 겹치면 배경과 거의 구분이 안 돼
+       기능이 아예 없는 것처럼 보였다 — 버튼이라는 형태는 분명히
+       보이면서 비활성 상태만 드러나도록 덜 흐리게 한다. */
+    opacity: 0.55;
+    pointer-events: none;
+}
+
+.scan-photo-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    padding: 4px 24px 18px;
+}
+
+.scan-photo-thumb {
+    position: relative;
+    aspect-ratio: 3 / 4;
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--card-bg);
+}
+
+.scan-photo-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.scan-photo-remove {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.scan-photo-remove svg {
+    width: 13px;
+    height: 13px;
+}
+
+.scan-photo-index {
+    position: absolute;
+    bottom: 4px;
+    left: 6px;
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.scan-photo-add {
+    aspect-ratio: 3 / 4;
+    border-radius: 12px;
+    border: 1.5px dashed var(--border-color);
+    background: transparent;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.scan-photo-add svg {
+    width: 22px;
+    height: 22px;
+}

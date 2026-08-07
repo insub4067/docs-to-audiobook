@@ -1,0 +1,601 @@
+/* Audiobook Library List */
+.library-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-height: 480px;
+    overflow-y: auto;
+    padding-right: 4px;
+    -webkit-overflow-scrolling: touch;
+}
+
+.library-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 48px 0;
+    color: var(--text-muted);
+    border: 1px dashed var(--border-color);
+    border-radius: 14px;
+    background-color: rgba(254, 253, 251, 0.3);
+}
+
+.library-empty-icon {
+    width: 36px;
+    height: 36px;
+    opacity: 0.4;
+}
+
+/* Audiobook Item Card (iOS List Tile Style with Swipe) */
+.audio-item {
+    position: relative;
+    overflow: hidden;
+    /* Removed background-color: #ff3b30 to fix red border */
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+}
+
+.audio-item:last-child {
+    border-bottom: none;
+}
+
+/* 뉴스 목록은 <button>으로 렌더돼(스와이프 삭제가 없어 <div>일 이유가
+   없음) 기본 버튼 스타일(테두리·패딩·폰트)만 지워서 .audio-item과
+   똑같이 보이게 한다. */
+.audio-item-news {
+    display: block;
+    width: 100%;
+    border: none;
+    background: none;
+    padding: 0;
+    font: inherit;
+    text-align: left;
+}
+
+.news-more-btn {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: auto;
+    border: none;
+    background: none;
+    padding: 4px;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+.news-more-btn i { width: 16px; height: 16px; }
+
+.news-play-all-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 56px;
+    padding: 12px 16px;
+    border: none;
+    border-radius: 14px;
+    background: var(--primary-color);
+    color: #fff;
+    font: inherit;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.news-play-all-btn:disabled {
+    opacity: 0.55;
+    pointer-events: none;
+}
+.news-play-all-btn i { width: 18px; height: 18px; }
+
+/* .action-sheet 기본값은 시트 전체가 스크롤되는데, 여기서는 "전체 듣기"
+   버튼이 목록 스크롤 위치와 무관하게 항상 눌리는 위치(하단 고정)에
+   있어야 해서 이 시트만 안쪽 목록 영역에만 스크롤을 두고 나머지
+   (헤더·버튼·닫기)는 고정한다. */
+.action-sheet.news-list-sheet {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.news-list-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+.news-list-footer {
+    flex-shrink: 0;
+    padding: 12px 20px 0;
+}
+.news-list-footer .action-sheet-btn-cancel {
+    padding: 14px 24px;
+}
+
+/* 재생목록 시트(ReaderPlaylistSheet_View.vue) — 같은 이유로 핸들·제목·
+   닫기 버튼은 고정하고 목록만 스크롤한다. */
+.action-sheet.playlist-sheet {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.playlist-list-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.audio-item-bg {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #ff3b30; /* Moved here */
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 28px;
+    color: white;
+    z-index: 1;
+}
+
+.audio-item-bg svg {
+    width: 24px;
+    height: 24px;
+}
+
+.audio-item-front {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background-color: var(--card-bg-solid);
+    /* Apple Spring Bounce Effect */
+    transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1.15), background-color 0.2s ease;
+    width: 100%;
+    position: relative;
+    z-index: 2;
+}
+
+.audio-item-front.deleting {
+    transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1) !important;
+    transform: translateX(-100%) !important;
+}
+
+.audio-item.deleting-row {
+    height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-color: transparent;
+    opacity: 0;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.audio-item-front.ui-dragging {
+    transition: none !important;
+}
+
+/* Hover/Active 시 배경이 투명해지면 아래쪽의 빨간 휴지통 레이어가 비쳐보이므로, 불투명한 색상 유지 */
+@media (hover: hover) {
+    .audio-item:hover .audio-item-front {
+        background-color: #f5f5f5;
+    }
+}
+.audio-item:active .audio-item-front {
+    background-color: #f0f0f0;
+}
+
+/* Inline Generating Progress Item — .audio-item-front(다른 행의 패딩을
+   담당하는 래퍼)을 안 쓰고 .audio-item에 바로 이 클래스를 붙이므로,
+   같은 좌우/상하 패딩을 여기서 직접 줘야 다른 행과 높이·여백이 맞는다. */
+.audio-item-generating {
+    display: flex;
+    align-items: center;
+    padding: 16px 20px;
+    cursor: default;
+    background: linear-gradient(135deg, rgba(198, 154, 88, 0.04), rgba(198, 154, 88, 0.08));
+    animation: generatingPulse 2s ease-in-out infinite;
+}
+
+@keyframes generatingPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.75; }
+}
+
+.audio-item-generating .audio-title-group {
+    width: 100%;
+}
+
+.generating-spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid rgba(198, 154, 88, 0.2);
+    border-top-color: var(--primary-color);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.generating-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.generating-progress-track {
+    width: 100%;
+    height: 4px;
+    background: rgba(93, 75, 64, 0.08);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.generating-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
+    border-radius: 4px;
+    transition: width 0.4s ease;
+}
+
+.generating-status {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+.audio-title-group {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+/* lucide.createIcons()가 <i data-lucide="..."> 를 <svg class="lucide
+   lucide-...">로 통째로 바꿔치기한다 — 태그 선택자 i는 그 순간부터
+   더 이상 아무것도 못 가리켜서(class가 없던 아이콘들이라) 이 규칙이
+   실제로는 한 번도 적용된 적이 없었다. 결과가 지정되지 않은
+   currentColor로 남아 다크 모드에서 파란색(iOS 기본 accent)으로
+   보이던 원인 — svg도 같이 가리키게 한다. */
+.audio-title-group i,
+.audio-title-group svg {
+    width: 24px;
+    height: 24px;
+    color: var(--primary-color);
+    flex-shrink: 0;
+}
+
+.audio-title-col {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.audio-title {
+    font-family: var(--font-serif);
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--text-color);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+.audio-subtitle {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.audio-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.default-badge {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    background: rgba(166, 124, 82, 0.15);
+    padding: 2px 8px;
+    border-radius: 999px;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.bookmark-star {
+    color: var(--primary-color);
+    flex-shrink: 0;
+}
+
+.btn-icon-round.btn-delete {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: transparent;
+    border: none;
+    color: #b33939;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    opacity: 0.6;
+}
+
+.btn-icon-round.btn-delete:hover {
+    opacity: 1;
+    background-color: rgba(179, 57, 57, 0.1);
+}
+
+.btn-icon-round.btn-more {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px; /* 44pt 터치 타겟 하한 */
+    height: 44px;
+    background: rgba(93, 75, 64, 0.06);
+    border-radius: 50%;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    touch-action: manipulation;
+}
+
+.btn-icon-round.btn-more:hover {
+    opacity: 1;
+    background-color: rgba(93, 75, 64, 0.12);
+}
+
+
+/* Audio Player styling override */
+.audio-player-wrapper {
+    width: 100%;
+}
+
+.audio-player-wrapper audio {
+    width: 100%;
+    height: 36px;
+    border-radius: 20px;
+    outline: none;
+    background-color: var(--bg-color);
+}
+
+/* Loading Overlay Styles (Warm modal) */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;      /* width: 100% 대신 */
+    bottom: 0;     /* height: 100% 대신 */
+    background-color: rgba(44, 37, 32, 0.35);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 2100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.loading-overlay.show {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.loading-card {
+    background-color: var(--card-bg-solid);
+    border: 1px solid var(--border-color);
+    border-radius: 24px;
+    padding: 36px;
+    width: 90%;
+    max-width: 400px;
+    text-align: center;
+    box-shadow: 0 20px 50px rgba(44, 37, 32, 0.12);
+}
+
+/* Warm tone spinner */
+.spinner-container {
+    width: 48px;
+    height: 48px;
+    position: relative;
+    margin: 0 auto 20px;
+}
+
+.double-bounce1, .double-bounce2 {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background-color: var(--accent-color);
+    opacity: 0.6;
+    position: absolute;
+    top: 0;
+    left: 0;
+    animation: sk-bounce 2.0s infinite ease-in-out;
+}
+
+.double-bounce2 {
+    animation-delay: -1.0s;
+}
+
+@keyframes sk-bounce {
+    0%, 100% { transform: scale(0.0); }
+    50% { transform: scale(1.0); }
+}
+
+.loading-card h3 {
+    font-family: var(--font-serif);
+    font-size: 1.35rem;
+    color: var(--primary-color);
+    margin-bottom: 8px;
+}
+
+.loading-card p {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 20px;
+}
+
+.loading-card p.loading-overlay-warning {
+    font-weight: 600;
+    color: var(--primary-color);
+    margin-bottom: 0;
+}
+
+.loading-cancel-btn {
+    margin-top: 20px;
+    padding: 10px 20px;
+    border: 1px solid var(--border-color);
+    border-radius: 30px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.loading-cancel-btn:active {
+    background: rgba(0, 0, 0, 0.04);
+}
+
+.progress-bar-container {
+    width: 100%;
+    height: 6px;
+    background-color: var(--bg-color);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 12px;
+    border: 1px solid var(--border-color);
+}
+
+.progress-bar-fill {
+    height: 100%;
+    width: 0%;
+    background-color: var(--primary-color);
+    border-radius: 10px;
+    transition: width 0.3s ease;
+}
+
+.loading-status {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+/* Toast Notifications (Elegant matching Toast) */
+.toast {
+    position: fixed;
+    /* 하단 탭바(높이 76px, .app-container 패딩 계산과 동일 상수) 위로
+       띄운다 — 탭바 없이 홈 인디케이터만 있는 화면(리더 등)은 toast-top로
+       따로 처리한다. */
+    bottom: calc(76px + env(safe-area-inset-bottom) + 16px);
+    left: 50%;
+    transform: translate(-50%, 100px);
+    /* 자체 합성 레이어로 올려 iOS 관성 스크롤 중에도 스크롤러와 함께
+       리페인트되지 않게 한다 */
+    will-change: transform, opacity;
+    background-color: var(--primary-color);
+    border: 1px solid var(--border-hover);
+    color: #ffffff;
+    padding: 14px 24px;
+    border-radius: 30px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 10px 30px rgba(44, 37, 32, 0.12);
+    z-index: 2000;
+    font-weight: 500;
+    font-size: 0.9rem;
+    opacity: 0;
+    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.toast.show {
+    transform: translate(-50%, 0);
+    opacity: 1;
+    /* 보이는 동안만 클릭을 받는다 — 탭하면(dismissToast) 토스트만 사라지고,
+       그 클릭이 뒤쪽 화면까지 파고들지 않는다. 숨겨져 있을 때(opacity 0)는
+       그대로 pointer-events: none이라 다른 조작을 막지 않는다. */
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+/* 리더 모드에서는 상단에 띄운다. 토스트가 body 직속이라
+   .reader-overlay 하위 선택자는 성립하지 않으므로 toast-top만 쓴다
+   (JS가 리더가 열려 있을 때 붙인다). */
+.toast.toast-top {
+    bottom: auto;
+    top: max(24px, calc(env(safe-area-inset-top) + 8px));
+    transform: translate(-50%, -100px);
+}
+
+.toast.toast-top.show {
+    transform: translate(-50%, 0);
+}
+
+.toast-icon {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+
+.toast-error {
+    background-color: #b33939;
+    border-color: #d63031;
+}
+
+/* Responsive breakpoints & iOS Mobile padding fixes */
+
+@media (max-width: 480px) {
+    .app-container {
+        padding: 24px 12px; /* Maximize card screen width */
+        /* 위 padding 단축 속성이 앞쪽 규칙의 padding-bottom(하단 탭바 여유
+           공간)까지 24px로 되돌려버린다 — 여기서 다시 얹어준다. */
+        padding-bottom: calc(24px + 76px + env(safe-area-inset-bottom));
+        gap: 20px;
+    }
+
+    .app-header {
+        padding: 8px 4px;
+    }
+    
+    .app-header h1 {
+        font-size: 2.0rem;
+    }
+    
+    .glass-card {
+        padding: 20px 16px; /* Narrow padding inside cards for optimal reading space */
+    }
+    
+    .upload-dropzone {
+        padding: 26px 12px;
+    }
+
+    .slider-container {
+        padding: 10px 12px;
+    }
+}
