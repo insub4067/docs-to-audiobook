@@ -3277,6 +3277,18 @@ input[type="range"]::-webkit-slider-thumb:active {
     cursor: pointer;
 }
 
+/* 보이는 선은 3px지만 손가락으로 3px를 정확히 짚을 수는 없다. 미니
+   플레이어는 위아래로 여유가 적어 읽기 화면(12px)보다 좁게 잡는다. */
+.mini-player-progress-bar::before {
+    content: "";
+    position: absolute;
+    inset: -9px 0;
+}
+
+.mini-player-progress-bar.is-dragging {
+    height: 5px;
+}
+
 .mini-player-progress-fill {
     position: absolute;
     top: 0;

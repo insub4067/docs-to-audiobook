@@ -344,3 +344,31 @@ def test_reader_buttons_do_not_duplicate_aria_label_with_title():
         assert 'title="' not in source, f"{name}에 title 속성이 남아 있습니다"
         # 이름표까지 사라지면 안 된다 — aria-label은 유지해야 한다.
         assert 'aria-label="' in source
+
+def test_mini_player_progress_bar_is_draggable_with_a_tooltip():
+    """미니 플레이어 진행 바도 끌 수 있고 이동 시각을 보여주는지 확인한다.
+
+    미니 플레이어 전체가 "읽기 화면 열기" 버튼이라, 진행 바에서 일어난
+    포인터 이벤트가 위로 올라가면 끌기만 해도 리더가 열려 버린다.
+    stopPropagation이 빠지면 안 된다.
+    """
+    view = (ROOT_DIR / "frontend" / "components" / "MiniPlayer" / "MiniPlayer_View.vue").read_text(encoding="utf-8")
+    css = STYLE_CSS.read_text(encoding="utf-8")
+
+    assert "@pointerdown=" in view and "@pointermove=" in view and "@pointerup=" in view
+    assert "@pointercancel=" in view
+    assert "player-progress-tooltip" in view
+    assert view.count("event.stopPropagation()") >= 3
+    assert ".mini-player-progress-bar::before" in css
+
+def test_mini_player_is_placed_without_animation_on_first_entry():
+    """앱을 처음 열 때 미니 플레이어가 전환 없이 제자리에 놓이는지 확인한다.
+
+    첫 화면을 그리는 도중 시작된 CSS 전환이 끝까지 진행되지 않고 반쯤
+    올라온 채로 굳는 일이 있었다(최초 진입에서만 재현). 이미 듣던 게
+    있다는 뜻이라 미끄러져 올라올 이유도 없다.
+    """
+    home_view = (ROOT_DIR / "frontend" / "Home" / "Home_View.vue").read_text(encoding="utf-8")
+    restore = home_view.split("async function restoreLastPlayedSession", 1)[1].split("\n}", 1)[0]
+
+    assert "settleMiniPlayer" in restore

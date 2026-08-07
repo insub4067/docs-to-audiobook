@@ -200,11 +200,15 @@ function watchBarHeights(): void {
 // 그대로 멈춰 미니 플레이어가 반쯤 올라온 채로 굳는다(백그라운드에
 // 있다가 PWA로 돌아왔을 때 실제로 그렇게 보였다).
 // 다시 보일 때 높이를 재측정하고, 남아 있는 전환은 끝으로 보낸다.
+function settleMiniPlayer(): void {
+    document.querySelector<HTMLElement>(".mini-player")
+        ?.getAnimations().forEach((animation) => animation.finish());
+}
+
 function onVisibilityChangeForLayout(): void {
     if (document.visibilityState !== "visible") return;
     measureBarHeights();
-    document.querySelector<HTMLElement>(".mini-player")
-        ?.getAnimations().forEach((animation) => animation.finish());
+    settleMiniPlayer();
 }
 
 // 마지막으로 듣던 오디오북이 있으면, 리더 화면을 펼치지 않고도 그 정보를
@@ -216,7 +220,14 @@ async function restoreLastPlayedSession(): Promise<void> {
     const lastPlayed = audiobooks
         .filter((a) => (a.lastPosition || 0) > CONTINUE_LISTENING_MIN_SECONDS && a.playbackUpdatedAt && a.audioData)
         .sort((a, b) => (b.playbackUpdatedAt || 0) - (a.playbackUpdatedAt || 0))[0];
-    if (lastPlayed) readerLogic.restoreLastSession(lastPlayed);
+    if (!lastPlayed) return;
+    readerLogic.restoreLastSession(lastPlayed);
+    // 앱을 처음 열 때는 미니 플레이어가 미끄러져 올라올 이유가 없다 —
+    // 이미 듣던 게 있다는 뜻이니 처음부터 제자리에 있어야 한다. 게다가 첫
+    // 화면을 그리는 도중 시작된 전환은 끝까지 진행되지 않고 반쯤 올라온
+    // 채로 굳는 일이 있었다(최초 진입에서만 재현됐다). 전환을 바로 끝내
+    // 제자리에 놓으면 그 경우가 아예 생기지 않는다.
+    requestAnimationFrame(settleMiniPlayer);
 }
 
 onMounted(async () => {
