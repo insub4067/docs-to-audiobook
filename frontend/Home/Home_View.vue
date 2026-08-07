@@ -167,45 +167,44 @@ function onPdfInputChange(event: Event): void {
 // 미니 플레이어를 탭바 바로 위에 빈틈없이 붙이려면 탭바의 실제 렌더 높이가
 // 필요하다 — 76px 같은 상수는 safe-area가 얼마나 이미 포함됐는지 기기마다
 // 달라 미니 플레이어와 탭바 사이에 틈이 생겼다. 실제 높이를 재서 CSS
-// 변수로 넘긴다(Reader의 --reader-header-h와 같은 방식). 폰트·아이콘이
-// 늦게 로드되며 높이가 미세하게 바뀔 수 있어 ResizeObserver로 계속 맞춘다.
-let tabBarResizeObserver: ResizeObserver | null = null;
-function watchTabBarHeight(): void {
+// 변수로 넘긴다(Reader의 --reader-header-h와 같은 방식).
+//
+// 헤더 높이는 프로필 탭의 로그아웃 버튼을 화면 맨 아래에 고정할 때,
+// 미니 플레이어 높이는 그 버튼이 미니 플레이어에 가려지지 않게 할 때 쓴다.
+function measureBarHeights(): void {
+    const root = document.documentElement.style;
     const tabBar = document.querySelector<HTMLElement>(".tab-bar");
-    if (!tabBar) return;
-    document.documentElement.style.setProperty("--tab-bar-h", `${tabBar.offsetHeight}px`);
-    tabBarResizeObserver = new ResizeObserver(() => {
-        document.documentElement.style.setProperty("--tab-bar-h", `${tabBar.offsetHeight}px`);
-    });
-    tabBarResizeObserver.observe(tabBar);
-}
-
-// 프로필 탭에서 로그아웃 버튼을 화면 맨 아래에 고정하려면(.profile-root의
-// min-height 계산) 헤더의 실제 렌더 높이도 필요하다 — 위 탭바와 같은 이유.
-let headerResizeObserver: ResizeObserver | null = null;
-function watchHeaderHeight(): void {
     const header = document.querySelector<HTMLElement>(".app-header");
-    if (!header) return;
-    document.documentElement.style.setProperty("--header-h", `${header.offsetHeight}px`);
-    headerResizeObserver = new ResizeObserver(() => {
-        document.documentElement.style.setProperty("--header-h", `${header.offsetHeight}px`);
-    });
-    headerResizeObserver.observe(header);
+    const miniPlayer = document.querySelector<HTMLElement>(".mini-player");
+    if (tabBar) root.setProperty("--tab-bar-h", `${tabBar.offsetHeight}px`);
+    if (header) root.setProperty("--header-h", `${header.offsetHeight}px`);
+    if (miniPlayer) root.setProperty("--mini-player-h", `${miniPlayer.offsetHeight}px`);
 }
 
-// 미니 플레이어가 떠 있으면 프로필 탭의 로그아웃 버튼이 그 밑에 가려지지
-// 않도록 .profile-root의 min-height 계산에서 미니 플레이어 높이도 함께
-// 빼야 한다. 미니 플레이어는 항상 마운트돼 있고(v-show가 아닌 opacity/
-// transform으로 표시) 표시 여부와 무관하게 실제 렌더 높이를 잴 수 있다.
-let miniPlayerResizeObserver: ResizeObserver | null = null;
-function watchMiniPlayerHeight(): void {
-    const miniPlayer = document.querySelector<HTMLElement>(".mini-player");
-    if (!miniPlayer) return;
-    document.documentElement.style.setProperty("--mini-player-h", `${miniPlayer.offsetHeight}px`);
-    miniPlayerResizeObserver = new ResizeObserver(() => {
-        document.documentElement.style.setProperty("--mini-player-h", `${miniPlayer.offsetHeight}px`);
-    });
-    miniPlayerResizeObserver.observe(miniPlayer);
+// 폰트·아이콘이 늦게 로드되며 높이가 미세하게 바뀔 수 있어 계속 맞춘다.
+// 미니 플레이어는 항상 마운트돼 있고(v-show가 아닌 opacity/transform으로
+// 표시) 표시 여부와 무관하게 실제 렌더 높이를 잴 수 있다.
+let barResizeObserver: ResizeObserver | null = null;
+function watchBarHeights(): void {
+    measureBarHeights();
+    barResizeObserver = new ResizeObserver(measureBarHeights);
+    for (const selector of [".tab-bar", ".app-header", ".mini-player"]) {
+        const element = document.querySelector<HTMLElement>(selector);
+        if (element) barResizeObserver.observe(element);
+    }
+}
+
+// 화면이 숨겨져 있는 동안에는 브라우저가 렌더링 단계를 건너뛴다. 그래서
+// 두 가지가 어긋난 채로 남는다 — ResizeObserver 콜백이 전달되지 않아
+// 위 변수들이 낡은 값으로 굳고, 시작만 하고 진행되지 않은 CSS 전환이
+// 그대로 멈춰 미니 플레이어가 반쯤 올라온 채로 굳는다(백그라운드에
+// 있다가 PWA로 돌아왔을 때 실제로 그렇게 보였다).
+// 다시 보일 때 높이를 재측정하고, 남아 있는 전환은 끝으로 보낸다.
+function onVisibilityChangeForLayout(): void {
+    if (document.visibilityState !== "visible") return;
+    measureBarHeights();
+    document.querySelector<HTMLElement>(".mini-player")
+        ?.getAnimations().forEach((animation) => animation.finish());
 }
 
 // 마지막으로 듣던 오디오북이 있으면, 리더 화면을 펼치지 않고도 그 정보를
@@ -222,9 +221,8 @@ async function restoreLastPlayedSession(): Promise<void> {
 
 onMounted(async () => {
     document.addEventListener("keydown", onEscape);
-    watchTabBarHeight();
-    watchHeaderHeight();
-    watchMiniPlayerHeight();
+    watchBarHeights();
+    document.addEventListener("visibilitychange", onVisibilityChangeForLayout);
     await voiceLogic.loadVoices();
     readerLogic.checkSharedLink();
     restoreLastPlayedSession();

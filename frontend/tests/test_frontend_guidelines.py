@@ -312,3 +312,22 @@ def test_long_reader_title_can_be_expanded_by_tapping():
     assert "is-expanded" in reader_view
     expanded = css.split(".reader-book-title.is-expanded {", 1)[1].split("}", 1)[0]
     assert "white-space: normal" in expanded
+
+def test_layout_vars_and_stuck_transitions_resync_when_page_becomes_visible():
+    """화면이 다시 보일 때 바 높이를 재측정하고 멈춘 전환을 끝내는지 확인한다.
+
+    브라우저는 숨겨진 화면의 렌더링 단계를 건너뛴다. 그래서 ResizeObserver
+    콜백이 전달되지 않아 --tab-bar-h 같은 변수가 낡은 값으로 굳고, 시작만
+    하고 진행되지 않은 CSS 전환이 그대로 멈춘다 — 백그라운드에 있다가
+    PWA로 돌아오면 미니 플레이어가 반쯤 올라온 채로 굳어 있었다.
+    (실측: transform이 translateY(71px)에 멈춘 채 show 클래스는 붙어 있고,
+    getAnimations().finish()를 부르면 제자리로 돌아왔다.)
+    """
+    home_view = (ROOT_DIR / "frontend" / "Home" / "Home_View.vue").read_text(encoding="utf-8")
+
+    assert 'addEventListener("visibilitychange"' in home_view
+    assert "getAnimations()" in home_view
+    assert "finish()" in home_view
+    # 높이 재측정도 같은 자리에서 함께 해야 한다.
+    handler = home_view.split("function onVisibilityChangeForLayout", 1)[1].split("\n}", 1)[0]
+    assert "measureBarHeights()" in handler
