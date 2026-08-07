@@ -14,6 +14,11 @@ import { useNewsLogic } from "../News/News_Logic.vue";
 
 export type PlaylistItem = AudiobookRecord | NewsItem;
 
+export interface PlaylistOpenOptions {
+    /** 미니 플레이어에서 넘길 때처럼 읽기 화면을 펼치지 않아야 하는 경우 false. */
+    openReaderUI?: boolean;
+}
+
 export function isNewsItem(item: PlaylistItem): item is NewsItem {
     return "audio_url" in item;
 }
@@ -21,9 +26,9 @@ export function isNewsItem(item: PlaylistItem): item is NewsItem {
 export interface PlaylistNavigation {
     items: ComputedRef<PlaylistItem[]>;
     currentIndex: ComputedRef<number>;
-    open(item: PlaylistItem): void;
+    open(item: PlaylistItem, options?: PlaylistOpenOptions): void;
     /** offset이 -1이면 이전, +1이면 다음. 목록 밖이면 아무 일도 하지 않는다. */
-    goToOffset(offset: number): boolean;
+    goToOffset(offset: number, options?: PlaylistOpenOptions): boolean;
 }
 
 export function usePlaylistNavigation(
@@ -52,15 +57,16 @@ export function usePlaylistNavigation(
         return currentId ? items.value.findIndex((item) => item.id === currentId) : -1;
     });
 
-    function open(item: PlaylistItem): void {
-        if (isNewsItem(item)) newsLogic.openNewsItem(item, items.value.indexOf(item));
-        else readerLogic.open(item);
+    function open(item: PlaylistItem, options: PlaylistOpenOptions = {}): void {
+        const openReaderUI = options.openReaderUI ?? true;
+        if (isNewsItem(item)) newsLogic.openNewsItem(item, items.value.indexOf(item), { openReaderUI });
+        else readerLogic.open(item, { openReaderUI });
     }
 
-    function goToOffset(offset: number): boolean {
+    function goToOffset(offset: number, options: PlaylistOpenOptions = {}): boolean {
         const target = currentIndex.value + offset;
         if (currentIndex.value < 0 || target < 0 || target >= items.value.length) return false;
-        open(items.value[target]);
+        open(items.value[target], options);
         return true;
     }
 

@@ -82,15 +82,31 @@ let swipeAxis: "none" | "x" | "y" = "none";
 // 스와이프로 끝난 제스처의 click까지 리더를 여는 걸 막는다.
 let swipeHandled = false;
 
-const swipeStyle = computed(() => {
+// 유튜브 뮤직처럼 바는 제자리에 두고 안쪽 제목만 미끄러진다. 진행 바와
+// 재생 버튼까지 통째로 밀면 조작 중인 컨트롤이 손가락을 따라 도망간다.
+const titleSlideStyle = computed(() => {
     const offset = swipeOffset.value;
-    if (!offset) return undefined;
+    if (!offset || offset.x === 0) return undefined;
     return {
-        transform: `translate(${offset.x}px, ${offset.y}px)`,
+        transform: `translateX(${offset.x}px)`,
         transition: "none",
-        opacity: offset.y > 0 ? String(Math.max(0.3, 1 - offset.y / 160)) : "1",
+        opacity: String(Math.max(0.2, 1 - Math.abs(offset.x) / 220)),
     };
 });
+
+// 아래로 내리는 건 바 전체가 내려가는 게 맞다.
+const dismissStyle = computed(() => {
+    const offset = swipeOffset.value;
+    if (!offset || offset.y === 0) return undefined;
+    return {
+        transform: `translateY(${offset.y}px)`,
+        transition: "none",
+        opacity: String(Math.max(0.3, 1 - offset.y / 160)),
+    };
+});
+
+// 다음/이전 중 어느 쪽으로 넘겼는지에 따라 새 제목이 들어오는 방향이 달라진다.
+const slideDirection = ref<"next" | "prev">("next");
 
 function onRootPointerDown(event: PointerEvent): void {
     // 포인터를 붙잡아 둬야 손가락이 미니 플레이어 밖으로 나가도 move/up이
@@ -129,7 +145,9 @@ function onRootPointerUp(): void {
     }
     if (swipeAxis === "x" && Math.abs(offset.x) > SWIPE_THRESHOLD) {
         const movedToNext = offset.x < 0;
-        if (!playlist.goToOffset(movedToNext ? 1 : -1)) {
+        slideDirection.value = movedToNext ? "next" : "prev";
+        // 읽기 화면은 펼치지 않는다 — 미니 플레이어에서 넘기는 것뿐이다.
+        if (!playlist.goToOffset(movedToNext ? 1 : -1, { openReaderUI: false })) {
             showToast(movedToNext ? "마지막 항목이에요" : "첫 항목이에요", "info");
         }
     }
@@ -153,7 +171,7 @@ function onRootClick(): void {
         type="button"
         class="mini-player"
         :class="{ show: !state.isOpen.value && !!state.title.value }"
-        :style="swipeStyle"
+        :style="dismissStyle"
         aria-label="재생 화면 열기"
         @click="onRootClick"
         @pointerdown="onRootPointerDown"
@@ -162,7 +180,15 @@ function onRootClick(): void {
         @pointercancel="onRootPointerCancel"
     >
         <div class="mini-player-row">
-            <span class="mini-player-title">{{ getAudiobookDisplayTitle(state.title.value) }}</span>
+            <div class="mini-player-title-slot">
+                <Transition :name="`mini-title-${slideDirection}`" mode="out-in">
+                    <span
+                        class="mini-player-title"
+                        :key="state.title.value"
+                        :style="titleSlideStyle"
+                    >{{ getAudiobookDisplayTitle(state.title.value) }}</span>
+                </Transition>
+            </div>
             <button class="mini-player-play-btn" type="button" aria-label="재생 또는 일시정지" @click="onPlayPauseClick">
                 <svg v-show="!state.isPlaying.value" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
                 <svg v-show="state.isPlaying.value" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>

@@ -24,6 +24,10 @@ export interface SharedReaderModeOptions {
     // 링크(shareId)에는 해당 없다.
     audiobookId?: string | null;
     resumeSeconds?: number;
+    // 재생목록 안에서 항목만 바꿀 때는 읽기 화면을 펼치지 않는다 —
+    // 미니 플레이어에서 스와이프로 넘기거나, 듣던 기사가 끝나 다음으로
+    // 자동으로 넘어가는 경우다. 이미 열려 있다면 그대로 둔다.
+    openReaderUI?: boolean;
 }
 
 export interface ReaderLogic {
@@ -289,7 +293,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
     }
 
     function openSharedReaderMode(title: string, sharedSentences: ReaderSentence[], audioUrl: string, options: SharedReaderModeOptions = {}): void {
-        const { shareId = null, onEnded, playlistKind = null, audiobookId = null, resumeSeconds = 0 } = options;
+        const { shareId = null, onEnded, playlistKind = null, audiobookId = null, resumeSeconds = 0, openReaderUI = true } = options;
         const el = state.audioEl.value;
         if (!el) return;
         state.sharedPlaylistKind.value = playlistKind;
@@ -367,9 +371,11 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         el.src = audioUrl;
         el.load();
 
-        state.isOpen.value = true;
-        setReaderOpenForToast(true);
-        requestAnimationFrame(measureReaderBars);
+        if (openReaderUI) {
+            state.isOpen.value = true;
+            setReaderOpenForToast(true);
+            requestAnimationFrame(measureReaderBars);
+        }
     }
 
     function togglePlayPause(): void {

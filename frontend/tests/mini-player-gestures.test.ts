@@ -82,6 +82,18 @@ describe("미니 플레이어 스와이프", () => {
         expect((logic.openSharedReaderMode as ReturnType<typeof vi.fn>).mock.calls[0][0]).toBe("첫 기사");
     });
 
+    it("항목을 넘겨도 읽기 화면을 펼치지 않는다", async () => {
+        // 유튜브 뮤직처럼 미니 플레이어 안에서만 넘어가야 한다.
+        // openSharedReaderMode가 무조건 isOpen을 켜고 있어서 넘길 때마다
+        // 전체 화면이 떴다.
+        const { wrapper } = setup(1);
+
+        await swipe(wrapper, -90, 0);
+
+        const options = (logic.openSharedReaderMode as ReturnType<typeof vi.fn>).mock.calls[0][3];
+        expect(options.openReaderUI).toBe(false);
+    });
+
     it("마지막 항목에서 왼쪽으로 쓸어도 넘어가지 않는다", async () => {
         const { wrapper } = setup(2);
 

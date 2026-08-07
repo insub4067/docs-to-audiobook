@@ -393,3 +393,20 @@ def test_mini_player_claims_the_touch_gesture_for_swiping():
 
     down = view.split("function onRootPointerDown", 1)[1].split("\n}", 1)[0]
     assert "setPointerCapture" in down
+
+def test_mini_player_slides_only_the_title_not_the_whole_bar():
+    """좌우로 넘길 때 바 전체가 아니라 제목만 미끄러지는지 확인한다.
+
+    유튜브 뮤직 참고 — 바는 제자리에 있고 곡 정보만 지나간다. 진행 바와
+    재생 버튼까지 통째로 밀면 조작 중인 컨트롤이 손가락을 따라 도망간다.
+    아래로 내릴 때는 반대로 바 전체가 내려가는 게 맞다.
+    """
+    view = (ROOT_DIR / "frontend" / "components" / "MiniPlayer" / "MiniPlayer_View.vue").read_text(encoding="utf-8")
+    css = STYLE_CSS.read_text(encoding="utf-8")
+
+    # 루트에는 세로(내리기) 스타일만, 제목에는 가로 스타일만 붙는다.
+    assert ':style="dismissStyle"' in view
+    assert ':style="titleSlideStyle"' in view
+    assert "mini-player-title-slot" in view
+    assert ".mini-title-next-enter-from" in css
+    assert ".mini-title-prev-enter-from" in css

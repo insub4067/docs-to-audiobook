@@ -3242,7 +3242,29 @@ input[type="range"]::-webkit-slider-thumb:active {
     gap: 10px;
 }
 
+/* 제목이 좌우로 미끄러져도 바깥으로 삐져나오지 않게 가둔다. */
+.mini-player-title-slot {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+/* 넘긴 방향으로 이전 제목이 빠지고, 반대쪽에서 새 제목이 들어온다
+   (유튜브 뮤직과 같은 방향 규칙). */
+.mini-title-next-enter-active,
+.mini-title-next-leave-active,
+.mini-title-prev-enter-active,
+.mini-title-prev-leave-active {
+    transition: transform 0.18s ease, opacity 0.18s ease;
+}
+
+.mini-title-next-enter-from { transform: translateX(60%); opacity: 0; }
+.mini-title-next-leave-to { transform: translateX(-60%); opacity: 0; }
+.mini-title-prev-enter-from { transform: translateX(-60%); opacity: 0; }
+.mini-title-prev-leave-to { transform: translateX(60%); opacity: 0; }
+
 .mini-player-title {
+    display: block;
     flex: 1;
     font-size: 0.92rem;
     font-weight: 600;

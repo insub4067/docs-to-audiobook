@@ -217,3 +217,29 @@ describe("장 경계 처리", () => {
         expect(el.currentTime).toBe(121);
     });
 });
+
+// 미니 플레이어에서 항목을 넘길 때는 읽기 화면이 펼쳐지면 안 된다.
+// 호출부가 옵션을 넘기는 것만 확인하면 옵션을 무시하는 회귀를 놓친다 —
+// 여기서는 실제 openSharedReaderMode의 동작을 본다.
+describe("읽기 화면 펼침 여부", () => {
+    it("openReaderUI가 false면 읽기 화면을 펼치지 않는다", () => {
+        const { state, logic } = setup();
+        state.isOpen.value = false;
+
+        logic.openSharedReaderMode("기사", [{ text: "문장", start: 0, end: 1000 }], "blob:x", {
+            openReaderUI: false,
+        });
+
+        expect(state.isOpen.value).toBe(false);
+    });
+
+    it("기본값은 펼치는 것이다", () => {
+        // 뉴스 카드나 라이브러리에서 처음 재생할 때는 읽기 화면이 떠야 한다.
+        const { state, logic } = setup();
+        state.isOpen.value = false;
+
+        logic.openSharedReaderMode("작품", [{ text: "문장", start: 0, end: 1000 }], "blob:y", {});
+
+        expect(state.isOpen.value).toBe(true);
+    });
+});
