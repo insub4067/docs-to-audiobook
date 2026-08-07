@@ -2,6 +2,7 @@
 import { useAuthStore } from "../stores/auth";
 import { useAuthLogic } from "../Auth/Auth_Logic.vue";
 import { useToastLogic } from "../components/Toast/Toast_Logic.vue";
+import { reportClientError } from "../services/clientErrors";
 import { useToastState } from "../components/Toast/Toast_State.vue";
 import { saveAudiobookToDB } from "../services/indexedDb";
 import { getAudiobookDisplayTitle, formatBytes } from "../utils/format";
@@ -190,6 +191,7 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
             if (isAbortError(error)) {
                 showToast("업로드를 취소했어요", "info");
             } else {
+                reportClientError("generation", error);
                 console.error(error);
                 showToast((error as Error).message, "error");
             }
@@ -234,6 +236,7 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
                     });
                     if (ok) completed += 1;
                 } catch (error) {
+                    reportClientError("generation", error);
                     console.error(`파일 처리 실패: ${file.name}`, error);
                     showToast(`${file.name} 처리 실패`, "error");
                 }
@@ -298,6 +301,7 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
             if (isAbortError(error)) {
                 showToast("업로드를 취소했어요", "info");
             } else {
+                reportClientError("generation", error);
                 console.error(error);
                 showToast((error as Error).message, "error");
             }
@@ -390,6 +394,7 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
             if (isAbortError(error)) {
                 showToast("업로드를 취소했어요", "info");
             } else {
+                reportClientError("generation", error);
                 console.error(error);
                 showToast((error as Error).message, "error");
             }
@@ -440,6 +445,7 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
             if (isAbortError(error)) {
                 showToast("업로드를 취소했어요", "info");
             } else {
+                reportClientError("generation", error);
                 console.error(error);
                 showToast((error as Error).message, "error");
             }
@@ -472,6 +478,7 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
             if (isAbortError(error)) {
                 showToast("업로드를 취소했어요", "info");
             } else {
+                reportClientError("generation", error);
                 console.error(error);
                 showToast((error as Error).message, "error");
             }

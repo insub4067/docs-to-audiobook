@@ -15,6 +15,7 @@ import { useToastState } from "../Toast/Toast_State.vue";
 import { usePromptSheetLogic } from "../../Sheet/PromptSheet_Logic.vue";
 import { usePromptSheetState } from "../../Sheet/PromptSheet_State.vue";
 import type { AudioListState, BackgroundJobItem } from "./AudioList_State.vue";
+import { reportClientError } from "../../services/clientErrors";
 
 export interface SyncResult {
     uploaded: number;
@@ -124,10 +125,12 @@ export function useAudioListLogic(state: AudioListState): AudioListLogic {
                 await refresh();
                 showToast("기본 제공 오디오북이 준비되었습니다!", "success");
             } catch (innerError) {
+                reportClientError("default_book", innerError);
                 console.error("Failed to save default book:", innerError);
                 showToast("기본 제공 오디오북 저장에 실패했습니다.", "error");
             }
         } catch (error) {
+            reportClientError("default_book", error);
             console.error("Default book sync failed:", error);
         }
     }
@@ -187,6 +190,7 @@ export function useAudioListLogic(state: AudioListState): AudioListLogic {
             await saveAudiobookToDB(synced);
             return synced;
         } catch (error) {
+            reportClientError("playback_save", error);
             console.error("재생 상태 동기화 실패:", error);
             return entry;
         }
@@ -232,6 +236,7 @@ export function useAudioListLogic(state: AudioListState): AudioListLogic {
                     await saveAudiobookToDB({ ...item, cloudId });
                     result.uploaded++;
                 } catch (error) {
+                    reportClientError("cloud_sync", error);
                     console.error("업로드 실패:", item.title, error);
                     result.failed++;
                 }
@@ -272,6 +277,7 @@ export function useAudioListLogic(state: AudioListState): AudioListLogic {
             }
             return result;
         } catch (error) {
+            reportClientError("cloud_sync", error);
             console.error("클라우드 동기화 실패:", error);
             return result;
         } finally {

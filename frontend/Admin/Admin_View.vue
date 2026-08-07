@@ -133,6 +133,11 @@ onUnmounted(() => {
                         <strong data-metric="total_audiobooks">{{ formatMetric('total_audiobooks', metrics.total_audiobooks) }}</strong>
                         <span><b>{{ formatMetric('generation_failed_30d', metrics.generation_failed_30d) }}</b>건 · 최근 30일 실패</span>
                     </a>
+                    <a class="metric-card" href="/admin/metrics/client_errors_7d">
+                        <p>조용한 실패</p>
+                        <strong data-metric="client_errors_7d">{{ formatMetric('client_errors_7d', metrics.client_errors_7d) }}</strong>
+                        <span>최근 7일 · 사용자에게 안 보인 오류</span>
+                    </a>
                 </div>
             </section>
 

@@ -11,6 +11,8 @@ import { getAudiobookDisplayTitle, formatTime, getReaderScrollTarget } from "../
 import { useToastLogic, setReaderOpenForToast } from "../components/Toast/Toast_Logic.vue";
 import { useToastState } from "../components/Toast/Toast_State.vue";
 import { useAuthLogic } from "../Auth/Auth_Logic.vue";
+import { swallowed } from "../services/clientErrors";
+import { reportClientError } from "../services/clientErrors";
 
 export interface SharedReaderModeOptions {
     shareId?: string | null;
@@ -187,7 +189,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
                 updateAudiobookPosition(audioObject.id, currentSec);
                 if (Date.now() - lastPlaybackSyncTime >= 30000) {
                     lastPlaybackSyncTime = Date.now();
-                    audioListLogic.savePlaybackState(audioObject, currentSec, settings).catch((error) => console.error("재생 상태 저장 실패:", error));
+                    audioListLogic.savePlaybackState(audioObject, currentSec, settings).catch(swallowed("playback_save", "재생 상태 저장 실패:"));
                 }
             }
         };
@@ -243,7 +245,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
                 // 오디오를 디코딩해야 한다. 어차피 여기서 알게 되므로 한 번만
                 // 저장해 두고 목록은 그 값을 읽어 쓴다.
                 audio.durationSeconds = audio.durationSeconds || el.duration;
-                saveAudiobookDuration(audio.id, el.duration).catch((error) => console.error("재생시간 저장 실패:", error));
+                saveAudiobookDuration(audio.id, el.duration).catch(swallowed("playback_save", "재생시간 저장 실패:"));
             }
             if (audio.lastPosition && audio.lastPosition > 0) el.currentTime = audio.lastPosition;
             el.playbackRate = readerControls.getPlaybackSettings().playbackSpeed;
@@ -348,7 +350,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
             const currentSecond = Math.floor(currentSec);
             if (sharedAudiobookId && currentSecond % 30 === 0 && currentSecond > 0 && currentSecond !== lastSharedPositionSaveSecond) {
                 lastSharedPositionSaveSecond = currentSecond;
-                saveSharedPlaybackPosition(sharedAudiobookId, currentSec).catch((error) => console.error("재생 상태 저장 실패:", error));
+                saveSharedPlaybackPosition(sharedAudiobookId, currentSec).catch(swallowed("playback_save", "재생 상태 저장 실패:"));
             }
         };
         // "현재 오디오 반복"은 지금 것만 다시 틀고 끝. "전체 반복"은 재생목록
@@ -624,9 +626,9 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
             const settings = readerControls.getPlaybackSettings();
             audioObject.playbackSpeed = settings.playbackSpeed;
             audioObject.repeatMode = settings.repeatMode;
-            audioListLogic.savePlaybackState(audioObject, el.currentTime, settings).catch((error) => console.error("재생 상태 저장 실패:", error));
+            audioListLogic.savePlaybackState(audioObject, el.currentTime, settings).catch(swallowed("playback_save", "재생 상태 저장 실패:"));
         } else if (el && sharedAudiobookId && el.currentTime > 0) {
-            saveSharedPlaybackPosition(sharedAudiobookId, el.currentTime).catch((error) => console.error("재생 상태 저장 실패:", error));
+            saveSharedPlaybackPosition(sharedAudiobookId, el.currentTime).catch(swallowed("playback_save", "재생 상태 저장 실패:"));
         }
         lastPositionSaveSecond = -1;
         state.isOpen.value = false;

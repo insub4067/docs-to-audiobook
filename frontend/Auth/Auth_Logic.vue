@@ -1,6 +1,7 @@
 <script lang="ts">
 import { useAuthStore, type AuthUser } from "../stores/auth";
 import { getAllAudiobooksFromDB, DEFAULT_BOOK_DISMISSED_KEY } from "../services/indexedDb";
+import { swallowed } from "../services/clientErrors";
 
 export interface FetchUserError extends Error {
     authFailed?: boolean;
@@ -106,7 +107,7 @@ export function useAuthLogic(): AuthLogic {
             method: "POST",
             headers: { ...authHeaders(), "Content-Type": "application/json" },
             body: JSON.stringify({ event_name: eventName }),
-        }).catch((error) => console.warn("제품 이벤트 기록 실패:", error));
+        }).catch(swallowed("product_event", "제품 이벤트 기록 실패:"));
     }
 
     /** 토큰이 실제로 무효한지(401/403) 여부를 호출자가 구분할 수 있도록

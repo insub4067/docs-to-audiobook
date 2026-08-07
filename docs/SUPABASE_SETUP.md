@@ -263,6 +263,39 @@ select
   has_table_privilege('service_role', 'public.content_jobs', 'DELETE');
 ```
 
+### 2.9 조용한 실패 테이블
+
+클라이언트가 사용자 경험을 위해 삼킨 실패를 한 줄씩 남긴다. **이 테이블이 없던 동안
+`playback_history`가 몇 주간 통째로 비어 있었는데 아무도 몰랐다** — 클라이언트는 저장이
+500을 내도 재생을 계속했고, 그 실패는 사용자 기기의 console에만 남았기 때문이다.
+
+`user_id`가 NULL일 수 있는 것은 의도적이다. 가입만 하고 아무것도 하지 않은 사용자가
+무엇에 걸려 떠났는지가 정확히 여기서 알고 싶은 것이라, 비로그인 체험 중의 실패를
+버리면 이 테이블을 만든 이유의 절반이 사라진다.
+
+```sql
+create table public.client_errors (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references public.users(id) on delete set null,
+  scope varchar(40) not null,
+  message text not null,
+  app_version varchar(60),
+  created_at timestamptz not null default now()
+);
+
+create index client_errors_created_at_idx on public.client_errors(created_at desc);
+alter table public.client_errors enable row level security;
+revoke all on table public.client_errors from anon, authenticated;
+grant select, insert, delete on table public.client_errors to service_role;
+```
+
+`scope`는 `backend/routes/system.py`의 `CLIENT_ERROR_LABELS`에 있는 값만 받는다
+(`playback_save` / `product_event` / `generation` / `cloud_sync` / `default_book`).
+아무 문자열이나 받으면 오타 하나로 지표가 두 갈래로 갈라지기 때문이다.
+
+관리자 대시보드의 "조용한 실패" 카드에서 최근 7일치를 볼 수 있다. 여기 안 실리면
+로그에만 쌓이고 아무도 보지 않으므로, 테이블만 만들고 끝내면 의미가 없다.
+
 ---
 
 ## 🔐 3단계: Row Level Security (RLS) 정책 설정

@@ -12,15 +12,16 @@ const metricDetails = {
     generation_success_rate: ["생성 성공률", "최근 30일 생성 완료 수를 완료와 실패의 합으로 나눈 비율입니다.", "완료 또는 실패 이벤트가 아직 없으면 비율 대신 —로 표시합니다."],
     playback_started_30d: ["첫 재생", "최근 30일 동안 오디오북 읽기 화면을 열어 재생을 시작한 횟수입니다.", "고유 사용자 수가 아니라 시작 횟수이므로 같은 사용자가 여러 번 포함될 수 있습니다."],
     total_audiobooks: ["보관함 오디오북", "사용자 보관함에 저장된 오디오북의 총 개수입니다.", "보조 수치는 최근 30일 생성 실패 이벤트 수입니다."],
+    client_errors_7d: ["조용한 실패", "최근 7일 동안 클라이언트가 사용자에게 알리지 않고 넘어간 오류입니다.", "재생 위치 저장·지표 전송·생성·동기화·기본 오디오북 경로만 집계하며, 같은 범위는 1분에 한 번만 보고합니다."],
 };
 
-function renderPeople(people) {
+function renderPeople(people, emptyText) {
     const list = document.getElementById("metricPageList");
     list.replaceChildren();
     if (!people.length) {
         const item = document.createElement("li");
         item.className = "metric-page-empty";
-        item.textContent = "현재 조건에 해당하는 사용자가 없습니다.";
+        item.textContent = emptyText;
         list.append(item);
         return;
     }
@@ -65,7 +66,11 @@ async function loadMetricPage() {
         document.getElementById("metricPageValue").textContent = formatMetric(metricName, metrics[metricName]);
         document.getElementById("metricPageDescription").textContent = detail[1];
         document.getElementById("metricPageBasis").textContent = detail[2];
-        renderPeople(metrics.metric_details?.[metricName] || []);
+        renderPeople(
+            metrics.metric_details?.[metricName] || [],
+            // 이 지표만 목록이 사람이 아니라 사건이다.
+            metricName === "client_errors_7d" ? "최근 7일 동안 보고된 오류가 없습니다." : "현재 조건에 해당하는 사용자가 없습니다.",
+        );
         content.hidden = false;
         status.textContent = "";
     } catch (error) {

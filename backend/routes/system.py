@@ -8,6 +8,17 @@ from state import APP_BUILD_ID, STATIC_DIR, require_user_id, enforce_rate_limit,
 
 router = APIRouter()
 
+# 클라이언트가 "사용자 경험을 안 망가뜨리려고" 조용히 삼키는 실패의 종류.
+# 아무 문자열이나 받으면 오타 하나로 지표가 두 갈래로 갈라지므로,
+# 새 scope를 늘릴 때는 반드시 여기에 먼저 추가한다.
+CLIENT_ERROR_LABELS = {
+    "playback_save": "재생 위치 저장",
+    "product_event": "지표 전송",
+    "generation": "오디오북 생성",
+    "cloud_sync": "클라우드 동기화",
+    "default_book": "기본 오디오북",
+}
+
 
 def _parse_event_time(value: str | None):
     if not value:
@@ -33,6 +44,15 @@ def load_admin_metrics():
             .gte("created_at", thirty_days_ago.isoformat()).execute().data or []
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"관리자 통계를 불러오지 못했습니다: {e}")
+
+    # 조용한 실패는 여기 안 실리면 아무도 안 본다. 이 지표를 만든 이유가
+    # "몇 주 동안 몰랐다"를 없애는 것이므로, 조회에 실패해도 통계 전체를
+    # 죽이지 않고 빈 목록으로 둔다.
+    try:
+        client_errors = supabase.table("client_errors").select("user_id,scope,message,created_at") \
+            .gte("created_at", week_ago.isoformat()).order("created_at", desc=True).limit(200).execute().data or []
+    except Exception:
+        client_errors = []
 
     dated_events = [(event, _parse_event_time(event.get("created_at"))) for event in events]
     recent_events = [(event, event_time) for event, event_time in dated_events if event_time]
@@ -115,6 +135,17 @@ def load_admin_metrics():
             audiobook_counts,
             {user_id: f"오디오북 {count}권" for user_id, count in audiobook_counts.items()},
         ),
+        # 이 목록만 사람이 아니라 사건이다. 상세 화면의 세 칸(name/email/meta)에
+        # 각각 범위·발생자·내용을 싣는다 — 칸 하나를 위해 화면을 새로 만들 만큼
+        # 자주 볼 지표가 아니다.
+        "client_errors_7d": [
+            {
+                "name": CLIENT_ERROR_LABELS.get(error.get("scope"), error.get("scope") or "알 수 없음"),
+                "email": (users_by_id.get(error.get("user_id"), {}).get("email") or "비로그인"),
+                "meta": f"{str(error.get('created_at') or '')[5:16].replace('T', ' ')} · {error.get('message') or ''}",
+            }
+            for error in client_errors
+        ],
     }
 
     return {
@@ -130,6 +161,7 @@ def load_admin_metrics():
         "playback_started_30d": sum(event["event_name"] == "playback_started" for event, _ in recent_events),
         "week_one_retention_rate": round(len(returning_users) / len(week_one_cohort) * 100) if week_one_cohort else None,
         "retention_cohort_size": len(week_one_cohort),
+        "client_errors_7d": len(client_errors),
         "metric_details": metric_details,
     }
 
@@ -183,6 +215,52 @@ async def create_product_event(request: Request, payload: dict, authorization: s
         raise
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"이벤트를 기록하지 못했습니다: {e}")
+
+
+CLIENT_ERROR_MESSAGE_LIMIT = 500
+
+
+@router.post("/api/client-errors")
+async def create_client_error(request: Request, payload: dict, authorization: str = Header(None)):
+    """클라이언트가 삼킨 실패를 한 줄 남긴다.
+
+    ⚠️ 로그인 여부를 따지지 않는다. 가입만 하고 아무것도 안 한 사용자가
+    무엇에 걸려 떠났는지가 정확히 여기서 알고 싶은 것이라, 비로그인 체험 중의
+    실패를 버리면 이 엔드포인트를 만든 이유의 절반이 사라진다.
+
+    또 이 엔드포인트는 실패해도 예외를 밖으로 던지지 않는다. 실패 보고가
+    실패해서 500을 내면 클라이언트가 그걸 또 삼키고, 결국 같은 침묵이
+    한 겹 더 생긴다. DB가 죽어 있어도 stdout에는 반드시 남긴다."""
+    enforce_rate_limit(request, "client_error", limit=60, window_sec=600)
+    scope = payload.get("scope")
+    if scope not in CLIENT_ERROR_LABELS:
+        raise HTTPException(status_code=400, detail="지원하지 않는 오류 범위입니다.")
+    message = str(payload.get("message") or "")[:CLIENT_ERROR_MESSAGE_LIMIT]
+    if not message:
+        raise HTTPException(status_code=400, detail="오류 내용이 비어 있습니다.")
+
+    user_id = None
+    if authorization:
+        try:
+            user_id = require_user_id(authorization)
+        except HTTPException:
+            # 토큰이 만료된 채로 보내는 것도 흔하다. 그렇다고 보고를 버리진 않는다.
+            user_id = None
+
+    print(f"[client-error] scope={scope} user={user_id or 'anonymous'} {message}", flush=True)
+    try:
+        _supabase_or_503().table("client_errors").insert({
+            "user_id": user_id,
+            "scope": scope,
+            "message": message,
+            # 클라이언트가 아니라 보고를 받은 서버의 빌드다. 클라이언트는 자기
+            # 버전을 확실히 알 방법이 없고(캐시된 sw.js를 다시 읽을 수 없다),
+            # 실무에서 필요한 건 "어느 배포부터 이 오류가 시작됐나"라 이걸로 충분하다.
+            "app_version": APP_BUILD_ID,
+        }).execute()
+    except Exception as e:
+        print(f"[client-error] 저장 실패: {e}", flush=True)
+    return {"recorded": scope}
 
 
 @router.get("/api/admin/metrics")

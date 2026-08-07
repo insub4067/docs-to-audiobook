@@ -12,6 +12,7 @@ export interface AdminMetrics {
     playback_started_30d?: number;
     week_one_retention_rate?: number | null;
     retention_cohort_size?: number;
+    client_errors_7d?: number;
 }
 
 export type AdminMetricName = keyof AdminMetrics;
