@@ -4145,3 +4145,32 @@ input[type="range"]::-webkit-slider-thumb:active {
     width: 18px;
     height: 18px;
 }
+
+/* 장 이동. 10초 이동보다 한 단계 조용하게 둔다 — 거친 이동이라 자주
+   누르지 않고, 여기가 튀면 가운데 재생 버튼의 무게가 흐려진다. */
+.btn-player-chapter {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: transparent;
+    color: var(--text-muted);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    touch-action: manipulation;
+}
+
+.btn-player-chapter i,
+.btn-player-chapter svg {
+    width: 20px;
+    height: 20px;
+}
+
+.btn-player-chapter:active {
+    transform: scale(0.92);
+    color: var(--primary-color);
+}

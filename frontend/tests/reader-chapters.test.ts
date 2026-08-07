@@ -243,3 +243,72 @@ describe("읽기 화면 펼침 여부", () => {
         expect(state.isOpen.value).toBe(true);
     });
 });
+
+// 장 이동은 경전·고전 청취의 주된 이동 수단인데 "더보기" 시트 안에 2탭
+// 깊이로 있었다. 하단 컨트롤로 올리면서, 목차가 없는 개인 문서에서는
+// 나타나지 않아야 한다는 조건이 함께 생겼다.
+describe("하단 재생 컨트롤의 장 이동 버튼", () => {
+    async function mountReader(headings: typeof CHAPTERS | []) {
+        const { mount } = await import("@vue/test-utils");
+        const ReaderView = (await import("../Reader/Reader_View.vue")).default;
+        const { state, logic } = setup();
+        state.headings.value = [...headings];
+        state.isOpen.value = true;
+
+        const controlsState = useReaderControlsState();
+        const wrapper = mount(ReaderView, {
+            props: {
+                state, logic,
+                controlsState,
+                controlsLogic: useReaderControlsLogic(controlsState, state.audioEl),
+                audioListLogic: {} as AudioListLogic,
+                audioListState: { savedAudiobooks: { value: [] } } as never,
+                themeLogic: {} as never,
+            },
+            global: { stubs: { IndexSheetView: true, BookmarkSheetView: true, ReaderMoreSheetView: true,
+                ReaderSettingsSheetView: true, ReaderOptionsSheetView: true, ReaderPlaylistSheetView: true,
+                ReaderControlsView: true } },
+        });
+        // ReaderView가 자기 <audio>를 ref로 물려서 setup()이 넣어 둔 스텁을
+        // 덮어쓴다. jsdom은 play()를 구현하지 않으므로 여기서 다시 막는다.
+        state.audioEl.value!.play = vi.fn().mockResolvedValue(undefined);
+        return wrapper;
+    }
+
+    it("장이 여러 개면 이전/다음 장 버튼이 하단에 보인다", async () => {
+        const wrapper = await mountReader(CHAPTERS);
+
+        expect(wrapper.findAll(".btn-player-chapter")).toHaveLength(2);
+        wrapper.unmount();
+    });
+
+    it("목차가 없는 문서에서는 나타나지 않는다", async () => {
+        // 개인 PDF 대부분이 여기 해당한다. 눌러도 갈 곳이 없는 버튼을
+        // 상시 노출하면 하단이 그만큼 좁아진다.
+        const wrapper = await mountReader([]);
+
+        expect(wrapper.findAll(".btn-player-chapter")).toHaveLength(0);
+        wrapper.unmount();
+    });
+
+    it("10초 이동 버튼을 밀어내지 않는다", async () => {
+        // 보고서는 ⏮⏭를 장 이동으로 "교체"하라고 했지만, 목차 없는 문서에서는
+        // 10초 이동이 유일한 이동 수단이다. 추가하되 대체하지 않는다.
+        const wrapper = await mountReader(CHAPTERS);
+
+        expect(wrapper.findAll(".btn-player-skip")).toHaveLength(2);
+        wrapper.unmount();
+    });
+
+    it("다음 장 버튼을 누르면 다음 장으로 간다", async () => {
+        const wrapper = await mountReader(CHAPTERS);
+        const state = wrapper.props("state") as ReturnType<typeof useReaderState>;
+        state.activeIndex.value = 0;
+        state.audioEl.value!.currentTime = 5;
+
+        await wrapper.findAll(".btn-player-chapter")[1].trigger("click");
+
+        expect(state.audioEl.value!.currentTime).toBe(60);
+        wrapper.unmount();
+    });
+});

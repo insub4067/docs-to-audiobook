@@ -41,11 +41,6 @@ function onBookmarkListClick(): void {
     props.logic.openBookmarkSheet();
 }
 
-function onChapterClick(offset: number): void {
-    props.logic.closeMoreSheet();
-    props.logic.goToChapter(offset);
-}
-
 function onShareClickWrapped(): void {
     props.logic.closeMoreSheet();
     props.onShareClick();
@@ -71,16 +66,6 @@ function onSaveSharedClick(): void {
             <button v-if="state.headings.value.length > 0" class="action-sheet-btn" type="button" @click="onIndexClick">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
                 목차 보기
-            </button>
-            <!-- 하단 재생 컨트롤의 ⏮⏭는 10초 이동이라 장 단위 이동이 없었다.
-                 경전처럼 장이 수십 개인 작품에서는 이게 주된 이동 수단이다. -->
-            <button v-if="state.headings.value.length > 1" class="action-sheet-btn" type="button" @click="onChapterClick(-1)">
-                <i data-lucide="chevron-first"></i>
-                이전 장
-            </button>
-            <button v-if="state.headings.value.length > 1" class="action-sheet-btn" type="button" @click="onChapterClick(1)">
-                <i data-lucide="chevron-last"></i>
-                다음 장
             </button>
             <button class="action-sheet-btn" type="button" @click="onBookmarkClick">
                 <i data-lucide="bookmark"></i>

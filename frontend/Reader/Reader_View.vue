@@ -230,6 +230,20 @@ useSwipeToDismiss(props.state.containerEl, () => props.logic.closeReader(), head
                 </div>
                 <div class="reader-player-ui">
                     <div class="reader-player-buttons">
+                        <!-- 장 이동은 경전·고전처럼 장이 여러 개인 작품에서 주된 이동
+                             수단인데, 그동안 "더보기" 시트 안에 2탭 깊이로 있었다.
+                             10초 이동을 밀어내지는 않는다 — 목차 없는 개인 문서에서는
+                             그쪽이 유일한 이동 수단이다. 거친 이동을 바깥, 미세한
+                             이동을 안쪽에 둬서 손가락 위치와 이동 폭을 맞춘다. -->
+                        <button
+                            v-if="state.headings.value.length > 1"
+                            class="btn-player-chapter"
+                            aria-label="이전 장"
+                            type="button"
+                            @click="logic.goToChapter(-1)"
+                        >
+                            <i data-lucide="chevron-first"></i>
+                        </button>
                         <button class="btn-player-skip" aria-label="10초 뒤로" type="button" @click="controlsLogic.skipBack">
                             <i data-lucide="skip-back"></i>
                         </button>
@@ -239,6 +253,15 @@ useSwipeToDismiss(props.state.containerEl, () => props.logic.closeReader(), head
                         </button>
                         <button class="btn-player-skip" aria-label="10초 앞으로" type="button" @click="controlsLogic.skipForward">
                             <i data-lucide="skip-forward"></i>
+                        </button>
+                        <button
+                            v-if="state.headings.value.length > 1"
+                            class="btn-player-chapter"
+                            aria-label="다음 장"
+                            type="button"
+                            @click="logic.goToChapter(1)"
+                        >
+                            <i data-lucide="chevron-last"></i>
                         </button>
                     </div>
                     <ReaderControlsView :state="controlsState" :logic="controlsLogic" />
