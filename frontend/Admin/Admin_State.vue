@@ -9,8 +9,23 @@ export interface LibraryAdminItem {
     title: string;
     library_status: "review" | "published";
     library_category: string | null;
+    library_edition: string | null;
+    library_translator: string | null;
+    library_source: string | null;
+    library_rights: string | null;
     library_description: string | null;
     created_at: string;
+}
+
+/** 편집 시트에서 고칠 수 있는 서지 정보. 본문(오디오)은 여기서 못 바꾼다. */
+export interface LibraryEditDraft {
+    title: string;
+    category: string;
+    edition: string;
+    translator: string;
+    source: string;
+    rights: string;
+    description: string;
 }
 
 /** 합성이 끝나기 전(또는 실패한) 등록 작업. 뉴스와 라이브러리가 같은
@@ -50,6 +65,9 @@ export interface AdminState {
     contentJobsStatus: Ref<string>;
     contentJobBusyIds: Ref<Set<string>>;
     statusMenuItem: Ref<LibraryAdminItem | null>;
+    editingItem: Ref<LibraryAdminItem | null>;
+    editDraft: Ref<LibraryEditDraft>;
+    editSaving: Ref<boolean>;
     activeInputSheet: Ref<"news" | "library" | null>;
 }
 
@@ -72,6 +90,9 @@ export function useAdminState(): AdminState {
         contentJobsStatus: ref(""),
         contentJobBusyIds: ref(new Set()),
         statusMenuItem: ref(null),
+        editingItem: ref(null),
+        editDraft: ref({ title: "", category: "", edition: "", translator: "", source: "", rights: "", description: "" }),
+        editSaving: ref(false),
         activeInputSheet: ref(null),
     };
 }

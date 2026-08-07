@@ -107,3 +107,71 @@ describe("관리자 등록 작업 목록", () => {
         expect(wrapper.text()).toContain("진행 중이거나 실패한 등록 작업이 없습니다.");
     });
 });
+
+// 작품 정보 수정 — 제목 오타 하나로 지우고 재등록(수 분짜리 재합성)하게
+// 두지 않으려고 넣었다. 본문/음성은 여기서 못 바꾼다.
+describe("작품 정보 수정", () => {
+    async function mountWithItem() {
+        const item = {
+            id: "book-1", title: "도덕경", library_status: "review",
+            library_category: "철학·사상", library_edition: "왕필본",
+            library_translator: "오강남", library_source: null,
+            library_rights: null, library_description: "노자의 도와 덕",
+            created_at: "2026-08-01",
+        };
+        fetchMock.mockImplementation(async (url: string) => {
+            const path = String(url);
+            if (path.startsWith("/api/admin/content-jobs")) return jsonResponse({ jobs: [] });
+            if (path.startsWith("/api/admin/library")) return jsonResponse({ items: [item] });
+            return jsonResponse({});
+        });
+        const wrapper = mount(AdminView, { attachTo: document.body });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await wrapper.vm.$nextTick();
+        return wrapper;
+    }
+
+    async function openEditor(wrapper: Awaited<ReturnType<typeof mountWithItem>>) {
+        await wrapper.find(".row-more-btn").trigger("click");
+        await wrapper.vm.$nextTick();
+        const edit = wrapper.findAll(".action-sheet-btn").find((b) => b.text() === "작품 정보 수정")!;
+        await edit.trigger("click");
+        await wrapper.vm.$nextTick();
+    }
+
+    it("기존 값을 폼에 채운다", async () => {
+        const wrapper = await mountWithItem();
+        await openEditor(wrapper);
+
+        const values = wrapper.findAll(".admin-input").map((el) => (el.element as HTMLInputElement).value);
+        expect(values).toContain("도덕경");
+        expect(values).toContain("왕필본");
+        expect(values).toContain("오강남");
+    });
+
+    it("저장하면 PATCH로 보낸다", async () => {
+        const wrapper = await mountWithItem();
+        await openEditor(wrapper);
+
+        const title = wrapper.findAll(".admin-input")[0];
+        await title.setValue("도덕경(개정)");
+        const save = wrapper.findAll(".action-sheet-btn").find((b) => b.text() === "저장")!;
+        await save.trigger("click");
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const patch = fetchMock.mock.calls.find(([, init]) => (init as RequestInit)?.method === "PATCH");
+        expect(patch).toBeTruthy();
+        expect(JSON.parse((patch![1] as RequestInit).body as string).title).toBe("도덕경(개정)");
+    });
+
+    it("제목을 비우면 저장하지 않는다", async () => {
+        const wrapper = await mountWithItem();
+        await openEditor(wrapper);
+
+        await wrapper.findAll(".admin-input")[0].setValue("   ");
+        await wrapper.findAll(".action-sheet-btn").find((b) => b.text() === "저장")!.trigger("click");
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(fetchMock.mock.calls.find(([, init]) => (init as RequestInit)?.method === "PATCH")).toBeUndefined();
+    });
+});

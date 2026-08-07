@@ -11,17 +11,20 @@ const {
     libraryInputText, libraryStatus, librarySubmitting,
     libraryItems, libraryItemsStatus, libraryTogglingIds, statusMenuItem, activeInputSheet,
     contentJobs, contentJobsStatus, contentJobBusyIds,
+    editingItem, editDraft, editSaving,
 } = useAdminState();
 const {
     formatMetric, loadMetrics, selectTab, validateJson, submitNews, submitLibrary,
     loadLibraryItems, loadContentJobs, retryContentJob, dismissContentJob,
     openStatusMenu, closeStatusMenu, toggleLibraryStatus,
+    openEditSheet, closeEditSheet, saveEdit,
     openInputSheet, closeInputSheet,
 } = useAdminLogic({
     status, contentVisible, metrics, activeAdminTab, newsInputText, newsStatus, newsSubmitting,
     libraryInputText, libraryStatus, librarySubmitting,
     libraryItems, libraryItemsStatus, libraryTogglingIds, statusMenuItem, activeInputSheet,
     contentJobs, contentJobsStatus, contentJobBusyIds,
+    editingItem, editDraft, editSaving,
 });
 const themeState = useThemeState();
 const themeLogic = useThemeLogic(themeState);
@@ -231,7 +234,52 @@ onUnmounted(() => {
             <button type="button" class="action-sheet-btn" @click="toggleLibraryStatus(statusMenuItem)">
                 {{ statusMenuItem.library_status === "published" ? "비공개로 전환" : "공개로 전환" }}
             </button>
+            <button type="button" class="action-sheet-btn" @click="openEditSheet(statusMenuItem)">작품 정보 수정</button>
             <button type="button" class="action-sheet-btn action-sheet-btn-cancel" @click="closeStatusMenu">취소</button>
+        </div>
+    </div>
+
+    <!-- 제목 오타 하나 때문에 지우고 다시 등록하면 수 분짜리 재합성을 또
+         해야 한다. 본문(오디오)을 건드리지 않는 정보는 여기서 바로 고친다. -->
+    <div class="action-sheet-backdrop" :class="{ show: !!editingItem }" role="dialog" aria-modal="true" @click="(e) => { if (e.target === e.currentTarget) closeEditSheet(); }">
+        <div class="action-sheet input-sheet" v-if="editingItem">
+            <div class="action-sheet-handle"></div>
+            <div class="index-sheet-header"><h3>작품 정보 수정</h3></div>
+            <div class="input-sheet-scroll">
+                <label class="admin-field">
+                    <span>제목</span>
+                    <input v-model="editDraft.title" type="text" class="admin-input">
+                </label>
+                <label class="admin-field">
+                    <span>카테고리</span>
+                    <input v-model="editDraft.category" type="text" class="admin-input">
+                </label>
+                <label class="admin-field">
+                    <span>판본</span>
+                    <input v-model="editDraft.edition" type="text" class="admin-input">
+                </label>
+                <label class="admin-field">
+                    <span>번역/편저</span>
+                    <input v-model="editDraft.translator" type="text" class="admin-input">
+                </label>
+                <label class="admin-field">
+                    <span>출처</span>
+                    <input v-model="editDraft.source" type="text" class="admin-input">
+                </label>
+                <label class="admin-field">
+                    <span>이용 조건</span>
+                    <input v-model="editDraft.rights" type="text" class="admin-input">
+                </label>
+                <label class="admin-field">
+                    <span>설명</span>
+                    <textarea v-model="editDraft.description" class="admin-input" rows="3"></textarea>
+                </label>
+                <p class="dashboard-subtitle">본문과 음성은 여기서 바꿀 수 없습니다. 내용을 고치려면 다시 등록해야 합니다.</p>
+            </div>
+            <button type="button" class="action-sheet-btn" :disabled="editSaving" @click="saveEdit">
+                {{ editSaving ? "저장 중..." : "저장" }}
+            </button>
+            <button type="button" class="action-sheet-btn action-sheet-btn-cancel" @click="closeEditSheet">취소</button>
         </div>
     </div>
 

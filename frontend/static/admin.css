@@ -379,3 +379,35 @@ h2 { margin-bottom: 0; font-size: 1.4rem; }
     :root { --ink: #f7f0e9; --muted: #cdbdb0; --paper: #211d1b; --card: #2f2926; --line: #504640; --accent: #e1a46f; }
     .metric-card-primary { border-color: #d68b57; background: linear-gradient(135deg, #7e4830, #4f3227); }
 }
+
+/* 작품 정보 수정 폼 */
+.admin-field {
+    display: block;
+    margin-bottom: 12px;
+}
+
+.admin-field > span {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+.admin-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    color: var(--ink);
+    background: transparent;
+    font-family: inherit;
+    /* iOS는 16px보다 작으면 입력할 때 화면을 확대한다. */
+    font-size: 16px;
+    resize: vertical;
+}
+
+.admin-input:focus {
+    outline: none;
+    border-color: var(--accent, #5d4b40);
+}

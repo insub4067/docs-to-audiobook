@@ -155,7 +155,7 @@ async def test_update_library_status_publishes_item(mock_supabase):
             response = await client.patch("/api/admin/library/book-1", json={"status": "published"}, headers=_auth_headers())
 
     assert response.status_code == 200
-    assert response.json() == {"status": "published"}
+    assert response.json() == {"updated": {"library_status": "published"}}
     mock_supabase.table().update.assert_called_with({"library_status": "published"})
     eq_calls = mock_supabase.table().update().eq.call_args_list
     assert ("id", "book-1") in [c.args for c in eq_calls]
@@ -302,3 +302,64 @@ async def test_list_library_playback_is_not_shadowed_by_the_id_route(mock_supaba
     # id 라우트로 새면 published 필터에 걸려 404가 난다.
     assert response.status_code == 200
     assert response.json() == {"positions": {}}
+
+
+# ── 서지 정보 수정 ──────────────────────────────────────────────────────
+# 제목 오타 하나 때문에 작품을 지우고 다시 등록하면 수 분짜리 재합성을
+# 또 해야 한다. 본문(오디오)을 건드리지 않는 정보는 바로 고칠 수 있어야 한다.
+
+@pytest.mark.asyncio
+async def test_update_library_item_edits_bibliographic_fields(mock_supabase):
+    with patch("routes.library.require_admin_user", return_value="admin-user"):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.patch(
+                "/api/admin/library/book-1",
+                json={"title": "도덕경", "translator": "오강남", "rights": "저작권 만료"},
+                headers=_auth_headers(),
+            )
+
+    assert response.status_code == 200
+    mock_supabase.table().update.assert_called_with({
+        "title": "도덕경",
+        "library_translator": "오강남",
+        "library_rights": "저작권 만료",
+    })
+
+
+@pytest.mark.asyncio
+async def test_update_library_item_only_touches_given_fields(mock_supabase):
+    """payload에 없는 필드는 건드리지 않는다 — 안 보낸 값이 지워지면 안 된다."""
+    with patch("routes.library.require_admin_user", return_value="admin-user"):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            await client.patch("/api/admin/library/book-1", json={"category": "철학·사상"}, headers=_auth_headers())
+
+    assert mock_supabase.table().update.call_args.args[0] == {"library_category": "철학·사상"}
+
+
+@pytest.mark.asyncio
+async def test_update_library_item_clears_a_field_with_empty_string(mock_supabase):
+    """빈 문자열은 "지우기"다. NULL로 넣어야 화면에서 그 줄이 사라진다."""
+    with patch("routes.library.require_admin_user", return_value="admin-user"):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            await client.patch("/api/admin/library/book-1", json={"edition": ""}, headers=_auth_headers())
+
+    assert mock_supabase.table().update.call_args.args[0] == {"library_edition": None}
+
+
+@pytest.mark.asyncio
+async def test_update_library_item_rejects_empty_title(mock_supabase):
+    with patch("routes.library.require_admin_user", return_value="admin-user"):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.patch("/api/admin/library/book-1", json={"title": "  "}, headers=_auth_headers())
+
+    assert response.status_code == 400
+    mock_supabase.table().update.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_update_library_item_rejects_empty_payload(mock_supabase):
+    with patch("routes.library.require_admin_user", return_value="admin-user"):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.patch("/api/admin/library/book-1", json={}, headers=_auth_headers())
+
+    assert response.status_code == 400

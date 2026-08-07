@@ -136,29 +136,68 @@ async def list_all_library_items(authorization: str = Header(None)):
     supabase = _supabase_or_503()
     try:
         rows = supabase.table("audiobooks") \
-            .select("id, title, library_status, library_category, library_description, created_at") \
+            .select("id, title, library_status, library_category, library_edition, "
+                    "library_translator, library_source, library_rights, library_description, created_at") \
             .eq("is_library", True).order("created_at", desc=True).execute().data or []
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"작품 목록을 불러오지 못했습니다: {e}")
     return {"items": rows}
 
 
+# 편집 가능한 서지 정보. 본문(오디오)은 여기서 못 바꾼다 — 텍스트를 고치면
+# 음성을 다시 합성해야 하므로 재등록 경로를 써야 한다.
+EDITABLE_LIBRARY_FIELDS = {
+    "title": ("title", 255),
+    "category": ("library_category", 50),
+    "edition": ("library_edition", 255),
+    "translator": ("library_translator", 255),
+    "source": ("library_source", 255),
+    "rights": ("library_rights", None),
+    "description": ("library_description", None),
+}
+
+
 @router.patch("/api/admin/library/{audiobook_id}")
-async def update_library_status(audiobook_id: str, payload: dict, authorization: str = Header(None)):
-    """관리자가 판본/권리를 직접 확인한 뒤에만 published로 전환한다 —
-    AI가 대신 "확인됨"이라고 표시하지 않는다는 원칙은 여기서도 유지된다."""
+async def update_library_item(audiobook_id: str, payload: dict, authorization: str = Header(None)):
+    """공개 상태와 서지 정보를 고친다.
+
+    관리자가 판본/권리를 직접 확인한 뒤에만 published로 전환한다 —
+    AI가 대신 "확인됨"이라고 표시하지 않는다는 원칙은 여기서도 유지된다.
+
+    제목 오타 하나 때문에 작품을 지우고 다시 등록(수 분짜리 재합성)하게
+    두지 않으려고 서지 정보 수정을 함께 받는다. payload에 들어 있는 키만
+    고치므로, status만 보내던 기존 호출은 그대로 동작한다.
+    """
     require_admin_user(authorization)
-    status = payload.get("status")
-    if status not in LIBRARY_STATUSES:
-        raise HTTPException(status_code=400, detail="status는 review 또는 published여야 합니다.")
+
+    changes: dict = {}
+    if "status" in payload:
+        status = payload.get("status")
+        if status not in LIBRARY_STATUSES:
+            raise HTTPException(status_code=400, detail="status는 review 또는 published여야 합니다.")
+        changes["library_status"] = status
+
+    for key, (column, max_length) in EDITABLE_LIBRARY_FIELDS.items():
+        if key not in payload:
+            continue
+        value = (payload.get(key) or "").strip()
+        if max_length:
+            value = value[:max_length]
+        # 제목이 비면 목록에서 어느 작품인지 알 수 없게 된다.
+        if key == "title" and not value:
+            raise HTTPException(status_code=400, detail="제목은 비울 수 없습니다.")
+        changes[column] = value or None
+
+    if not changes:
+        raise HTTPException(status_code=400, detail="변경할 내용이 없습니다.")
 
     supabase = _supabase_or_503()
     try:
-        supabase.table("audiobooks").update({"library_status": status}) \
+        supabase.table("audiobooks").update(changes) \
             .eq("id", audiobook_id).eq("is_library", True).execute()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"상태를 변경하지 못했습니다: {e}")
-    return {"status": status}
+        raise HTTPException(status_code=500, detail=f"작품을 수정하지 못했습니다: {e}")
+    return {"updated": changes}
 
 
 @router.get("/api/library")

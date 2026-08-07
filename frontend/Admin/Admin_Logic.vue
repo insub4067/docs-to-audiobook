@@ -14,6 +14,9 @@ export interface AdminLogic {
     retryContentJob(job: ContentJob): Promise<void>;
     dismissContentJob(job: ContentJob): Promise<void>;
     openStatusMenu(item: LibraryAdminItem): void;
+    openEditSheet(item: LibraryAdminItem): void;
+    closeEditSheet(): void;
+    saveEdit(): Promise<void>;
     closeStatusMenu(): void;
     toggleLibraryStatus(item: LibraryAdminItem): Promise<void>;
     openInputSheet(kind: "news" | "library"): void;
@@ -28,6 +31,7 @@ export function useAdminLogic(
         libraryInputText, libraryStatus, librarySubmitting,
         libraryItems, libraryItemsStatus, libraryTogglingIds, statusMenuItem, activeInputSheet,
         contentJobs, contentJobsStatus, contentJobBusyIds,
+        editingItem, editDraft, editSaving,
     }: AdminState
 ): AdminLogic {
     function formatMetric(name: AdminMetricName, value: number | null | undefined): string {
@@ -260,6 +264,54 @@ export function useAdminLogic(
         return sendJobAction(job, "DELETE", `/api/admin/content-jobs/${job.id}`);
     }
 
+    function openEditSheet(item: LibraryAdminItem): void {
+        closeStatusMenu();
+        editingItem.value = item;
+        editDraft.value = {
+            title: item.title || "",
+            category: item.library_category || "",
+            edition: item.library_edition || "",
+            translator: item.library_translator || "",
+            source: item.library_source || "",
+            rights: item.library_rights || "",
+            description: item.library_description || "",
+        };
+    }
+
+    function closeEditSheet(): void {
+        editingItem.value = null;
+    }
+
+    async function saveEdit(): Promise<void> {
+        const token = localStorage.getItem("authToken");
+        const item = editingItem.value;
+        if (!token || !item) return;
+        if (!editDraft.value.title.trim()) {
+            libraryItemsStatus.value = "제목은 비울 수 없습니다.";
+            return;
+        }
+
+        editSaving.value = true;
+        try {
+            const response = await fetch(`/api/admin/library/${item.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                body: JSON.stringify(editDraft.value),
+            });
+            if (!response.ok) {
+                const body = await response.json().catch(() => ({}));
+                throw new Error(body.detail || "수정하지 못했습니다.");
+            }
+            closeEditSheet();
+            await loadLibraryItems();
+        } catch (error) {
+            console.error(error);
+            libraryItemsStatus.value = (error as Error).message || "수정하지 못했습니다.";
+        } finally {
+            editSaving.value = false;
+        }
+    }
+
     function openStatusMenu(item: LibraryAdminItem): void {
         statusMenuItem.value = item;
     }
@@ -305,6 +357,7 @@ export function useAdminLogic(
         formatMetric, loadMetrics, selectTab, validateJson, submitNews, submitLibrary,
         loadLibraryItems, loadContentJobs, retryContentJob, dismissContentJob,
         openStatusMenu, closeStatusMenu, toggleLibraryStatus,
+        openEditSheet, closeEditSheet, saveEdit,
         openInputSheet, closeInputSheet,
     };
 }
