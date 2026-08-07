@@ -36,6 +36,13 @@ const props = withDefaults(defineProps<{
 
 const displayedItems = computed(() => props.items ?? props.state.savedAudiobooks.value);
 
+/** 합성이 끝나기 전에 앞 구간부터 듣는다. */
+function onListenEarly(item: GeneratingItem): void {
+    if (!item.playableAudio) return;
+    const url = URL.createObjectURL(item.playableAudio);
+    (window as any).__openPartialReaderMode?.(item.title, item.playableSentences ?? [], url);
+}
+
 const isEmpty = computed(() =>
     (!props.showGeneratingItems || (props.generatingItems.length === 0 && props.state.backgroundJobItems.value.length === 0))
     && displayedItems.value.length === 0
@@ -82,6 +89,18 @@ onMounted(() => {
                                 <span class="generating-status">{{ item.statusText }}</span>
                             </div>
                         </div>
+                        <!-- 나머지가 합성되는 동안 앞 구간부터 듣게 한다.
+                             10만 자 문서면 전체는 70초 넘게 걸리지만 첫 구간은
+                             2초면 준비되고 그것만으로 100초 분량이다. -->
+                        <button
+                            v-if="item.playableAudio"
+                            class="generating-listen-btn"
+                            type="button"
+                            @click.stop="onListenEarly(item)"
+                        >
+                            <i data-lucide="play"></i>
+                            <span>먼저 듣기</span>
+                        </button>
                     </div>
 
                     <div v-for="item in state.backgroundJobItems.value" :key="item.jobId" class="audio-item audio-item-generating">

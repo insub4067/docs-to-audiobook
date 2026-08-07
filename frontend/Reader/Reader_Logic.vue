@@ -733,6 +733,12 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
     }
 
     (window as any).__openReaderMode = open;
+    // 아직 합성 중인 문서의 앞 구간을 듣는 경로. 공유 리더 모드를 그대로
+    // 쓴다 — 저장된 오디오북이 아니라 임시 URL과 문장만 있으면 되는 상황이
+    // 정확히 같기 때문이다.
+    (window as any).__openPartialReaderMode = (
+        title: string, sentences: ReaderSentence[], audioUrl: string,
+    ) => openSharedReaderMode(title, sentences, audioUrl, {});
 
     return {
         open, restoreLastSession, openSharedReaderMode, closeReader, reopenReader, dismissMiniPlayer, checkSharedLink,

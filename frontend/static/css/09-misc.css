@@ -830,3 +830,33 @@
     transform: scale(0.92);
     color: var(--primary-color);
 }
+
+/* "먼저 듣기" — 합성이 끝나기 전에 앞 구간을 트는 버튼. 진행 중인 행에만
+   잠깐 나타났다 사라지므로, 목록의 다른 행보다 튀지 않게 둔다. */
+.generating-listen-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    min-height: 36px;
+    padding: 0 14px;
+    margin-left: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--primary-color);
+    background-color: rgba(93, 75, 64, 0.1);
+    border: none;
+    border-radius: 18px;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.generating-listen-btn i,
+.generating-listen-btn svg {
+    width: 15px;
+    height: 15px;
+}
+
+.generating-listen-btn:active {
+    transform: scale(0.95);
+}

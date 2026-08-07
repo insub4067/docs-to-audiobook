@@ -9,6 +9,7 @@ import { getAudiobookDisplayTitle, formatBytes } from "../utils/format";
 import type { GenerationState, GeneratingItem } from "./Generation_State.vue";
 import type { VoiceLogic } from "../Voices/Voice_Logic.vue";
 import { pickGoogleDriveFile, preloadGoogleDrivePicker } from "../Auth/GoogleDrivePicker";
+import { streamJobAudio } from "../services/progressiveAudio";
 
 export interface GenerationArguments {
     textId: string;
@@ -560,32 +561,25 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
                 return true;
             }
 
-            async function pollJobStatus(id: string): Promise<any> {
-                const pollResponse = await fetch(`/api/job/${id}`, { headers: generationHeaders });
-                if (!pollResponse.ok) throw new Error("작업 상태 통신 실패");
-                const jobData = await pollResponse.json();
-                if (jobData.status === "processing") {
-                    const completedChunks = Number(jobData.completed_chunks) || 0;
-                    const totalChunks = Number(jobData.total_chunks) || 0;
+            // 청크가 준비되는 대로 받아 모은다. 다 끝날 때까지 기다리지 않으므로
+            // 10만 자 문서에서 첫 소리까지 70초대가 아니라 2초쯤 걸린다.
+            // 모아 둔 Blob은 서버가 합친 파일과 바이트 단위로 같아서, 완료 후
+            // 전체 파일을 다시 받지 않는다.
+            const completedJobData = await streamJobAudio(jobId, generationHeaders, {
+                onProgress(completedChunks, totalChunks) {
                     if (totalChunks > 0) {
                         item.progressPercent = Math.min(Math.round((completedChunks / totalChunks) * 100), 100);
                         item.statusText = `음성 변환 중... (${completedChunks}/${totalChunks})`;
                     } else {
                         item.statusText = "음성 변환 준비 중...";
                     }
-                    return new Promise((resolve) => {
-                        setTimeout(() => resolve(pollJobStatus(id)), 2000);
-                    });
-                }
-                if (jobData.status === "completed") return jobData;
-                if (jobData.status === "error") throw new Error(jobData.error || "서버 오디오 변환 에러 발생");
-                throw new Error("알 수 없는 작업 상태입니다.");
-            }
-
-            const completedJobData = await pollJobStatus(jobId);
-            const audioResponse = await fetch(completedJobData.audio_url, { headers: generationHeaders });
-            if (!audioResponse.ok) throw new Error("오디오 파일 다운로드 실패");
-            const audioBlob = await audioResponse.blob();
+                },
+                onPlayable(blob, sentences) {
+                    item.playableAudio = blob;
+                    item.playableSentences = sentences;
+                },
+            });
+            const audioBlob = completedJobData.blob;
             item.progressPercent = 100;
             item.statusText = "저장 중...";
 
@@ -594,7 +588,7 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
                 title: args.filename,
                 audioData: await audioBlob.arrayBuffer(),
                 sentences: completedJobData.sentences,
-                displayMarkdown: completedJobData.display_markdown || "",
+                displayMarkdown: completedJobData.displayMarkdown || "",
                 timestamp: Date.now(),
                 dateString: new Date().toLocaleDateString("ko-KR", {
                     year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit",

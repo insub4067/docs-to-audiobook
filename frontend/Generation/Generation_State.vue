@@ -1,5 +1,6 @@
 <script lang="ts">
 import { ref, type Ref } from "vue";
+import type { ReaderSentence } from "../Reader/sentenceDisplay";
 
 export interface GeneratingItem {
     id: string;
@@ -7,6 +8,10 @@ export interface GeneratingItem {
     progressPercent: number;
     statusText: string;
     backgroundJobId?: string;
+    // 합성이 끝나기 전에도 앞 구간은 들을 수 있다. 준비된 청크를 이어 붙인
+    // 것이라 0초부터 시작하는 온전한 MP3다(services/progressiveAudio.ts).
+    playableAudio?: Blob;
+    playableSentences?: ReaderSentence[];
     // 내 파일의 어느 폴더에서 추가했는지 — MyFilesView가 지금 보고 있는
     // 폴더에만 진행 중 행을 보여줄 때 쓴다. 홈 화면 드롭존에서 추가한
     // 경우는 null(루트).
