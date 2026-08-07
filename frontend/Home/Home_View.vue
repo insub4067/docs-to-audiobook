@@ -297,7 +297,7 @@ onMounted(async () => {
     />
 
     <TabBarView v-show="!readerState.isOpen.value" :active-tab="activeTab" @select="(tab) => (activeTab = tab)" />
-    <MiniPlayerView :state="readerState" :logic="readerLogic" />
+    <MiniPlayerView :state="readerState" :logic="readerLogic" :audio-list-state="audioListState" />
 
     <input
         ref="fileInput"

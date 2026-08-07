@@ -31,3 +31,11 @@ if (!window.localStorage) {
     Object.defineProperty(window, "localStorage", { value: shim, configurable: true });
     Object.defineProperty(globalThis, "localStorage", { value: shim, configurable: true });
 }
+
+// jsdom에는 포인터 캡처 API가 없다. 진행 바 드래그가 이걸 부르는데, 없으면
+// 이벤트 핸들러가 통째로 터져 테스트 결과가 가려진다.
+if (!HTMLElement.prototype.setPointerCapture) {
+    HTMLElement.prototype.setPointerCapture = () => {};
+    HTMLElement.prototype.releasePointerCapture = () => {};
+    HTMLElement.prototype.hasPointerCapture = () => false;
+}

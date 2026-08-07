@@ -3,11 +3,10 @@ import { computed } from "vue";
 import type { ReaderState } from "../Reader/Reader_State.vue";
 import type { ReaderLogic } from "../Reader/Reader_Logic.vue";
 import type { AudioListState } from "../components/Library/AudioList_State.vue";
-import type { AudiobookRecord } from "../services/indexedDb";
-import type { NewsItem } from "../components/News/News_State.vue";
-import { useNewsState } from "../components/News/News_State.vue";
-import { useNewsLogic } from "../components/News/News_Logic.vue";
 import { getAudiobookDisplayTitle } from "../utils/format";
+import {
+    usePlaylistNavigation, isNewsItem, type PlaylistItem,
+} from "../components/MiniPlayer/playlistNavigation";
 
 const props = defineProps<{
     state: ReaderState;
@@ -15,31 +14,17 @@ const props = defineProps<{
     audioListState: AudioListState;
 }>();
 
-const newsState = useNewsState();
-const newsLogic = useNewsLogic(newsState, props.logic);
-
+// 미니 플레이어 스와이프와 같은 목록·같은 현재 위치를 봐야 한다.
+const playlist = usePlaylistNavigation(props.state, props.audioListState, props.logic);
+const playlistItems = playlist.items;
 const isNewsPlaylist = computed(() => props.state.sharedPlaylistKind.value === "news");
 
-// 홈 요약 카드와 같은 이유로 폴더든 뉴스든 "같이 묶인 항목이 2개 이상"일
-// 때만 고를 의미가 있다 — Reader_View의 제목 클릭 가능 여부도 이 값을 쓴다.
-const playlistItems = computed<(AudiobookRecord | NewsItem)[]>(() => {
-    if (isNewsPlaylist.value) return newsState.items.value;
-    const folderId = props.state.currentAudioObject.value?.folderId;
-    if (!folderId) return [];
-    return props.audioListState.savedAudiobooks.value.filter((a) => a.folderId === folderId);
-});
-
-function isNewsItem(item: AudiobookRecord | NewsItem): item is NewsItem {
-    return "audio_url" in item;
-}
-
-function itemTitle(item: AudiobookRecord | NewsItem): string {
+function itemTitle(item: PlaylistItem): string {
     return isNewsItem(item) ? item.title : getAudiobookDisplayTitle(item.title);
 }
 
-function onItemClick(item: AudiobookRecord | NewsItem): void {
-    if (isNewsItem(item)) newsLogic.openNewsItem(item);
-    else props.logic.open(item);
+function onItemClick(item: PlaylistItem): void {
+    playlist.open(item);
     props.logic.closePlaylistSheet();
 }
 

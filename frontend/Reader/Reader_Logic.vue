@@ -32,6 +32,7 @@ export interface ReaderLogic {
     openSharedReaderMode(title: string, sentences: ReaderSentence[], audioUrl: string, options?: SharedReaderModeOptions): void;
     closeReader(): void;
     reopenReader(): void;
+    dismissMiniPlayer(): void;
     checkSharedLink(): Promise<void>;
     togglePlayPause(): void;
     seekTo(fraction: number): void;
@@ -632,6 +633,19 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
 
     // 미니 플레이어를 눌러 같은 재생 세션으로 되돌아간다 — open()과 달리
     // 오디오/문장/스크롤 상태를 그대로 두고 화면만 다시 펼친다.
+    /** 미니 플레이어를 내린다(재생 세션 종료). 목록에서 다시 고르면
+     *  마지막 위치부터 이어진다 — 내리기 전에 위치를 저장하기 때문이다. */
+    function dismissMiniPlayer(): void {
+        const el = state.audioEl.value;
+        el?.pause();
+        closeReader();
+        state.title.value = "";
+        state.currentAudioObject.value = null;
+        state.sharedPlaylistKind.value = null;
+        state.isPlaying.value = false;
+        sharedAudiobookId = null;
+    }
+
     function reopenReader(): void {
         state.isOpen.value = true;
         setReaderOpenForToast(true);
@@ -714,7 +728,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
     (window as any).__openReaderMode = open;
 
     return {
-        open, restoreLastSession, openSharedReaderMode, closeReader, reopenReader, checkSharedLink,
+        open, restoreLastSession, openSharedReaderMode, closeReader, reopenReader, dismissMiniPlayer, checkSharedLink,
         togglePlayPause, seekTo, onSentenceClick, onHeadingClick,
         currentChapterIndex, goToChapter,
         toggleBookmarkForCurrentSentence, openBookmarkSheet, closeBookmarkSheet,
