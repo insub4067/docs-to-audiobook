@@ -331,3 +331,16 @@ def test_layout_vars_and_stuck_transitions_resync_when_page_becomes_visible():
     # 높이 재측정도 같은 자리에서 함께 해야 한다.
     handler = home_view.split("function onVisibilityChangeForLayout", 1)[1].split("\n}", 1)[0]
     assert "measureBarHeights()" in handler
+
+def test_reader_buttons_do_not_duplicate_aria_label_with_title():
+    """읽기 화면 버튼에 title 속성이 없는지 확인한다.
+
+    iOS에서 버튼을 길게 누르면 title이 네이티브 툴팁으로 뜬다. 재생 버튼을
+    누를 때마다 툴팁이 보인다는 제보가 있었다. aria-label이 이미 이름을
+    제공하므로 title은 중복이고, 화면에 방해만 된다.
+    """
+    for name in ["Reader/Reader_View.vue", "Reader/ReaderControls/ReaderControls_View.vue"]:
+        source = (ROOT_DIR / "frontend" / name).read_text(encoding="utf-8")
+        assert 'title="' not in source, f"{name}에 title 속성이 남아 있습니다"
+        # 이름표까지 사라지면 안 된다 — aria-label은 유지해야 한다.
+        assert 'aria-label="' in source

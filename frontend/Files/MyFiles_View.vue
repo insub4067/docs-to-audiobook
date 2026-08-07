@@ -208,7 +208,7 @@ onUnmounted(() => {
                 </template>
             </div>
             <span v-else></span>
-            <button class="btn-icon-round btn-more" aria-label="추가" title="추가" type="button" @click="myFilesLogic.openAddMenu">
+            <button class="btn-icon-round btn-more" aria-label="추가" type="button" @click="myFilesLogic.openAddMenu">
                 <i data-lucide="folder-plus"></i>
             </button>
         </div>
@@ -262,7 +262,7 @@ onUnmounted(() => {
             >
                 <i data-lucide="folder" class="myfiles-row-icon"></i>
                 <span class="myfiles-row-title">{{ folder.name }}</span>
-                <button class="btn-icon-round btn-more" title="더보기" type="button" @click.stop="myFilesLogic.openFolderActionSheet(folder)">
+                <button class="btn-icon-round btn-more" aria-label="더보기" type="button" @click.stop="myFilesLogic.openFolderActionSheet(folder)">
                     <i data-lucide="more-horizontal"></i>
                 </button>
             </div>

@@ -55,7 +55,6 @@ onMounted(() => {
                 v-if="showImportButton"
                 class="btn-icon"
                 aria-label="공유 링크 불러오기"
-                title="공유 링크 불러오기"
                 style="margin-left: auto; width: 44px; height: 44px; border-radius: 50%; background: var(--glass-bg); border: 1px solid var(--glass-border); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-color); transition: all 0.3s ease;"
                 @click="onImportLink"
             >

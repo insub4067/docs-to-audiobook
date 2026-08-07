@@ -14,7 +14,6 @@ const props = defineProps<{
             class="btn-reader-secondary"
             :class="{ active: state.repeatMode.value !== 'off' }"
             aria-label="반복 모드"
-            title="반복 모드"
             type="button"
             @click="logic.openSheet('repeat')"
         >
@@ -24,7 +23,6 @@ const props = defineProps<{
             class="btn-reader-secondary"
             :class="{ active: state.playbackSpeed.value !== 1.0 }"
             aria-label="재생 속도"
-            title="재생 속도"
             type="button"
             @click="logic.openSheet('speed')"
         >
@@ -34,7 +32,6 @@ const props = defineProps<{
             class="btn-reader-secondary"
             :class="{ active: state.isTimerActive.value }"
             aria-label="취침 타이머"
-            title="취침 타이머"
             type="button"
             @click="logic.openSheet('timer')"
         >

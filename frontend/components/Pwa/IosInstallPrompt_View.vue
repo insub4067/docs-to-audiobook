@@ -7,7 +7,7 @@ defineProps<{ state: PwaState; logic: PwaLogic }>();
 
 <template>
     <div id="iosPwaPrompt" class="ios-pwa-prompt" :class="{ show: state.isIosPromptVisible.value }">
-        <button class="pwa-close-btn" aria-label="닫기" title="닫기" @click="logic.dismissIosPrompt">
+        <button class="pwa-close-btn" aria-label="닫기" @click="logic.dismissIosPrompt">
             <i data-lucide="x"></i>
         </button>
         <div class="pwa-prompt-content">

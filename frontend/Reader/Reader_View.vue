@@ -116,13 +116,12 @@ useSwipeToDismiss(props.state.containerEl, () => props.logic.closeReader(), head
     <div class="reader-overlay" :class="{ show: state.isOpen.value }" role="dialog" aria-modal="true" aria-label="오디오북 듣기">
         <div class="reader-container" :ref="setContainerEl">
             <header class="reader-header" ref="header">
-                <button class="btn-reader-close" aria-label="오디오북 듣기 닫기" title="닫기" type="button" @click="logic.closeReader">
+                <button class="btn-reader-close" aria-label="오디오북 듣기 닫기" type="button" @click="logic.closeReader">
                     <i data-lucide="chevron-left"></i>
                 </button>
                 <h3
                     class="reader-book-title"
                     :class="{ 'is-expanded': isTitleExpanded }"
-                    :title="state.title.value"
                     @click="onTitleClick"
                 >{{ state.title.value }}</h3>
                 <div class="reader-header-actions">
@@ -132,12 +131,11 @@ useSwipeToDismiss(props.state.containerEl, () => props.logic.closeReader(), head
                         class="btn-reader-close"
                         :class="{ 'is-active': state.isPlaylistSheetOpen.value }"
                         aria-label="재생목록"
-                        title="재생목록"
                         @click="logic.openPlaylistSheet"
                     >
                         <i data-lucide="list-music"></i>
                     </button>
-                    <button class="btn-reader-close" aria-label="더보기" title="더보기" type="button" @click="logic.openMoreSheet">
+                    <button class="btn-reader-close" aria-label="더보기" type="button" @click="logic.openMoreSheet">
                         <i data-lucide="more-horizontal"></i>
                     </button>
                 </div>
@@ -232,14 +230,14 @@ useSwipeToDismiss(props.state.containerEl, () => props.logic.closeReader(), head
                 </div>
                 <div class="reader-player-ui">
                     <div class="reader-player-buttons">
-                        <button class="btn-player-skip" aria-label="10초 뒤로" title="10초 뒤로" type="button" @click="controlsLogic.skipBack">
+                        <button class="btn-player-skip" aria-label="10초 뒤로" type="button" @click="controlsLogic.skipBack">
                             <i data-lucide="skip-back"></i>
                         </button>
-                        <button class="btn-player-play" aria-label="재생 또는 일시정지" title="재생 또는 일시정지" type="button" @click="logic.togglePlayPause">
+                        <button class="btn-player-play" aria-label="재생 또는 일시정지" type="button" @click="logic.togglePlayPause">
                             <svg v-show="!state.isPlaying.value" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
                             <svg v-show="state.isPlaying.value" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
                         </button>
-                        <button class="btn-player-skip" aria-label="10초 앞으로" title="10초 앞으로" type="button" @click="controlsLogic.skipForward">
+                        <button class="btn-player-skip" aria-label="10초 앞으로" type="button" @click="controlsLogic.skipForward">
                             <i data-lucide="skip-forward"></i>
                         </button>
                     </div>

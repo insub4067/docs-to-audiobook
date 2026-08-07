@@ -44,7 +44,7 @@ function onVoiceChange(event: Event): void {
         <div class="modal-content glass-card" ref="modalContent">
             <header class="modal-header">
                 <h2 id="generationTitle">오디오북 설정 및 미리보기</h2>
-                <button class="btn-icon" aria-label="닫기" title="닫기" @click="logic.closeModal">
+                <button class="btn-icon" aria-label="닫기" @click="logic.closeModal">
                     <i data-lucide="x"></i>
                 </button>
             </header>
@@ -75,7 +75,7 @@ function onVoiceChange(event: Event): void {
                                     </select>
                                     <i data-lucide="chevron-down" class="select-arrow"></i>
                                 </div>
-                                <button type="button" class="btn-voice-preview" aria-label="선택한 목소리 미리듣기" title="선택한 목소리 미리듣기" @click="voiceLogic.togglePreview">
+                                <button type="button" class="btn-voice-preview" aria-label="선택한 목소리 미리듣기" @click="voiceLogic.togglePreview">
                                     <i data-lucide="volume-2"></i>
                                     <span>{{ voiceState.previewLabel.value }}</span>
                                 </button>
