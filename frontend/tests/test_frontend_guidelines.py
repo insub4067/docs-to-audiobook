@@ -283,3 +283,32 @@ def test_progress_bar_supports_dragging_with_a_time_tooltip():
     assert "@pointercancel=" in reader_view
     assert "player-progress-tooltip" in reader_view
     assert ".player-progress-tooltip" in css
+
+def test_secondary_player_controls_are_not_dimmed_by_opacity():
+    """보조 재생 컨트롤(반복·속도·타이머)의 대비가 깎이지 않는지 확인한다.
+
+    이미 muted 색이라 대비가 5.03:1인데 opacity 0.75를 곱하면 3.09:1까지
+    떨어져 UI 요소 기준(3:1)에 겨우 걸친다(웜 테마에서 실측). 활성/비활성은
+    색과 배경으로 이미 구분되므로 투명도를 겹쳐 쓸 이유가 없다.
+    """
+    css = STYLE_CSS.read_text(encoding="utf-8")
+    rule = css.split(".btn-reader-secondary {", 1)[1].split("}", 1)[0]
+    # 주석에도 "opacity"라는 낱말이 나오므로 선언만 본다.
+    declarations = re.sub(r"/\*.*?\*/", "", rule, flags=re.S)
+
+    assert "color: var(--text-muted)" in declarations
+    assert "opacity" not in declarations
+
+def test_long_reader_title_can_be_expanded_by_tapping():
+    """긴 제목을 눌러 전체를 볼 수 있는지 확인한다.
+
+    제목은 한 줄 말줄임이라 화면에서 끝을 알 수 없다. 모바일에는 hover
+    툴팁이 없어 title 속성만으로는 부족하므로, 눌러서 펼치게 한다.
+    """
+    reader_view = (ROOT_DIR / "frontend" / "Reader" / "Reader_View.vue").read_text(encoding="utf-8")
+    css = STYLE_CSS.read_text(encoding="utf-8")
+
+    assert "isTitleExpanded" in reader_view
+    assert "is-expanded" in reader_view
+    expanded = css.split(".reader-book-title.is-expanded {", 1)[1].split("}", 1)[0]
+    assert "white-space: normal" in expanded

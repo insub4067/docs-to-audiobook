@@ -2255,7 +2255,17 @@ input[type="range"]::-webkit-slider-thumb:active {
     -webkit-backdrop-filter: blur(24px) saturate(160%);
 }
 
+/* 눌러서 전체 제목을 펼칠 수 있다. 접힌 상태에서만 말줄임한다. */
+.reader-book-title.is-expanded {
+    overflow: visible;
+    white-space: normal;
+    text-overflow: clip;
+    word-break: keep-all;
+    line-height: 1.35;
+}
+
 .reader-book-title {
+    cursor: pointer;
     font-family: var(--font-serif);
     font-size: 1.15rem;
     font-weight: 700;
@@ -2765,7 +2775,10 @@ input[type="range"]::-webkit-slider-thumb:active {
     color: var(--text-muted);
     cursor: pointer;
     border-radius: 50%;
-    opacity: 0.75;
+    /* ⚠️ 여기에 opacity를 걸면 안 된다. 이미 muted 색이라 대비가 5.03:1인데
+       0.75를 곱하면 3.09:1까지 떨어져 UI 요소 기준(3:1)에 겨우 걸친다.
+       활성/비활성은 색(muted ↔ primary)과 배경으로 이미 구분되므로
+       투명도로 한 번 더 흐리게 할 이유가 없다. */
     transition: all 0.2s ease;
 }
 
@@ -2777,13 +2790,11 @@ input[type="range"]::-webkit-slider-thumb:active {
 .btn-reader-secondary:hover {
     background: rgba(93, 75, 64, 0.05);
     color: var(--text-color);
-    opacity: 1;
 }
 
 .btn-reader-secondary.active {
     color: var(--primary-color);
     background: rgba(93, 75, 64, 0.1);
-    opacity: 1;
 }
 
 .reader-time-row {

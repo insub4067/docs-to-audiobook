@@ -33,6 +33,14 @@ const hasPlaylist = computed(() =>
     props.state.sharedPlaylistKind.value === "news" || !!props.state.currentAudioObject.value?.folderId
 );
 
+// 긴 제목은 한 줄 말줄임이라 화면에서 끝을 알 수 없다. 눌러서 전체를
+// 보여준다 — 모바일에는 hover 툴팁이 없어 title 속성만으로는 부족하다.
+const isTitleExpanded = ref(false);
+
+function onTitleClick(): void {
+    isTitleExpanded.value = !isTitleExpanded.value;
+}
+
 function onShareClick(): void {
     const audio = props.state.currentAudioObject.value;
     if (audio) props.audioListLogic.performShare(audio);
@@ -111,7 +119,12 @@ useSwipeToDismiss(props.state.containerEl, () => props.logic.closeReader(), head
                 <button class="btn-reader-close" aria-label="오디오북 듣기 닫기" title="닫기" type="button" @click="logic.closeReader">
                     <i data-lucide="chevron-left"></i>
                 </button>
-                <h3 class="reader-book-title">{{ state.title.value }}</h3>
+                <h3
+                    class="reader-book-title"
+                    :class="{ 'is-expanded': isTitleExpanded }"
+                    :title="state.title.value"
+                    @click="onTitleClick"
+                >{{ state.title.value }}</h3>
                 <div class="reader-header-actions">
                     <button
                         v-if="hasPlaylist"
