@@ -4,6 +4,7 @@ import type { ReaderLogic } from "../Reader/Reader_Logic.vue";
 import { useAuthLogic } from "../Auth/Auth_Logic.vue";
 import { useToastLogic } from "../components/Toast/Toast_Logic.vue";
 import { useToastState } from "../components/Toast/Toast_State.vue";
+import { needsFreshSignedUrls } from "../services/signedUrls";
 
 /** 목록 카드에 보여줄 청취 상태. 재생 이력이 없으면 null. */
 export interface LibraryProgress {
@@ -39,6 +40,7 @@ export function useLibraryLogic(state: LibraryState, readerLogic: ReaderLogic): 
             if (response.ok) {
                 const data = await response.json();
                 state.items.value = data.library || [];
+                state.fetchedAt.value = Date.now();
             }
         } catch (error) {
             console.error("라이브러리를 불러오지 못했습니다:", error);
@@ -164,15 +166,35 @@ export function useLibraryLogic(state: LibraryState, readerLogic: ReaderLogic): 
         }
     }
 
+    /** 서명 URL이 만료될 때가 됐으면 목록을 다시 받아 같은 작품의 새 URL을
+     *  돌려준다. 목록에서 사라진 작품이면 null.
+     *  라이브러리는 탭을 열 때마다 갱신해서 뉴스보다 덜 노출되지만, 한 화면에
+     *  한 시간 넘게 머물다 재생을 누르면 똑같이 죽은 URL을 쓰게 된다. */
+    async function withFreshSignedUrls(item: LibraryItem): Promise<LibraryItem | null> {
+        if (!needsFreshSignedUrls(state.fetchedAt.value)) return item;
+        await loadLibrary();
+        return state.items.value.find((candidate) => candidate.id === item.id) ?? null;
+    }
+
     async function playFromStart(item: LibraryItem): Promise<void> {
-        const sentences = await fetchSentences(item);
-        readerLogic.openSharedReaderMode(item.title, sentences as never, item.audio_url, { audiobookId: item.id });
+        const fresh = await withFreshSignedUrls(item);
+        if (!fresh) {
+            showToast("이 작품은 더 이상 제공되지 않습니다.", "error");
+            return;
+        }
+        const sentences = await fetchSentences(fresh);
+        readerLogic.openSharedReaderMode(fresh.title, sentences as never, fresh.audio_url, { audiobookId: fresh.id });
         state.isDetailOpen.value = false;
     }
 
     async function playFromLastPosition(item: LibraryItem): Promise<void> {
-        const [sentences, resumeSeconds] = await Promise.all([fetchSentences(item), fetchLastPosition(item)]);
-        readerLogic.openSharedReaderMode(item.title, sentences as never, item.audio_url, { audiobookId: item.id, resumeSeconds });
+        const fresh = await withFreshSignedUrls(item);
+        if (!fresh) {
+            showToast("이 작품은 더 이상 제공되지 않습니다.", "error");
+            return;
+        }
+        const [sentences, resumeSeconds] = await Promise.all([fetchSentences(fresh), fetchLastPosition(fresh)]);
+        readerLogic.openSharedReaderMode(fresh.title, sentences as never, fresh.audio_url, { audiobookId: fresh.id, resumeSeconds });
         state.isDetailOpen.value = false;
     }
 

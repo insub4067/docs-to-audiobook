@@ -4,6 +4,7 @@ import type { ReaderLogic } from "../../Reader/Reader_Logic.vue";
 import type { RepeatMode } from "../../Reader/ReaderControls/ReaderControls_State.vue";
 import { useToastLogic } from "../Toast/Toast_Logic.vue";
 import { useToastState } from "../Toast/Toast_State.vue";
+import { needsFreshSignedUrls } from "../../services/signedUrls";
 
 export interface NewsLogic {
     loadNews(): Promise<void>;
@@ -22,6 +23,7 @@ export function useNewsLogic(state: NewsState, readerLogic: ReaderLogic): NewsLo
             if (response.ok) {
                 const data = await response.json();
                 state.items.value = data.news || [];
+                state.fetchedAt.value = Date.now();
             }
         } catch (error) {
             console.error("경제 뉴스를 불러오지 못했습니다:", error);
@@ -49,6 +51,14 @@ export function useNewsLogic(state: NewsState, readerLogic: ReaderLogic): NewsLo
         return [];
     }
 
+    /** 서명 URL이 만료될 때가 됐으면 목록을 다시 받아 같은 기사의 새 URL을
+     *  돌려준다. 목록에서 사라진 기사면 null. */
+    async function withFreshSignedUrls(item: NewsItem): Promise<NewsItem | null> {
+        if (!needsFreshSignedUrls(state.fetchedAt.value)) return item;
+        await loadNews();
+        return state.items.value.find((candidate) => candidate.id === item.id) ?? null;
+    }
+
     // queueIndex >= 0이면 "전체 듣기"로 시작한 연속 재생이라는 뜻. 개별 기사를
     // 눌러서 열 때(-1)도 목록에서의 위치는 기록해 둔다 — "전체 반복"은 어떻게
     // 재생을 시작했든 목록을 순환해야 하기 때문이다. 그래서 onEnded도 항상
@@ -58,6 +68,14 @@ export function useNewsLogic(state: NewsState, readerLogic: ReaderLogic): NewsLo
         state.queueIndex.value = queueIndex >= 0
             ? queueIndex
             : state.items.value.findIndex((candidate) => candidate.id === item.id);
+        // ⚠️ 목록을 오래 들고 있었으면 이 항목의 서명 URL이 이미 죽어 있다.
+        // 재생을 누른 시점에 갱신해, 오디오와 문장을 살아 있는 URL로 받는다.
+        const fresh = await withFreshSignedUrls(item);
+        if (!fresh) {
+            showToast("이 기사는 더 이상 제공되지 않습니다.", "error");
+            return;
+        }
+        item = fresh;
         const sentences = await fetchSentences(item);
         readerLogic.openSharedReaderMode(item.title, sentences as never, item.audio_url, {
             onEnded: onQueueEnded,

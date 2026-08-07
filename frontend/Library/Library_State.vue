@@ -22,6 +22,9 @@ export type LibrarySortKey = "recent" | "duration-asc" | "duration-desc" | "list
 export interface LibraryState {
     items: Ref<LibraryItem[]>;
     loaded: Ref<boolean>;
+    // 목록의 audio_url/sentences_url은 1시간짜리 서명 URL이다
+    // (services/signedUrls.ts). 언제 받아 왔는지 알아야 만료 전에 갱신한다.
+    fetchedAt: Ref<number>;
     savedIds: Ref<Set<string>>;
     savedItems: Ref<LibraryItem[]>;
     activeCategory: Ref<string | null>;
@@ -36,6 +39,7 @@ export interface LibraryState {
 const state: LibraryState = {
     items: ref([]),
     loaded: ref(false),
+    fetchedAt: ref(0),
     savedIds: ref(new Set()),
     savedItems: ref([]),
     activeCategory: ref(null),

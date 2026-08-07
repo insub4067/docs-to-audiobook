@@ -26,6 +26,10 @@ function setup(queueIndex: number) {
     const newsState = useNewsState();
     newsState.items.value = [...NEWS];
     newsState.queueIndex.value = queueIndex;
+    // 목록의 서명 URL은 1시간이면 만료돼서, 재생 직전에 오래됐으면 다시
+    // 받는다(services/signedUrls.ts). 실제로는 loadNews()가 이 값을 채우므로
+    // "목록은 있는데 언제 받았는지 모른다"는 상태는 프로덕션에 없다.
+    newsState.fetchedAt.value = Date.now();
 
     const wrapper = mount(MiniPlayerView, {
         props: { state: readerState, logic, audioListState: useAudioListState() },
