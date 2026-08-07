@@ -170,7 +170,9 @@ def test_admin_metric_cards_link_to_dedicated_detail_pages():
 
     assert 'href="/admin/metrics/weekly_active_users"' in html
     assert 'id="metricPageList"' in detail_html
-    assert 'function renderPeople(people)' in detail_source
+    # 시그니처가 아니라 "목록을 그린다"는 사실만 고정한다. 인자를 하나
+    # 늘렸다는 이유로 깨지면 테스트가 리팩토링을 막기만 한다.
+    assert 'function renderPeople(' in detail_source
     assert 'fetch("/api/admin/metrics"' in detail_source
 
 def test_admin_html_is_standalone_capable_but_not_translucent_status_bar():

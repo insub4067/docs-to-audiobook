@@ -300,6 +300,40 @@ grant select, insert, delete on table public.client_errors to service_role;
 
 ## 🔐 3단계: Row Level Security (RLS) 정책 설정
 
+### 3.0 ⚠️ 권한부터 회수한다 — RLS는 두 번째 방어선이다
+
+**RLS 정책을 믿기 전에 `GRANT`부터 확인할 것.** 이 앱은 Supabase Auth를 쓰지 않고
+자체 JWT를 쓰기 때문에, 아래 정책들의 `auth.uid()`는 anon 키로 접근하면 언제나 NULL이다.
+그래서 정책이 "우연히" 모든 접근을 거부한다. 정책을 하나만 잘못 고치면 `users` 테이블이
+통째로 열린다는 뜻이기도 하다.
+
+서버는 모든 경로에서 service_role 키만 쓰고(`auth.get_supabase_client(use_service_role=True)`),
+프론트엔드는 Supabase를 직접 호출하지 않는다. 즉 anon/authenticated 권한은 아무도 쓰지 않는다.
+
+```sql
+revoke select, insert, update, delete on table public.users from anon, authenticated;
+revoke select, insert, update, delete on table public.audiobooks from anon, authenticated;
+revoke select, insert, update, delete on table public.folders from anon, authenticated;
+revoke select, insert, update, delete on table public.playback_history from anon, authenticated;
+revoke insert on table public.product_events from authenticated;
+```
+
+적용 후 다음 쿼리가 **빈 결과**여야 한다.
+
+```sql
+select table_name, grantee, privilege_type
+from information_schema.role_table_grants
+where table_schema='public'
+  and grantee in ('anon','authenticated')
+  and privilege_type in ('SELECT','INSERT','UPDATE','DELETE');
+```
+
+새 테이블을 만들 때도 `revoke all ... from anon, authenticated`를 잊지 말 것.
+`GRANT`를 반대로 빠뜨리면 `42501 permission denied`로 기능 전체가 500을 낸다
+(§2.7의 `library_saves`가 실제로 그랬다).
+
+### 3.1 이하: 각 테이블별 RLS 정책
+
 각 테이블별로 보안 정책 활성화:
 
 ### 3.1 사용자 테이블 정책
