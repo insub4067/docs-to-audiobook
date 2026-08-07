@@ -218,6 +218,10 @@ async def synthesize_document(
     return combined_audio, annotated_sentences, heading_index
 
 
+def chunk_audio_path(output_path: str, chunk_index: int) -> str:
+    return f"{output_path}.chunk-{chunk_index}"
+
+
 async def synthesize_document_to_file(
     raw_text: str,
     voice: str,
@@ -226,8 +230,24 @@ async def synthesize_document_to_file(
     output_path: str,
     progress_callback=None,
     provider_name: str | None = None,
+    chunk_ready_callback=None,
 ) -> tuple[list, list, str]:
-    """긴 문서를 최대 다섯 묶음으로 병렬 합성해 MP3를 디스크에 기록한다."""
+    """긴 문서를 최대 다섯 묶음으로 병렬 합성해 MP3를 디스크에 기록한다.
+
+    청크마다 **개별 파일**로 먼저 쓰고 마지막에 순서대로 합친다. 예전에는
+    묶음(part)당 한 파일에 이어 붙였는데, 그러면 묶음이 통째로 끝나기 전에는
+    아무것도 꺼내 쓸 수 없었다. 청크 파일로 두면 앞에서부터 준비되는 대로
+    재생에 내줄 수 있다 — 10만 자 문서에서 사용자가 보는 대기가 70초대에서
+    첫 청크 2초로 줄어든다(청크 하나가 100초 안팎 분량이고 합성은 1초당
+    27초 분량을 만들어서, 재생이 합성을 따라잡지 않는다).
+
+    합쳐진 결과물은 예전과 바이트 단위로 같다. 묶음 파일도 청크를 순서대로
+    담았고 묶음을 순서대로 이었으므로, 청크를 0..N-1로 잇는 것과 동일하다.
+
+    chunk_ready_callback(records)는 "0번부터 끊김 없이 이어지는 구간"이
+    늘어날 때만 부른다. 중간이 비면 순차 재생을 못 하므로 개별 청크가
+    끝났다는 사실만으로는 알릴 의미가 없다.
+    """
     display_markdown, text, tables = build_document_representations(raw_text)
     headings = extract_markdown_headings(display_markdown)
     chunks = split_tts_chunks(text)
@@ -239,53 +259,69 @@ async def synthesize_document_to_file(
         part_size = base_part_size + (1 if part_index < extra_chunks else 0)
         parts.append(list(enumerate(chunks[start:start + part_size], start)))
         start += part_size
-    part_paths = [f"{output_path}.part-{index}" for index in range(len(parts))]
+    chunk_paths = [chunk_audio_path(output_path, index) for index in range(len(chunks))]
     completed_chunks = 0
+    # 끝난 자리만 채워진다. 묶음이 병렬로 도니 중간이 비어 있을 수 있다.
+    chunk_results: list[dict | None] = [None] * len(chunks)
+    ready_count = 0
+
+    def advance_ready_prefix():
+        """0번부터 연속으로 끝난 구간이 늘었으면 그만큼만 알린다."""
+        nonlocal ready_count
+        newly = []
+        offset = sum(chunk_results[i]["duration"] for i in range(ready_count))
+        while ready_count < len(chunks) and chunk_results[ready_count] is not None:
+            record = chunk_results[ready_count]
+            newly.append({
+                "index": ready_count,
+                "duration": record["duration"],
+                "sentences": [
+                    {"text": s["text"], "start": s["start"] + offset, "end": s["end"] + offset}
+                    for s in record["sentences"]
+                ],
+            })
+            offset += record["duration"]
+            ready_count += 1
+        if newly and chunk_ready_callback:
+            chunk_ready_callback(newly)
 
     async def synthesize_part(part_index: int, part: list[tuple[int, str]]):
         nonlocal completed_chunks
-        part_sentences = []
-        current_offset = 0
-        with open(part_paths[part_index], "wb") as audio_file:
-            for chunk_index, chunk in part:
-                _, audio_data, sentences = await synthesize_chunk(
-                    chunk_index, chunk, voice, rate, pitch, provider_name=provider_name
-                )
+        for chunk_index, chunk in part:
+            _, audio_data, sentences = await synthesize_chunk(
+                chunk_index, chunk, voice, rate, pitch, provider_name=provider_name
+            )
+            with open(chunk_paths[chunk_index], "wb") as audio_file:
                 audio_file.write(audio_data)
-                for sentence in sentences:
-                    part_sentences.append({
-                        "text": sentence["text"],
-                        "start": sentence["start"] + current_offset,
-                        "end": sentence["end"] + current_offset,
-                    })
-                if sentences:
-                    current_offset += max(sentence["end"] for sentence in sentences)
-                completed_chunks += 1
-                if progress_callback:
-                    progress_callback(completed_chunks, len(chunks))
-        return part_index, part_sentences, current_offset
+            chunk_results[chunk_index] = {
+                "sentences": [dict(sentence) for sentence in sentences],
+                "duration": max((sentence["end"] for sentence in sentences), default=0),
+            }
+            completed_chunks += 1
+            if progress_callback:
+                progress_callback(completed_chunks, len(chunks))
+            advance_ready_prefix()
 
     try:
-        results = await asyncio.gather(*[
+        await asyncio.gather(*[
             synthesize_part(part_index, part)
             for part_index, part in enumerate(parts)
         ])
-        results.sort(key=lambda result: result[0])
 
         combined_sentences = []
         current_offset = 0
         with open(output_path, "wb") as output_file:
-            for part_index, part_sentences, part_duration in results:
-                with open(part_paths[part_index], "rb") as part_file:
-                    shutil.copyfileobj(part_file, output_file)
-                os.remove(part_paths[part_index])
-                for sentence in part_sentences:
+            for chunk_index in range(len(chunks)):
+                with open(chunk_paths[chunk_index], "rb") as chunk_file:
+                    shutil.copyfileobj(chunk_file, output_file)
+                record = chunk_results[chunk_index]
+                for sentence in record["sentences"]:
                     combined_sentences.append({
                         "text": sentence["text"],
                         "start": sentence["start"] + current_offset,
                         "end": sentence["end"] + current_offset,
                     })
-                current_offset += part_duration
+                current_offset += record["duration"]
     except Exception:
         try:
             os.remove(output_path)
@@ -293,9 +329,9 @@ async def synthesize_document_to_file(
             pass
         raise
     finally:
-        for part_path in part_paths:
+        for chunk_path in chunk_paths:
             try:
-                os.remove(part_path)
+                os.remove(chunk_path)
             except OSError:
                 pass
 
@@ -310,9 +346,27 @@ async def process_synthesis_task(job_id: str, raw_text: str, voice: str, rate: s
             jobs[job_id]["completed_chunks"] = completed_chunks
             jobs[job_id]["total_chunks"] = total_chunks
 
+        def publish_ready_chunks(records: list[dict]):
+            """앞에서부터 이어지는 구간이 늘 때마다 재생에 필요한 것만 채운다.
+
+            문장은 여기서도 누적해 둔다 — 클라이언트가 첫 청크를 트는 순간
+            이미 그 구간의 하이라이트가 맞아야 하기 때문이다."""
+            job = jobs.get(job_id)
+            if job is None:
+                return
+            job["sentences"] = job.get("sentences", []) + [
+                sentence for record in records for sentence in record["sentences"]
+            ]
+            job["chunk_durations"] = job.get("chunk_durations", []) + [
+                record["duration"] for record in records
+            ]
+            job["ready_chunks"] = records[-1]["index"] + 1
+
         audio_path = os.path.join(JOB_AUDIO_DIR, f"{job_id}.mp3")
         annotated_sentences, heading_index, display_markdown = await synthesize_document_to_file(
-            raw_text, voice, rate, pitch, audio_path, progress_callback=update_progress
+            raw_text, voice, rate, pitch, audio_path,
+            progress_callback=update_progress,
+            chunk_ready_callback=publish_ready_chunks,
         )
 
         if not os.path.exists(audio_path) or os.path.getsize(audio_path) == 0:
@@ -387,6 +441,10 @@ def _fresh_job_state(user_id: str) -> dict:
         "display_markdown": "",
         "completed_chunks": 0,
         "total_chunks": 0,
+        # 0번부터 끊김 없이 준비된 청크 수. 클라이언트는 합성이 끝나기 전에도
+        # 0..ready_chunks-1을 순서대로 재생한다.
+        "ready_chunks": 0,
+        "chunk_durations": [],
         "error": None,
         "created_at": time.time(),
         "user_id": user_id,
@@ -564,12 +622,46 @@ async def get_job_status(
             "display_markdown": job.get("display_markdown", ""),
         })
 
+    # 아직 합성 중이어도 앞에서부터 준비된 청크는 바로 들려줄 수 있다.
+    # ready_chunks는 "0번부터 끊김 없이 이어지는" 개수라, 클라이언트는
+    # 0..ready_chunks-1을 순서대로 재생하면 된다.
     return JSONResponse(content={
         "status": job["status"],
         "error": job.get("error"),
         "completed_chunks": job.get("completed_chunks", 0),
         "total_chunks": job.get("total_chunks", 0),
+        "ready_chunks": job.get("ready_chunks", 0),
+        "chunk_durations": job.get("chunk_durations", []),
+        "sentences": job.get("sentences", []),
+        "headings": job.get("headings", []),
+        "display_markdown": job.get("display_markdown", ""),
     })
+
+
+@router.get("/api/job/{job_id}/chunk/{chunk_index}")
+async def get_job_chunk(
+    job_id: str,
+    chunk_index: int,
+    authorization: str = Header(None),
+    anonymous_session: str = Header(None, alias="X-Anonymous-Session")
+):
+    """합성이 끝나기 전에도 준비된 청크를 하나씩 내려준다.
+
+    ⚠️ 합성이 완료되면 청크 파일은 지워지고 합본 하나만 남는다. 그래서
+    마지막 청크를 받는 도중에 완료되면 404가 날 수 있다. 클라이언트는
+    이때 /api/job/{id}/audio(합본)로 갈아타야 한다 — 상태가 completed면
+    청크를 더 요청하지 않는 것이 정상 경로다.
+    """
+    job = require_job_owner(job_id, authorization, anonymous_session)
+    if chunk_index < 0 or chunk_index >= job.get("ready_chunks", 0):
+        raise HTTPException(status_code=404, detail="아직 준비되지 않은 구간입니다.")
+
+    audio_path = job.get("audio_path") or os.path.join(JOB_AUDIO_DIR, f"{job_id}.mp3")
+    chunk_path = chunk_audio_path(audio_path, chunk_index)
+    if not os.path.exists(chunk_path):
+        raise HTTPException(status_code=404, detail="이 구간은 이미 합본으로 합쳐졌습니다.")
+
+    return FileResponse(chunk_path, media_type="audio/mpeg")
 
 
 @router.get("/api/job/{job_id}/audio")

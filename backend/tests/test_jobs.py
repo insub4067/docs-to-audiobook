@@ -62,11 +62,18 @@ async def test_get_job_status_processing_includes_chunk_progress():
             response = await client.get(f"/api/job/{job_id}", headers={"Authorization": "Bearer owner"})
 
     assert response.status_code == 200
+    # 합성이 끝나기 전에도 준비된 구간을 재생할 수 있어야 하므로,
+    # 진행률만이 아니라 재생에 필요한 것(ready_chunks·길이·문장)도 함께 준다.
     assert response.json() == {
         "status": "processing",
         "error": None,
         "completed_chunks": 2,
         "total_chunks": 5,
+        "ready_chunks": 0,
+        "chunk_durations": [],
+        "sentences": [],
+        "headings": [],
+        "display_markdown": "",
     }
     del jobs[job_id]
 

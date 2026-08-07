@@ -160,7 +160,7 @@ async def test_process_synthesis_task_success(tmp_path, monkeypatch):
     fake_sentences = [{"text": "안녕", "start": 0, "end": 100, "type": "text"}]
     fake_headings = [{"text": "제목", "level": 1, "sentIndex": 0, "startMs": 0}]
 
-    async def fake_synthesize_to_file(raw_text, voice, rate, pitch, output_path, progress_callback=None):
+    async def fake_synthesize_to_file(raw_text, voice, rate, pitch, output_path, progress_callback=None, chunk_ready_callback=None):
         with open(output_path, "wb") as f:
             f.write(b"audio-bytes")
         return fake_sentences, fake_headings, "# 제목"
