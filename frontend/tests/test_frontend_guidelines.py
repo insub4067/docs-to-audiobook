@@ -459,12 +459,20 @@ def test_every_stylesheet_file_exists_and_none_is_orphaned():
     assert on_disk == sorted(STYLE_SHEET_ORDER)
 
 
-def test_service_worker_precaches_every_stylesheet():
-    """하나라도 빠지면 오프라인에서 그 화면만 스타일이 없는 채로 뜬다."""
+def test_service_worker_does_not_precache_bundled_stylesheets():
+    """분할한 CSS는 빌드 입력이지 런타임 자산이 아니다.
+
+    Vite가 app.html의 link들을 순서대로 하나의 해시 붙은 CSS로 합쳐 넣고,
+    빌드 결과 HTML에는 link가 남지 않는다. 즉 앱은 /static/css/*.css를
+    절대 요청하지 않는다. 프리캐시에 넣으면 설치할 때마다 아무도 안 쓰는
+    파일 10개(약 100KB)를 받아 두게 된다.
+
+    (분할 직후 실제로 이 실수를 했고, 프로덕션 HTML을 확인하고 나서야
+    알았다. 그래서 반대 방향으로 고정해 둔다.)"""
     sw = (FRONTEND_STATIC / "sw.js").read_text(encoding="utf-8")
 
     for name in STYLE_SHEET_ORDER:
-        assert f'"/static/css/{name}"' in sw, name
+        assert f'"/static/css/{name}"' not in sw, name
 
 
 def test_no_stylesheet_references_the_old_single_file():
