@@ -270,7 +270,12 @@ onUnmounted(() => {
                 aria-hidden="true"
             >
                 <span class="redacted redacted-row-icon"></span>
-                <span class="redacted redacted-row-title"></span>
+                <span class="myfiles-row-title redacted-text">폴더 이름</span>
+                <!-- ⚠️ 행 높이를 정하는 건 이 44px 버튼이다. 빼먹었더니
+                     자리표시자가 실제 행(77px)보다 29px 짧아, 폴더가 도착할
+                     때 네 줄 분량이 한꺼번에 밀렸다. 실제 마크업을 그대로
+                     두고 색만 덮는다. -->
+                <span class="btn-icon-round btn-more redacted"></span>
             </div>
 
             <div

@@ -102,3 +102,45 @@ describe("서재 폴더 개수 기억", () => {
         expect(logic.lastKnownFolderCount()).toBe(1);
     });
 });
+
+
+// 자리표시자 행이 실제 폴더 행과 같은 골격을 갖는지. 높이는 44px "더보기"
+// 버튼이 정하는데, 처음엔 그걸 빼먹어 실제 행(77px)보다 29px 짧았다.
+// 폴더 네 개면 116px이 한꺼번에 밀린다.
+describe("폴더 자리표시자 골격", () => {
+    it("실제 행과 같은 구성요소를 갖는다", async () => {
+        const { mount } = await import("@vue/test-utils");
+        const MyFilesView = (await import("../Files/MyFiles_View.vue")).default;
+        // 비로그인이면 loadCurrentFolder가 곧장 빠져나가 isLoading이 안 켜진다.
+        localStorage.setItem("authToken", "토큰");
+        localStorage.setItem("textAudio_folderCount:root", "3");
+        // 응답이 오지 않게 잡아 두어 "불러오는 중" 상태를 유지한다.
+        vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+
+        const wrapper = mount(MyFilesView, {
+            props: {
+                audioListState: { savedAudiobooks: { value: [] }, backgroundJobItems: { value: [] } },
+                audioListLogic: {},
+                myFilesState: {},
+                myFilesLogic: {},
+                generationLogic: {},
+                generatingItems: [],
+                hasMiniPlayer: false,
+                readerLogic: {},
+            } as never,
+            shallow: true,
+        });
+
+        // onMounted의 loadCurrentFolder가 isLoading을 켜는 건 마이크로태스크
+        // 뒤다. 한 틱 기다려야 자리표시자가 그려진다.
+        await wrapper.vm.$nextTick();
+
+        const rows = wrapper.findAll(".myfiles-row-placeholder");
+        expect(rows).toHaveLength(3);
+        // 행 높이를 정하는 건 이 버튼이다. 빠지면 29px 짧아진다.
+        expect(rows[0].find(".btn-more").exists()).toBe(true);
+        expect(rows[0].find(".myfiles-row-title").classes()).toContain("redacted-text");
+        expect(rows[0].attributes("aria-hidden")).toBe("true");
+        wrapper.unmount();
+    });
+});

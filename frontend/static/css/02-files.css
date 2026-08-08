@@ -425,14 +425,8 @@ a.myfiles-row {
     pointer-events: none;
 }
 
-.redacted-row-icon {
-    flex-shrink: 0;
-    width: 22px;
-    height: 22px;
-    border-radius: 6px;
-}
-
-.redacted-row-title {
-    width: 38%;
-    height: 1.05rem;
+/* 제목 자리는 .myfiles-row-title에 글자를 넣고 덮는다(.redacted-text).
+   폴더 이름 길이는 제각각이라 최소 폭만 잡아 준다. */
+.myfiles-row-placeholder .myfiles-row-title {
+    min-width: 38%;
 }

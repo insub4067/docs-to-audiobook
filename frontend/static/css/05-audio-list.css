@@ -626,6 +626,17 @@
     border-radius: 50%;
 }
 
+/* ⚠️ 이 규칙은 반드시 .redacted 뒤에 있어야 한다. 처음엔 02-files.css에
+   뒀는데, 05가 나중에 실려 .redacted의 height: 1em이 덮어써서 아이콘이
+   24px가 아니라 16px로 그려졌다(스타일을 파일로 나눈 뒤 생긴 문제다).
+   크기는 실제 .myfiles-row-icon과 같아야 한다. */
+.redacted-row-icon {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+}
+
 /* 실제 글자를 넣고 그 위를 덮는 방식. 글자가 들어 있으니 줄 높이도
    줄바꿈도 실제 행과 똑같이 계산된다 — 막대 크기를 직접 잡았을 때는 계속
    어긋났다(37px 짧음 → 5px 짧음 → 22px 김).
