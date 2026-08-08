@@ -3,6 +3,7 @@ import { computed, onMounted } from "vue";
 import type { ReaderLogic } from "../../Reader/Reader_Logic.vue";
 import { useNewsState } from "./News_State.vue";
 import { useNewsLogic } from "./News_Logic.vue";
+import NewsPlaceholderRowView from "./NewsPlaceholderRow_View.vue";
 
 const props = defineProps<{ logic: ReaderLogic }>();
 const state = useNewsState();
@@ -25,17 +26,28 @@ onMounted(() => {
 </script>
 
 <template>
-    <section v-if="topItem" class="glass-card library-section">
+    <!-- 아직 못 받아 왔으면 카드를 숨기지 않고 자리표시자를 그린다. 숨겼다가
+         나중에 끼워 넣으면 그 아래 내용이 통째로 밀려, 누르려던 것이 움직인다.
+         다 받아 왔는데 뉴스가 없을 때만 카드를 감춘다. -->
+    <section v-if="!state.loaded.value || topItem" class="glass-card library-section">
         <div class="card-header">
             <i data-lucide="newspaper" class="header-icon"></i>
             <h2>경제 뉴스</h2>
-            <button type="button" class="news-more-btn" @click="newsLogic.openList">
+            <button
+                v-if="topItem"
+                type="button"
+                class="news-more-btn"
+                @click="newsLogic.openList"
+            >
                 더보기
                 <i data-lucide="chevron-right"></i>
             </button>
         </div>
         <div class="library-container">
-            <div class="audio-list">
+            <div v-if="!state.loaded.value" class="audio-list">
+                <NewsPlaceholderRowView />
+            </div>
+            <div v-else class="audio-list">
                 <button type="button" class="audio-item audio-item-news" @click="newsLogic.openNewsItem(topItem)">
                     <div class="audio-item-front">
                         <div class="audio-title-group">

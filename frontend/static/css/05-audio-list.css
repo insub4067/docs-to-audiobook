@@ -599,3 +599,55 @@
         padding: 10px 12px;
     }
 }
+
+/* ===== 로딩 자리표시자(redacted) ===== */
+/* 내용이 오기 전에 같은 골격을 회색 블록으로 먼저 그린다. 도착하면 같은
+   자리에 글자만 들어차므로 화면이 뛰지 않는다.
+
+   색은 --text-color를 아주 옅게 깔아 테마를 따라간다 — 고정 회색을 쓰면
+   다크 테마에서 블록만 밝게 떠 보인다. */
+.news-placeholder {
+    cursor: default;
+    pointer-events: none;
+}
+
+.redacted {
+    display: block;
+    border-radius: 6px;
+    background-color: color-mix(in srgb, var(--text-color) 11%, transparent);
+    /* 글자가 들어올 자리라 높이를 줄 높이에 맞춰 둔다. */
+    height: 1em;
+}
+
+.redacted-icon {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+}
+
+.redacted-title {
+    height: 0.95rem;
+    margin: 2px 0 8px;
+}
+
+.redacted-subtitle {
+    width: 45%;
+    height: 0.75rem;
+}
+
+/* 멈춰 있는 회색 블록은 "고장난 화면"처럼 보인다. 아주 옅게 밝아졌다
+   어두워지게 해서 기다리는 중이라는 걸 알린다. */
+@keyframes redacted-pulse {
+    50% { opacity: 0.45; }
+}
+
+.redacted {
+    animation: redacted-pulse 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .redacted {
+        animation: none;
+    }
+}
