@@ -21,13 +21,6 @@
     margin-bottom: 0;
 }
 
-.logo-icon {
-    width: 20px;
-    height: 20px;
-    color: var(--primary-color);
-    flex-shrink: 0;
-}
-
 .app-header h1 {
     font-family: var(--font-serif);
     font-size: 0.95rem;
@@ -64,11 +57,6 @@
     .app-header .logo {
         margin-bottom: 14px;
         gap: 12px;
-    }
-
-    .logo-icon {
-        width: 28px;
-        height: 28px;
     }
 
     .app-header h1 {
