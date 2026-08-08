@@ -722,6 +722,15 @@
     height: 16px;
 }
 
+/* 현재 문장이 화면 아래에 있으면 내려가야 하므로 화살표를 뒤집는다.
+   ⚠️ lucide가 <i data-lucide>를 <svg>로 갈아치우기 때문에 아이콘을 v-if로
+   바꿔 끼우면 Vue의 vnode가 사라진 노드를 가리켜 크래시한다(프로필 화면에서
+   겪었다). 그래서 아이콘은 하나만 두고 회전으로만 방향을 바꾼다. */
+.reader-back-to-current.is-below i,
+.reader-back-to-current.is-below svg {
+    transform: rotate(180deg);
+}
+
 /* 하단 바는 접혀도 사라지지 않고 재생 컨트롤만 남는 컴팩트 상태가 된다.
    오디오북에서 일시정지와 재생 위치는 읽는 중 가장 자주 쓰는 컨트롤이라
    완전히 숨기면 매번 스크롤을 되돌려야 한다. */

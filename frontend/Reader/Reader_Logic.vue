@@ -127,10 +127,14 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         el.onended = null;
     }
 
-    function isElementInView(container: HTMLElement, element: HTMLElement): boolean {
+    // 보이는지만이 아니라 어느 쪽으로 벗어났는지도 함께 낸다. 버튼 화살표가
+    // 돌아갈 방향을 가리켜야 하는데, 참/거짓만으로는 위아래를 구분할 수 없다.
+    function locateActiveSentence(container: HTMLElement, element: HTMLElement): "above" | "below" | "in-view" {
         const containerRect = container.getBoundingClientRect();
         const elementRect = element.getBoundingClientRect();
-        return elementRect.bottom > containerRect.top && elementRect.top < containerRect.bottom;
+        if (elementRect.bottom <= containerRect.top) return "above";
+        if (elementRect.top >= containerRect.bottom) return "below";
+        return "in-view";
     }
 
     function scrollToSentence(index: number): void {
@@ -163,7 +167,9 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         if (!content || state.activeIndex.value < 0) return;
         const activeSpan = document.getElementById(`sent-${state.activeIndex.value}`);
         if (!activeSpan) return;
-        state.isScrolledAway.value = !isElementInView(content, activeSpan);
+        const where = locateActiveSentence(content, activeSpan);
+        state.isScrolledAway.value = where !== "in-view";
+        state.isCurrentBelow.value = where === "below";
     }
 
     function jumpToCurrentSentence(): void {

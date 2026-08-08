@@ -198,6 +198,7 @@ useSwipeToDismiss(props.state.containerEl, () => props.logic.closeReader(), head
                 v-if="state.isScrolledAway.value"
                 type="button"
                 class="reader-back-to-current"
+                :class="{ 'is-below': state.isCurrentBelow.value }"
                 @click="logic.jumpToCurrentSentence"
             >
                 <i data-lucide="chevron-up"></i>
