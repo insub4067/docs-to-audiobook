@@ -62,8 +62,8 @@ function onLogoutBackdropClick(event: MouseEvent): void {
             <div class="profile-account-row">
                 <span class="redacted redacted-avatar"></span>
                 <div class="profile-account-info">
-                    <span class="redacted redacted-line" style="width: 40%; height: 1.05rem"></span>
-                    <span class="redacted redacted-line" style="width: 62%; height: 0.85rem"></span>
+                    <strong class="redacted-text">사용자 이름</strong>
+                    <span class="redacted-text">account@example.com</span>
                 </div>
             </div>
         </div>

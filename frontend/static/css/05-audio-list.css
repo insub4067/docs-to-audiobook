@@ -626,13 +626,26 @@
     border-radius: 50%;
 }
 
-/* .audio-title / .audio-subtitle 안에 들어가 그 글꼴 크기를 물려받는다.
-   한 줄이 차지하는 높이는 line-height 1.6em이므로, 막대 1em에 위아래
-   0.3em씩을 더해 정확히 한 줄을 채운다. 이렇게 해야 실제 내용이 도착해도
-   높이가 그대로다(직접 px로 잡았더니 실제 행보다 37px 짧았다). */
-.redacted-line {
-    height: 1em;
-    margin: 0.3em 0;
+/* 실제 글자를 넣고 그 위를 덮는 방식. 글자가 들어 있으니 줄 높이도
+   줄바꿈도 실제 행과 똑같이 계산된다 — 막대 크기를 직접 잡았을 때는 계속
+   어긋났다(37px 짧음 → 5px 짧음 → 22px 김).
+
+   box-decoration-break: clone이 있어야 두 줄로 감길 때 줄마다 따로 둥근
+   배경이 생긴다. 없으면 두 줄이 한 덩어리로 이어져 보인다. */
+.redacted-text {
+    color: transparent;
+    border-radius: 6px;
+    background-color: color-mix(in srgb, var(--text-color) 11%, transparent);
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+    user-select: none;
+    animation: redacted-pulse 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .redacted-text {
+        animation: none;
+    }
 }
 
 /* 멈춰 있는 회색 블록은 "고장난 화면"처럼 보인다. 아주 옅게 밝아졌다

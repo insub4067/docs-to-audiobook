@@ -55,19 +55,32 @@ describe("경제 뉴스 로딩 자리표시자", () => {
         wrapper.unmount();
     });
 
-    it("회색 막대가 실제 제목·부제 요소 안에 들어 있다", () => {
-        // ⚠️ 이게 높이가 맞는 이유다. 막대 크기를 직접 px로 잡았더니 실제
-        // 행(108px)보다 37px 짧아서, 자리를 잡아 두고도 그만큼 밀렸다.
-        // .audio-title 안에 넣으면 글꼴 크기·줄 높이를 그대로 물려받는다.
+    it("실제 제목·부제 요소에 글자를 넣고 그 위를 덮는다", () => {
+        // ⚠️ 이게 높이가 맞는 이유다. 회색 막대의 크기를 직접 잡았을 때는
+        // 계속 어긋났다 — 37px 짧음 → 5px 짧음 → 22px 김. 글자가 들어
+        // 있으면 줄 높이도 줄바꿈도 실제 행과 똑같이 계산된다.
         resetNewsState();
         pendingFetch();
 
         const wrapper = mount(TodayNewsView, { props: { logic: readerLogic } });
         const placeholder = wrapper.find(".list-row-placeholder");
+        const title = placeholder.find(".audio-title");
 
         expect(placeholder.find(".redacted-icon").exists()).toBe(true);
-        expect(placeholder.findAll(".audio-title .redacted-line")).toHaveLength(2);
-        expect(placeholder.findAll(".audio-subtitle .redacted-line")).toHaveLength(1);
+        expect(title.classes()).toContain("redacted-text");
+        expect(title.text().length).toBeGreaterThan(0);
+        expect(placeholder.find(".audio-subtitle").classes()).toContain("redacted-text");
+        wrapper.unmount();
+    });
+
+    it("덮은 글자는 스크린 리더에 읽히지 않는다", () => {
+        // 자리를 채우려고 넣은 말이라 뜻이 없다.
+        resetNewsState();
+        pendingFetch();
+
+        const wrapper = mount(TodayNewsView, { props: { logic: readerLogic } });
+
+        expect(wrapper.find(".list-row-placeholder").attributes("aria-hidden")).toBe("true");
         wrapper.unmount();
     });
 
