@@ -58,6 +58,10 @@ def _parse_news_payload(raw_text: str) -> list[dict]:
         raise HTTPException(status_code=400, detail="뉴스 배열이 비어 있습니다.")
 
     parsed = []
+    # 같은 붙여넣기 안에 같은 기사가 두 번 들어오는 일이 있다(GPT가 같은
+    # 뉴스를 다른 출처로 두 번 뽑는 경우). 제목을 공백·대소문자만 정규화해
+    # 비교하고 먼저 온 것만 남긴다.
+    seen_titles = set()
     for item in items:
         if not isinstance(item, dict):
             continue
@@ -65,6 +69,10 @@ def _parse_news_payload(raw_text: str) -> list[dict]:
         content = _strip_citation_artifacts((item.get("content") or "").strip())
         if not title or not content:
             continue
+        title_key = re.sub(r"\s+", " ", title).casefold()
+        if title_key in seen_titles:
+            continue
+        seen_titles.add(title_key)
         parsed.append({
             "title": title[:255],
             "content": content,
@@ -117,25 +125,15 @@ async def store_news_item(supabase, admin_user_id: str, item: dict, job_id: str)
     return audiobook_id
 
 
-def _cleanup_stale_news(supabase) -> int:
-    """list_news 공개 목록에서 이미 벗어난(3일 초과 또는 최신 10개 밖으로
-    밀려난) 뉴스 오디오북을 실제로 지운다. 안 지우면 화면엔 안 보여도
-    DB 행과 Storage 음성 파일이 계속 쌓인다.
-
-    "보이는" 집합은 list_news와 정확히 같은 조건(같은 gte+order+limit
-    쿼리)으로 DB에 직접 물어서 구한다 — 날짜 문자열을 파이썬에서 직접
-    비교하면 형식 차이로 어긋날 수 있어서다."""
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=NEWS_VISIBLE_DAYS)).isoformat()
-    visible_rows = supabase.table("audiobooks").select("id") \
-        .eq("is_news", True).gte("created_at", cutoff) \
-        .order("created_at", desc=True).limit(NEWS_LIST_LIMIT).execute().data or []
-    visible_ids = {row["id"] for row in visible_rows}
-
-    all_rows = supabase.table("audiobooks").select("id, user_id") \
+def _all_news_rows(supabase) -> list[dict]:
+    return supabase.table("audiobooks").select("id, user_id") \
         .eq("is_news", True).execute().data or []
-    stale_rows = [row for row in all_rows if row["id"] not in visible_ids]
 
-    for row in stale_rows:
+
+def _delete_news_rows(supabase, rows: list[dict]) -> int:
+    """행과 Storage 음성 파일을 함께 지운다. 행만 지우면 화면에서는 사라져도
+    버킷은 계속 불어난다."""
+    for row in rows:
         audio_path, sentences_path = _object_paths(row["user_id"], row["id"])
         try:
             supabase.storage.from_(AUDIOBOOK_BUCKET).remove([audio_path, sentences_path])
@@ -143,36 +141,77 @@ def _cleanup_stale_news(supabase) -> int:
             # 파일이 이미 없어도 행은 정리해야 한다
             logger.exception("뉴스 정리 중 스토리지 삭제 실패 id=%s", row["id"])
         supabase.table("audiobooks").delete().eq("id", row["id"]).execute()
+    return len(rows)
 
-    return len(stale_rows)
+
+def _enforce_news_limit(supabase) -> int:
+    """DB에 뉴스는 항상 최신 NEWS_LIST_LIMIT개까지만 남긴다.
+
+    새 묶음이 이전 것을 통째로 대체하므로 보통은 지울 게 없지만, 대체가
+    부분적으로 실패했거나 예전 데이터가 남아 있을 때를 위한 마지막 방어선이다.
+
+    남길 집합은 파이썬이 아니라 DB에 물어서 정한다 — 날짜 문자열을 직접
+    비교하면 형식 차이로 어긋날 수 있다."""
+    keep_rows = supabase.table("audiobooks").select("id") \
+        .eq("is_news", True).order("created_at", desc=True) \
+        .limit(NEWS_LIST_LIMIT).execute().data or []
+    keep_ids = {row["id"] for row in keep_rows}
+
+    extra = [row for row in _all_news_rows(supabase) if row["id"] not in keep_ids]
+    return _delete_news_rows(supabase, extra)
 
 
-async def _process_news_batch(job_ids: list[str]) -> None:
+async def _process_news_batch(job_ids: list[str], previous_rows: list[dict]) -> None:
     """항목마다 TTS 합성이 걸려 전체가 수십 초~수 분 걸릴 수 있다.
     관리자가 응답을 기다리지 않도록 백그라운드로 돌리고, 다 끝나면
     구독한 모든 사용자에게 새 뉴스가 왔다고 한 번만 알린다."""
     created = await run_jobs(job_ids)
 
     if created:
+        # ⚠️ 이전 뉴스는 새 묶음이 하나라도 만들어진 뒤에 지운다. 등록을
+        # 받자마자 지우면 합성이 통째로 실패했을 때 화면에 아무것도 남지
+        # 않는다 — 새 뉴스가 없는 것보다 어제 뉴스라도 있는 게 낫다.
+        try:
+            _delete_news_rows(_supabase_or_503(), previous_rows)
+        except Exception:
+            logger.exception("이전 뉴스 삭제 실패")
+
         try:
             send_news_ready_broadcast(len(created))
         except Exception:
             logger.exception("경제 뉴스 등록 완료 알림 발송 실패")
 
     try:
-        _cleanup_stale_news(_supabase_or_503())
+        _enforce_news_limit(_supabase_or_503())
     except Exception:
-        logger.exception("오래된 뉴스 정리 실패")
+        logger.exception("뉴스 개수 정리 실패")
 
 
 @router.post("/api/admin/news")
 async def add_news(payload: dict, background_tasks: BackgroundTasks, authorization: str = Header(None)):
     admin_user_id = require_admin_user(authorization)
     items = _parse_news_payload(payload.get("text") or "")[:NEWS_LIST_LIMIT]
+    supabase = _supabase_or_503()
 
-    job_ids = queue_jobs(_supabase_or_503(), "news", admin_user_id, items)
-    background_tasks.add_task(_process_news_batch, job_ids)
-    return {"queued": len(job_ids)}
+    # ⚠️ 이미 처리 중인 묶음이 있으면 받지 않는다. 실수로 두 번 눌러 두
+    # 묶음이 겹치면, 두 번째가 캡처한 "이전 목록"에 첫 번째 결과가 아직
+    # 없어서 그것만 살아남는다. 실제로 그렇게 같은 기사가 두 번씩 든
+    # 목록이 만들어졌다.
+    in_flight = supabase.table("content_jobs").select("id") \
+        .eq("kind", "news").in_("status", ["queued", "processing"]) \
+        .limit(1).execute().data or []
+    if in_flight:
+        raise HTTPException(
+            status_code=429,
+            detail="이미 처리 중인 뉴스 등록이 있습니다. 완료 후 다시 시도해 주세요.",
+        )
+
+    # 새 묶음이 성공하면 이 목록을 통째로 지운다(_process_news_batch).
+    previous_rows = _all_news_rows(supabase)
+
+    job_ids = queue_jobs(supabase, "news", admin_user_id, items)
+    background_tasks.add_task(_process_news_batch, job_ids, previous_rows)
+    return {"queued": len(job_ids), "replacing": len(previous_rows)}
 
 
 @router.get("/api/news")

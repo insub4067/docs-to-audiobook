@@ -4,6 +4,7 @@
 TTS 호출은 synthesize_document 하나로 모아 패치해 edge-tts/구글 TTS
 실호출 없이 테스트한다.
 """
+import json
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -188,25 +189,24 @@ async def test_add_news_skips_broadcast_when_nothing_created(mock_supabase_table
 
 
 @pytest.mark.asyncio
-async def test_add_news_deletes_rows_and_storage_that_fell_outside_visible_window(mock_supabase_tables):
-    """새 뉴스를 등록하면, 공개 목록(list_news)에서 이미 벗어난(3일 초과
-    또는 최신 10개 밖으로 밀려난) 오래된 뉴스가 DB 행 + Storage 음성
-    파일까지 함께 삭제되는지 확인한다. 화면에 안 보인다고 실제로 지워지는
-    건 아니었던 문제를 고친 것이라, 두 종류(스토리지/행) 모두 지워지는
-    것을 각각 확인해야 한다."""
+async def test_add_news_replaces_all_previous_news(mock_supabase_tables):
+    """새 묶음이 성공하면 이전 뉴스를 행·Storage까지 통째로 지운다.
+
+    경제 뉴스는 매일 갈리는 피드라 지난 것을 남겨 둘 이유가 없다. 남겨 두니
+    같은 기사가 두 번씩 든 목록이 만들어졌다(등록을 두 번 눌러서 생긴 일이다).
+    """
     client_mock, _tables = mock_supabase_tables
     audiobooks = client_mock.table("audiobooks")
-    # list_news와 정확히 같은 쿼리(select→eq→gte→order→limit)로 "보이는" 것만 반환.
-    audiobooks.select().eq().gte().order().limit().execute.return_value = MagicMock(
-        data=[{"id": "visible-1"}, {"id": "visible-2"}]
-    )
-    # 정리 대상을 고르기 위한 전체 목록(select→eq)에는 보이는 것 + 밀려난 것이 섞여 있다.
     audiobooks.select().eq().execute.return_value = MagicMock(data=[
-        {"id": "visible-1", "user_id": "admin-user"},
-        {"id": "visible-2", "user_id": "admin-user"},
-        {"id": "stale-1", "user_id": "admin-user"},
-        {"id": "stale-2", "user_id": "other-admin"},
+        {"id": "old-1", "user_id": "admin-user"},
+        {"id": "old-2", "user_id": "other-admin"},
     ])
+    # ⚠️ 10개 제한 정리가 대신 지워 주면 교체 로직이 없어도 테스트가 통과한다
+    # (실제로 뮤테이션에서 그렇게 샜다). 두 행 모두 "최신 10개 안"이라고 둬서,
+    # 지워진다면 그건 오직 교체 때문이게 만든다.
+    audiobooks.select().eq().order().limit().execute.return_value = MagicMock(
+        data=[{"id": "old-1"}, {"id": "old-2"}]
+    )
 
     with patch("routes.news.require_admin_user", return_value="admin-user"), \
          patch("routes.news.synthesize_document", side_effect=_fake_synthesize_document):
@@ -218,16 +218,121 @@ async def test_add_news_deletes_rows_and_storage_that_fell_outside_visible_windo
             )
 
     assert response.status_code == 200
+    assert response.json()["replacing"] == 2
 
     deleted_ids = [call.args for call in audiobooks.delete().eq.call_args_list]
-    assert ("id", "stale-1") in deleted_ids
-    assert ("id", "stale-2") in deleted_ids
-    assert ("id", "visible-1") not in deleted_ids
-    assert ("id", "visible-2") not in deleted_ids
+    assert ("id", "old-1") in deleted_ids
+    assert ("id", "old-2") in deleted_ids
 
+    # 행만 지우면 화면에서만 사라지고 버킷은 계속 불어난다.
     removed_paths = [call.args[0] for call in client_mock.storage.from_().remove.call_args_list]
-    assert ["admin-user/stale-1.mp3", "admin-user/stale-1.sentences.json"] in removed_paths
-    assert ["other-admin/stale-2.mp3", "other-admin/stale-2.sentences.json"] in removed_paths
+    assert ["admin-user/old-1.mp3", "admin-user/old-1.sentences.json"] in removed_paths
+    assert ["other-admin/old-2.mp3", "other-admin/old-2.sentences.json"] in removed_paths
+
+
+@pytest.mark.asyncio
+async def test_add_news_keeps_previous_news_when_every_item_fails(mock_supabase_tables):
+    """⚠️ 합성이 통째로 실패하면 이전 뉴스를 지우지 않는다.
+
+    등록을 받자마자 지우면 실패했을 때 화면에 아무것도 남지 않는다.
+    새 뉴스가 없는 것보다 어제 뉴스라도 있는 게 낫다."""
+    client_mock, _tables = mock_supabase_tables
+    audiobooks = client_mock.table("audiobooks")
+    audiobooks.select().eq().execute.return_value = MagicMock(data=[
+        {"id": "old-1", "user_id": "admin-user"},
+    ])
+    audiobooks.select().eq().order().limit().execute.return_value = MagicMock(
+        data=[{"id": "old-1"}]
+    )
+
+    async def always_fails(*args, **kwargs):
+        raise RuntimeError("합성 실패")
+
+    with patch("routes.news.require_admin_user", return_value="admin-user"), \
+         patch("routes.news.synthesize_document", side_effect=always_fails):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/admin/news",
+                json={"text": '[{"title": "새 뉴스", "content": "본문"}]'},
+                headers=_auth_headers(),
+            )
+
+    assert response.status_code == 200
+    deleted_ids = [call.args for call in audiobooks.delete().eq.call_args_list]
+    assert ("id", "old-1") not in deleted_ids
+
+
+@pytest.mark.asyncio
+async def test_add_news_keeps_at_most_ten_rows_in_db(mock_supabase_tables):
+    """DB에 뉴스는 항상 최신 10개까지만 남는다(마지막 방어선)."""
+    client_mock, _tables = mock_supabase_tables
+    audiobooks = client_mock.table("audiobooks")
+    keep = [{"id": f"keep-{i}"} for i in range(10)]
+    audiobooks.select().eq().order().limit().execute.return_value = MagicMock(data=keep)
+    audiobooks.select().eq().execute.return_value = MagicMock(data=[
+        *[{"id": row["id"], "user_id": "admin-user"} for row in keep],
+        {"id": "extra-1", "user_id": "admin-user"},
+        {"id": "extra-2", "user_id": "admin-user"},
+    ])
+
+    with patch("routes.news.require_admin_user", return_value="admin-user"), \
+         patch("routes.news.synthesize_document", side_effect=_fake_synthesize_document):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            await client.post(
+                "/api/admin/news",
+                json={"text": '[{"title": "새 뉴스", "content": "본문"}]'},
+                headers=_auth_headers(),
+            )
+
+    deleted_ids = [call.args for call in audiobooks.delete().eq.call_args_list]
+    assert ("id", "extra-1") in deleted_ids
+    assert ("id", "extra-2") in deleted_ids
+
+
+@pytest.mark.asyncio
+async def test_add_news_drops_duplicate_titles_within_one_batch(mock_supabase_tables):
+    """같은 붙여넣기 안에 같은 기사가 두 번 들어오면 하나만 등록한다."""
+    _client_mock, tables = mock_supabase_tables
+
+    payload = json.dumps([
+        {"title": "달러 약세", "content": "본문 A"},
+        {"title": "  달러   약세  ", "content": "본문 B"},
+        {"title": "금값 급등", "content": "본문 C"},
+    ], ensure_ascii=False)
+
+    with patch("routes.news.require_admin_user", return_value="admin-user"), \
+         patch("routes.news.synthesize_document", side_effect=_fake_synthesize_document):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/admin/news", json={"text": payload}, headers=_auth_headers()
+            )
+
+    assert response.json()["queued"] == 2
+    titles = [row["title"] for row in rows_inserted_into(tables, "content_jobs")]
+    assert titles == ["달러 약세", "금값 급등"]
+
+
+@pytest.mark.asyncio
+async def test_add_news_rejects_while_another_batch_is_processing(mock_supabase_tables):
+    """⚠️ 실수로 두 번 누르면 두 묶음이 겹친다.
+
+    두 번째 요청이 캡처한 "이전 목록"에는 첫 번째 결과가 아직 없어서, 나중에
+    이전 것을 지울 때 첫 번째 묶음만 살아남는다. 그렇게 같은 기사가 두 번씩
+    든 목록이 실제로 만들어졌다."""
+    _client_mock, tables = mock_supabase_tables
+    jobs_table = tables["content_jobs"]
+    jobs_table.insert({"id": "running-job", "kind": "news", "title": "처리 중"})
+    jobs_table.rows["running-job"]["status"] = "processing"
+
+    with patch("routes.news.require_admin_user", return_value="admin-user"):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/admin/news",
+                json={"text": '[{"title": "새 뉴스", "content": "본문"}]'},
+                headers=_auth_headers(),
+            )
+
+    assert response.status_code == 429
 
 
 @pytest.mark.asyncio

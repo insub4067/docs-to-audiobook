@@ -21,10 +21,19 @@ class _Query:
         self.payload = payload
         self.columns = columns
         self.job_id = None
+        self.status_filter = None
+        self.kind_filter = None
 
     def eq(self, column, value):
         if column == "id":
             self.job_id = value
+        return self
+
+    def in_(self, column, values):
+        """kind='news' 묶음이 이미 처리 중인지 확인할 때 쓴다. 상태 필터를
+        여기서 해석해, 진행 중인 행이 있으면 그 행들만 남긴다."""
+        if column == "status":
+            self.status_filter = set(values)
         return self
 
     def order(self, *args, **kwargs):
@@ -74,7 +83,11 @@ class FakeContentJobsTable:
         if query.op == "select":
             if query.job_id is not None:
                 return _Result(self.rows.get(query.job_id))
-            return _Result([dict(row) for row in self.rows.values()])
+            rows = [dict(row) for row in self.rows.values()]
+            # 뉴스 등록은 "처리 중인 묶음이 있는가"를 status로 물어본다.
+            if query.status_filter is not None:
+                rows = [row for row in rows if row.get("status") in query.status_filter]
+            return _Result(rows)
         if query.op == "update":
             self.updates.append((query.job_id, query.payload))
             if query.job_id in self.rows:
