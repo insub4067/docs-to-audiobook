@@ -6,6 +6,9 @@ import type { FolderBrowserState, FolderNode } from "./FolderBrowser_State.vue";
 
 export interface FolderBrowserLogic {
     loadCurrentFolder(): Promise<void>;
+    /** 이 폴더에 지난번에 몇 개가 있었는지. 불러오는 동안 그만큼 자리를
+     *  잡아 두려고 쓴다(모르면 0). */
+    lastKnownFolderCount(): number;
     openFolder(folder: FolderNode): Promise<void>;
     goToBreadcrumb(index: number): Promise<void>;
     createFolder(name: string): Promise<void>;
@@ -17,9 +20,27 @@ export interface FolderBrowserLogic {
 // 때마다 /api/folders에서 바로 불러온다(로그인 필요). Files/MyFiles_View와
 // Sheet/MoveToFolderSheet_View가 각자 독립된 인스턴스로 이 컴포저블을 쓴다
 // (탐색 스택이 서로 달라야 하므로).
+// 폴더 목록은 네트워크에서 오는데 파일 목록은 IndexedDB라 훨씬 빨리 뜬다.
+// 그래서 파일이 먼저 그려진 뒤 폴더가 위에 끼어들며 아래를 통째로 밀어냈다
+// — 누르려던 항목이 손가락 밑에서 움직인다.
+//
+// 개수를 기억해 두면 불러오는 동안 정확히 그만큼 자리표시자를 깔 수 있어
+// 앱을 새로 켠 직후에도 밀림이 없다. 폴더 수는 자주 바뀌지 않으므로
+// 지난번 값이 거의 항상 맞는다. 틀려도 손해는 자리표시자 한두 줄뿐이다.
+const FOLDER_COUNT_KEY_PREFIX = "textAudio_folderCount:";
+
+function folderCountKey(folderId: string | null): string {
+    return `${FOLDER_COUNT_KEY_PREFIX}${folderId ?? "root"}`;
+}
+
 export function useFolderBrowserLogic(state: FolderBrowserState): FolderBrowserLogic {
     const authLogic = useAuthLogic();
     const { showToast } = useToastLogic(useToastState());
+
+    function lastKnownFolderCount(): number {
+        const stored = Number(localStorage.getItem(folderCountKey(state.currentFolderId.value)));
+        return Number.isFinite(stored) && stored > 0 ? Math.min(stored, 12) : 0;
+    }
 
     async function loadCurrentFolder(): Promise<void> {
         if (!authLogic.isLoggedIn()) {
@@ -33,6 +54,10 @@ export function useFolderBrowserLogic(state: FolderBrowserState): FolderBrowserL
             if (!res.ok) throw new Error("폴더를 불러오지 못했습니다.");
             const data = await res.json();
             state.subfolders.value = data.folders || [];
+            localStorage.setItem(
+                folderCountKey(state.currentFolderId.value),
+                String(state.subfolders.value.length),
+            );
         } catch (error) {
             console.error(error);
             showToast("폴더를 불러오지 못했습니다.", "error");
@@ -107,7 +132,10 @@ export function useFolderBrowserLogic(state: FolderBrowserState): FolderBrowserL
         }
     }
 
-    return { loadCurrentFolder, openFolder, goToBreadcrumb, createFolder, renameFolder, deleteFolder };
+    return {
+        loadCurrentFolder, lastKnownFolderCount, openFolder, goToBreadcrumb,
+        createFolder, renameFolder, deleteFolder,
+    };
 }
 
 export default {};

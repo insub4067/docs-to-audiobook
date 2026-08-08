@@ -417,3 +417,22 @@ a.myfiles-row {
     outline: none;
     border-color: var(--primary-color);
 }
+
+/* 폴더 목록이 오기 전 자리만 잡아 두는 행. 실제 .myfiles-row와 같은 높이여야
+   내용이 도착해도 목록이 밀리지 않는다. */
+.myfiles-row-placeholder {
+    cursor: default;
+    pointer-events: none;
+}
+
+.redacted-row-icon {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+}
+
+.redacted-row-title {
+    width: 38%;
+    height: 1.05rem;
+}

@@ -56,6 +56,14 @@ const currentFolderBackgroundJobItems = computed(() =>
     )
 );
 
+// 불러오는 동안에만, 그리고 아직 실제 폴더가 하나도 안 왔을 때만 깐다.
+// 이미 온 뒤에 겹쳐 깔면 목록이 두 배로 길어 보인다.
+const folderPlaceholderCount = computed(() =>
+    browserState.isLoading.value && browserState.subfolders.value.length === 0
+        ? browserLogic.lastKnownFolderCount()
+        : 0
+);
+
 const isEmpty = computed(() =>
     !browserState.isLoading.value
     && browserState.subfolders.value.length === 0
@@ -250,6 +258,19 @@ onUnmounted(() => {
             <div class="library-empty" v-show="isEmpty">
                 <i data-lucide="folder-open"></i>
                 <p>이 폴더는 비어 있습니다.</p>
+            </div>
+
+            <!-- 폴더는 네트워크, 파일은 IndexedDB라 파일이 먼저 뜬다. 자리를
+                 안 잡아 두면 폴더가 나중에 위로 끼어들며 아래를 통째로 밀어낸다.
+                 지난번 개수만큼 미리 깔아 두면 앱을 새로 켠 직후에도 안 밀린다. -->
+            <div
+                v-for="n in folderPlaceholderCount"
+                :key="`folder-placeholder-${n}`"
+                class="myfiles-row myfiles-row-placeholder"
+                aria-hidden="true"
+            >
+                <span class="redacted redacted-row-icon"></span>
+                <span class="redacted redacted-row-title"></span>
             </div>
 
             <div
