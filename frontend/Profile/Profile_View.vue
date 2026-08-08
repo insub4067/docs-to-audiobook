@@ -62,8 +62,8 @@ function onLogoutBackdropClick(event: MouseEvent): void {
             <div class="profile-account-row">
                 <span class="redacted redacted-avatar"></span>
                 <div class="profile-account-info">
-                    <span class="redacted redacted-title" style="width: 40%"></span>
-                    <span class="redacted redacted-subtitle" style="width: 62%"></span>
+                    <span class="redacted redacted-line" style="width: 40%; height: 1.05rem"></span>
+                    <span class="redacted redacted-line" style="width: 62%; height: 0.85rem"></span>
                 </div>
             </div>
         </div>

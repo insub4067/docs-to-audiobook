@@ -55,9 +55,10 @@ describe("경제 뉴스 로딩 자리표시자", () => {
         wrapper.unmount();
     });
 
-    it("자리표시자는 실제 행과 같은 골격을 갖는다", () => {
-        // 골격이 다르면 내용이 도착하는 순간 높이가 바뀌어, 자리를 잡아 둔
-        // 의미가 없어진다.
+    it("회색 막대가 실제 제목·부제 요소 안에 들어 있다", () => {
+        // ⚠️ 이게 높이가 맞는 이유다. 막대 크기를 직접 px로 잡았더니 실제
+        // 행(108px)보다 37px 짧아서, 자리를 잡아 두고도 그만큼 밀렸다.
+        // .audio-title 안에 넣으면 글꼴 크기·줄 높이를 그대로 물려받는다.
         resetNewsState();
         pendingFetch();
 
@@ -65,8 +66,8 @@ describe("경제 뉴스 로딩 자리표시자", () => {
         const placeholder = wrapper.find(".list-row-placeholder");
 
         expect(placeholder.find(".redacted-icon").exists()).toBe(true);
-        expect(placeholder.find(".redacted-title").exists()).toBe(true);
-        expect(placeholder.find(".redacted-subtitle").exists()).toBe(true);
+        expect(placeholder.findAll(".audio-title .redacted-line")).toHaveLength(2);
+        expect(placeholder.findAll(".audio-subtitle .redacted-line")).toHaveLength(1);
         wrapper.unmount();
     });
 
