@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import type { AudiobookRecord } from "../../services/indexedDb";
 import type { AudioListLogic } from "./AudioList_Logic.vue";
 import { getAudiobookDisplayTitle } from "../../utils/format";
+import { nowPlayingId } from "../../services/nowPlaying";
 
 const props = withDefaults(defineProps<{
     audio: AudiobookRecord;
@@ -11,6 +12,10 @@ const props = withDefaults(defineProps<{
 }>(), {
     swipeEnabled: true,
 });
+
+// 지금 듣고 있는 항목은 목록에서 바로 알아볼 수 있어야 한다. 재생목록
+// 시트와 같은 표시를 쓴다 — 화면마다 신호가 다르면 매번 새로 배워야 한다.
+const isPlaying = computed(() => nowPlayingId.value === props.audio.id);
 
 const root = ref<HTMLElement | null>(null);
 const front = ref<HTMLElement | null>(null);
@@ -144,7 +149,13 @@ onUnmounted(() => document.removeEventListener("touchstart", onDocumentTouchStar
 </script>
 
 <template>
-    <div ref="root" class="audio-item" :class="{ 'deleting-row': isDeleting, 'swipe-open': isSwipeOpen }" @click="onItemClick">
+    <div
+        ref="root"
+        class="audio-item"
+        :class="{ 'deleting-row': isDeleting, 'swipe-open': isSwipeOpen, 'is-playing': isPlaying }"
+        :aria-current="isPlaying ? 'true' : undefined"
+        @click="onItemClick"
+    >
         <div class="audio-item-bg" @click="onBgClick"><i data-lucide="trash-2"></i></div>
         <div
             ref="front"
@@ -174,6 +185,9 @@ onUnmounted(() => document.removeEventListener("touchstart", onDocumentTouchStar
                 <span v-if="audio.isDefault" class="default-badge" title="기본 제공 오디오북">기본 제공</span>
                 <svg v-if="audio.isBookmarked" class="bookmark-star" width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none" title="즐겨찾기"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
             </div>
+            <span v-if="isPlaying" class="now-playing-bars" aria-hidden="true">
+                <span></span><span></span><span></span>
+            </span>
             <div class="audio-actions">
                 <button class="btn-icon-round btn-more" aria-label="더보기" @click.stop="logic.openActionSheet(audio)">
                     <i data-lucide="more-horizontal"></i>

@@ -4,6 +4,7 @@ import type { ReaderLogic } from "../Reader/Reader_Logic.vue";
 import { useLibraryState, type LibraryItem, type LibrarySortKey } from "./Library_State.vue";
 import { useLibraryLogic } from "./Library_Logic.vue";
 import ListRowPlaceholderView from "../components/Placeholder/ListRowPlaceholder_View.vue";
+import { nowPlayingId } from "../services/nowPlaying";
 
 const props = defineProps<{ logic: ReaderLogic; hasMiniPlayer?: boolean; active?: boolean; readerOpen?: boolean }>();
 const state = useLibraryState();
@@ -191,6 +192,8 @@ watch(() => props.readerOpen, (open, wasOpen) => {
                     v-for="item in filteredItems"
                     :key="item.id"
                     class="audio-item audio-item-news"
+                    :class="{ 'is-playing': nowPlayingId === item.id }"
+                    :aria-current="nowPlayingId === item.id ? 'true' : undefined"
                     role="button"
                     tabindex="0"
                     @click="libraryLogic.openDetail(item)"
@@ -199,6 +202,8 @@ watch(() => props.readerOpen, (open, wasOpen) => {
                 >
                     <div class="audio-item-front">
                         <div class="audio-title-group">
+                            <!-- ⚠️ lucide가 <i>를 <svg>로 갈아치우므로 토글하지 않는다.
+                                 표시는 덧붙이는 방식으로만 넣는다. -->
                             <i data-lucide="book-open"></i>
                             <div class="audio-title-col">
                                 <span class="audio-title">{{ item.title }}</span>
@@ -221,6 +226,9 @@ watch(() => props.readerOpen, (open, wasOpen) => {
                                     </div>
                                 </template>
                             </div>
+                            <span v-if="nowPlayingId === item.id" class="now-playing-bars" aria-hidden="true">
+                                <span></span><span></span><span></span>
+                            </span>
                             <i v-if="libraryLogic.isSaved(item)" data-lucide="check-circle-2" class="library-saved-badge" aria-label="내 서재에 있음"></i>
                         </div>
                     </div>

@@ -523,3 +523,23 @@ def test_bottom_bars_stack_owns_the_position_of_both_bars():
     stack_rule = read_all_css().split(".bottom-bars {", 1)[1].split("}", 1)[0]
     assert "position: fixed" in stack_rule
     assert "flex-direction: column" in stack_rule
+
+
+def test_now_playing_row_background_is_opaque():
+    """⚠️ 재생 중 강조 배경은 반투명이면 안 된다.
+
+    내 파일 목록의 행 아래에는 스와이프 삭제용 빨간 레이어(.audio-item-bg,
+    #ff3b30)가 깔려 있다. 강조 배경에 투명도가 있으면 그게 그대로 비쳐,
+    재생 중인 행만 붉게 물든 것처럼 보인다. hover/active 규칙이 이미 같은
+    이유로 불투명한 색을 쓴다.
+
+    처음 작업할 때 rgba(...,0.14)로 넣었다가 이 제약을 뒤늦게 발견했다.
+    눈으로 보기 전에는 드러나지 않는 종류라 규칙으로 고정해 둔다.
+    """
+    css = read_all_css()
+    rule = css.split(".audio-item.is-playing .audio-item-front {", 1)[1].split("}", 1)[0]
+    background = re.search(r"background-color:\s*([^;]+);", rule)
+
+    assert background, "재생 중 강조 배경이 없다"
+    assert "rgba" not in background.group(1)
+    assert "transparent" not in background.group(1)

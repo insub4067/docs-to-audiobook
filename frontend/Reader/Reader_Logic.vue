@@ -12,6 +12,7 @@ import { useToastLogic, setReaderOpenForToast } from "../components/Toast/Toast_
 import { useToastState } from "../components/Toast/Toast_State.vue";
 import { useAuthLogic } from "../Auth/Auth_Logic.vue";
 import { swallowed } from "../services/clientErrors";
+import { setNowPlaying } from "../services/nowPlaying";
 
 export interface SharedReaderModeOptions {
     shareId?: string | null;
@@ -212,6 +213,8 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         state.sharedPlaylistKind.value = null;
         sharedAudiobookId = null;
         state.currentAudioObject.value = audio;
+        // 목록 화면들이 "이 행이 지금 듣는 것"을 표시할 수 있게 알린다.
+        setNowPlaying(audio.id);
         sentences = (audio.sentences || []) as ReaderSentence[];
 
         lastPositionSaveSecond = -1;
@@ -307,6 +310,9 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         sharedAudioUrl = audioUrl;
         sharedShareId = shareId;
         sharedAudiobookId = audiobookId;
+        // 라이브러리 작품도 서버 id가 있어 목록에서 같은 방식으로 표시한다.
+        // 뉴스는 audiobookId가 없는데, 뉴스 목록은 queueIndex로 따로 표시한다.
+        setNowPlaying(audiobookId);
         state.currentAudioObject.value = null;
         sentences = sharedSentences;
         playbackStartTracked = false;
@@ -662,6 +668,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         state.sharedPlaylistKind.value = null;
         state.isPlaying.value = false;
         sharedAudiobookId = null;
+        setNowPlaying(null);
     }
 
     function reopenReader(): void {

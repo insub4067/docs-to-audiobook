@@ -89,3 +89,49 @@ describe("재생 중인 항목 표시", () => {
         expect(rows.every((r) => r.find('[data-lucide="play-circle"]').exists())).toBe(true);
     });
 });
+
+// "모든 셀에 적용" — 재생목록 시트뿐 아니라 홈·내 파일·서점 목록에서도
+// 지금 듣고 있는 항목이 보여야 한다. 목록마다 신호가 다르면 매번 새로 배운다.
+describe("보관함 목록에도 같은 표시", () => {
+    it("지금 듣는 오디오북 행에만 표시가 붙는다", async () => {
+        const { mount } = await import("@vue/test-utils");
+        const { nowPlayingId } = await import("../services/nowPlaying");
+        const AudioListItemView = (await import("../components/Library/AudioListItem_View.vue")).default;
+
+        const audio = { id: "a1", title: "데미안.pdf", timestamp: 0 };
+        nowPlayingId.value = "a1";
+        const playing = mount(AudioListItemView, {
+            props: { audio: audio as never, logic: {} as never },
+        });
+        nowPlayingId.value = "다른-것";
+        const idle = mount(AudioListItemView, {
+            props: { audio: audio as never, logic: {} as never },
+        });
+
+        expect(playing.find(".audio-item").classes()).toContain("is-playing");
+        expect(playing.find(".now-playing-bars").exists()).toBe(true);
+        expect(idle.find(".audio-item").classes()).not.toContain("is-playing");
+        nowPlayingId.value = null;
+        playing.unmount();
+        idle.unmount();
+    });
+
+    it("재생이 바뀌면 표시도 따라간다", async () => {
+        const { mount } = await import("@vue/test-utils");
+        const { nowPlayingId } = await import("../services/nowPlaying");
+        const AudioListItemView = (await import("../components/Library/AudioListItem_View.vue")).default;
+
+        nowPlayingId.value = null;
+        const wrapper = mount(AudioListItemView, {
+            props: { audio: { id: "a1", title: "데미안.pdf", timestamp: 0 } as never, logic: {} as never },
+        });
+        expect(wrapper.find(".audio-item").classes()).not.toContain("is-playing");
+
+        nowPlayingId.value = "a1";
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.find(".audio-item").classes()).toContain("is-playing");
+        nowPlayingId.value = null;
+        wrapper.unmount();
+    });
+});

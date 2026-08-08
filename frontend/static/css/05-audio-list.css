@@ -607,7 +607,11 @@
    왼쪽에 얇은 강조선 + 옅은 배경. 같은 앱 안에서 "여기가 현재"라는 신호가
    화면마다 다르면 매번 새로 배워야 한다. */
 .audio-item.is-playing .audio-item-front {
-    background-color: rgba(198, 154, 88, 0.14);
+    /* ⚠️ 반투명이면 안 된다. 내 파일 목록의 행 아래에는 스와이프 삭제용
+       빨간 레이어(.audio-item-bg)가 깔려 있어서, 투명도가 있으면 그게
+       비쳐 보인다(hover/active 규칙이 이미 같은 이유로 불투명하다).
+       카드 배경 위에 강조색을 섞어 같은 색을 불투명하게 만든다. */
+    background-color: color-mix(in srgb, var(--primary-color) 14%, var(--card-bg-solid));
     box-shadow: inset 3px 0 0 var(--primary-color);
 }
 
