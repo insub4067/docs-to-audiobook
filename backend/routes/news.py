@@ -33,6 +33,11 @@ NEWS_LIST_LIMIT = 10
 _CITATION_ARTIFACT_RE = re.compile(r"\[oaicitation:[^\]]*\]", re.IGNORECASE)
 
 
+def _title_key(title: str) -> str:
+    """중복 판정용 제목 키. 공백과 대소문자만 정규화한다."""
+    return re.sub(r"\s+", " ", title).strip().casefold()
+
+
 def _strip_citation_artifacts(text: str) -> str:
     cleaned = _CITATION_ARTIFACT_RE.sub("", text)
     cleaned = re.sub(r"\s+([.,!?])", r"\1", cleaned)
@@ -69,7 +74,7 @@ def _parse_news_payload(raw_text: str) -> list[dict]:
         content = _strip_citation_artifacts((item.get("content") or "").strip())
         if not title or not content:
             continue
-        title_key = re.sub(r"\s+", " ", title).casefold()
+        title_key = _title_key(title)
         if title_key in seen_titles:
             continue
         seen_titles.add(title_key)
@@ -226,8 +231,18 @@ async def list_news():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"뉴스를 불러오지 못했습니다: {e}")
 
+    # ⚠️ DB에 같은 기사가 두 번 들어 있어도 화면에는 한 번만 보여 준다.
+    # 등록 단계에서 거르지만(_parse_news_payload), 그 수정 이전에 들어간
+    # 행은 그대로 남아 있다. 목록에서 한 번 더 거르면 데이터를 건드리지
+    # 않고도 재생목록·연속 듣기에서 같은 기사가 두 번 나오지 않는다.
+    # rows는 최신순이라 먼저 만난 것(더 최근)을 남긴다.
+    seen_titles = set()
     items = []
     for row in rows:
+        title_key = _title_key(row.get("title") or "")
+        if title_key in seen_titles:
+            continue
+        seen_titles.add(title_key)
         try:
             items.extend(audiobook_items_with_urls(supabase, row["user_id"], [row]))
         except Exception:

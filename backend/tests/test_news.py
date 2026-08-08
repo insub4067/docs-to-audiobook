@@ -383,3 +383,30 @@ async def test_list_news_filters_recent_news_items_only(mock_supabase):
 
     select_call = mock_supabase.table().select().eq.call_args
     assert select_call.args == ("is_news", True)
+
+
+@pytest.mark.asyncio
+async def test_list_news_hides_duplicate_rows_already_in_db(mock_supabase_tables):
+    """⚠️ 등록 단계에서 거르기 전에 들어간 중복 행이 DB에 남아 있다.
+
+    실제로 붙여넣은 JSON에 같은 기사가 두 번씩 든 적이 있었고, 그 10행이
+    그대로 남아 재생목록과 "연속 듣기"에서 같은 기사가 두 번 재생됐다.
+    데이터를 건드리지 않고도 화면에는 한 번만 나와야 한다."""
+    client_mock, _tables = mock_supabase_tables
+    audiobooks = client_mock.table("audiobooks")
+    audiobooks.select().eq().gte().order().limit().execute.return_value = MagicMock(data=[
+        {"id": "new", "user_id": "admin", "title": "금값 급등"},
+        {"id": "old", "user_id": "admin", "title": "  금값   급등 "},
+        {"id": "other", "user_id": "admin", "title": "중국 수출"},
+    ])
+
+    def fake_items(_supabase, _user_id, rows):
+        return [{"id": row["id"], "title": row["title"]} for row in rows]
+
+    with patch("routes.news.audiobook_items_with_urls", side_effect=fake_items):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get("/api/news")
+
+    ids = [item["id"] for item in response.json()["news"]]
+    # 최신순으로 오므로 더 최근인 "new"가 남는다.
+    assert ids == ["new", "other"]
