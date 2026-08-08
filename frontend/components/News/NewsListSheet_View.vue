@@ -45,6 +45,12 @@ function onBackdropClick(event: MouseEvent): void {
     if (event.target === event.currentTarget) newsLogic.closeList();
 }
 
+// 지금 듣고 있는 기사를 목록에서 알아볼 수 있어야 한다. queueIndex는
+// "전체 듣기"로 시작했든 기사 하나를 눌러 들었든 항상 채워진다.
+function isPlaying(index: number): boolean {
+    return index === state.queueIndex.value;
+}
+
 function formatRelativeTime(iso: string): string {
     const diffMin = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
     if (diffMin < 1) return "방금 전";
@@ -84,14 +90,18 @@ function formatRelativeTime(iso: string): string {
                 </div>
                 <div v-else class="audio-list">
                     <button
-                        v-for="item in state.items.value"
+                        v-for="(item, index) in state.items.value"
                         :key="item.id"
                         type="button"
                         class="audio-item audio-item-news"
+                        :class="{ 'is-playing': isPlaying(index) }"
+                        :aria-current="isPlaying(index) ? 'true' : undefined"
                         @click="newsLogic.openNewsItem(item)"
                     >
                         <div class="audio-item-front">
                             <div class="audio-title-group">
+                                <!-- ⚠️ lucide가 <i>를 <svg>로 갈아치우므로 토글하지 않는다.
+                                     아이콘은 그대로 두고 표시를 덧붙인다. -->
                                 <i data-lucide="play-circle"></i>
                                 <div class="audio-title-col">
                                     <span class="audio-title">{{ item.title }}</span>
@@ -100,6 +110,9 @@ function formatRelativeTime(iso: string): string {
                                         <template v-if="item.news_source">{{ item.news_source }} · </template>{{ formatRelativeTime(item.created_at) }}
                                     </span>
                                 </div>
+                                <span v-if="isPlaying(index)" class="now-playing-bars" aria-hidden="true">
+                                    <span></span><span></span><span></span>
+                                </span>
                             </div>
                         </div>
                     </button>

@@ -23,6 +23,12 @@ function itemTitle(item: PlaylistItem): string {
     return isNewsItem(item) ? item.title : getAudiobookDisplayTitle(item.title);
 }
 
+// 목록에서 지금 듣고 있는 것이 어느 것인지 보이지 않아, 어디까지 왔는지
+// 알 수 없었다. 미니 플레이어 스와이프와 같은 위치를 본다.
+function isPlaying(index: number): boolean {
+    return index === playlist.currentIndex.value;
+}
+
 function onItemClick(item: PlaylistItem): void {
     playlist.open(item);
     props.logic.closePlaylistSheet();
@@ -50,16 +56,25 @@ function onBackdropClick(event: MouseEvent): void {
             <div class="playlist-list-scroll">
                 <div class="audio-list">
                     <button
-                        v-for="item in playlistItems"
+                        v-for="(item, index) in playlistItems"
                         :key="item.id"
                         type="button"
                         class="audio-item audio-item-news"
+                        :class="{ 'is-playing': isPlaying(index) }"
+                        :aria-current="isPlaying(index) ? 'true' : undefined"
                         @click="onItemClick(item)"
                     >
                         <div class="audio-item-front">
                             <div class="audio-title-group">
+                                <!-- ⚠️ lucide가 <i>를 <svg>로 갈아치우므로 이 아이콘을
+                                     v-if/v-show로 토글하면 안 된다. Vue의 vnode가 사라진
+                                     <i>를 가리키게 돼 크래시가 난다(프로필 화면에서 겪었다).
+                                     아이콘은 그대로 두고 표시를 덧붙인다. -->
                                 <i data-lucide="play-circle"></i>
                                 <span class="audio-title">{{ itemTitle(item) }}</span>
+                                <span v-if="isPlaying(index)" class="now-playing-bars" aria-hidden="true">
+                                    <span></span><span></span><span></span>
+                                </span>
                             </div>
                         </div>
                     </button>

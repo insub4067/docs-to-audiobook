@@ -600,3 +600,54 @@
     height: 34px;
     border-radius: 17px;
 }
+
+/* ===== 지금 듣고 있는 항목 표시 ===== */
+/* 목록에서 어느 것을 듣고 있는지 보이지 않아 어디까지 왔는지 알 수 없었다.
+   목차의 "현재 장"(.index-item.is-current)과 같은 시각 언어를 쓴다 —
+   왼쪽에 얇은 강조선 + 옅은 배경. 같은 앱 안에서 "여기가 현재"라는 신호가
+   화면마다 다르면 매번 새로 배워야 한다. */
+.audio-item.is-playing .audio-item-front {
+    background-color: rgba(198, 154, 88, 0.14);
+    box-shadow: inset 3px 0 0 var(--primary-color);
+}
+
+.audio-item.is-playing .audio-title {
+    color: var(--primary-color);
+    font-weight: 700;
+}
+
+/* 정지 화면에서도 "재생 중"이 읽히도록 색만 쓰지 않고 움직이는 막대를 함께
+   둔다. 색은 색각 이상이나 강한 햇빛 아래에서 놓치기 쉽다. */
+.now-playing-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    margin-left: auto;
+}
+
+.now-playing-bars span {
+    flex: 1;
+    border-radius: 1px;
+    background-color: var(--primary-color);
+    animation: now-playing-bounce 0.9s ease-in-out infinite;
+}
+
+.now-playing-bars span:nth-child(1) { animation-delay: -0.6s; }
+.now-playing-bars span:nth-child(2) { animation-delay: -0.3s; }
+
+@keyframes now-playing-bounce {
+    0%, 100% { height: 30%; }
+    50% { height: 100%; }
+}
+
+/* 움직임을 줄이는 설정에서는 멈춘 막대로 남긴다 — 사라지면 "재생 중"을
+   알리는 유일한 비색상 신호가 없어진다. */
+@media (prefers-reduced-motion: reduce) {
+    .now-playing-bars span {
+        height: 65%;
+        animation: none;
+    }
+}
