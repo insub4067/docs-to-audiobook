@@ -91,6 +91,9 @@ export function useNewsLogic(state: NewsState, readerLogic: ReaderLogic): NewsLo
         readerLogic.openSharedReaderMode(item.title, sentences as never, item.audio_url, {
             onEnded: onQueueEnded,
             playlistKind: "news",
+            // 뉴스는 audiobooks 행이 없어 audiobookId가 없다. 목록 표시를
+            // 위해 기사 id를 따로 넘긴다.
+            playingId: item.id,
             openReaderUI: options.openReaderUI ?? true,
         });
         state.isListOpen.value = false;

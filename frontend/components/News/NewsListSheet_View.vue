@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import type { ReaderLogic } from "../../Reader/Reader_Logic.vue";
-import { useNewsState } from "./News_State.vue";
+import { useNewsState, type NewsItem } from "./News_State.vue";
 import { useNewsLogic } from "./News_Logic.vue";
 import { useSwipeToDismiss } from "../../utils/swipeToDismiss";
+import { nowPlayingId } from "../../services/nowPlaying";
 import ListRowPlaceholderView from "../Placeholder/ListRowPlaceholder_View.vue";
 
 const props = defineProps<{ logic: ReaderLogic }>();
@@ -45,10 +46,12 @@ function onBackdropClick(event: MouseEvent): void {
     if (event.target === event.currentTarget) newsLogic.closeList();
 }
 
-// 지금 듣고 있는 기사를 목록에서 알아볼 수 있어야 한다. queueIndex는
-// "전체 듣기"로 시작했든 기사 하나를 눌러 들었든 항상 채워진다.
-function isPlaying(index: number): boolean {
-    return index === state.queueIndex.value;
+// ⚠️ 재생 위치(queueIndex)가 아니라 "지금 재생 중인 id"로 판정한다.
+// queueIndex는 뉴스 큐 안에서의 자리라, 다른 문서를 재생해도 그대로 남는다.
+// 실제로 개인 오디오북을 듣는 중에 뉴스 첫 기사에 "재생 중"이 붙어 있었다.
+// 모든 목록이 같은 값 하나(nowPlayingId)를 본다.
+function isPlaying(item: NewsItem): boolean {
+    return nowPlayingId.value === item.id;
 }
 
 function formatRelativeTime(iso: string): string {
@@ -90,12 +93,12 @@ function formatRelativeTime(iso: string): string {
                 </div>
                 <div v-else class="audio-list">
                     <button
-                        v-for="(item, index) in state.items.value"
+                        v-for="item in state.items.value"
                         :key="item.id"
                         type="button"
                         class="audio-item audio-item-news"
-                        :class="{ 'is-playing': isPlaying(index) }"
-                        :aria-current="isPlaying(index) ? 'true' : undefined"
+                        :class="{ 'is-playing': isPlaying(item) }"
+                        :aria-current="isPlaying(item) ? 'true' : undefined"
                         @click="newsLogic.openNewsItem(item)"
                     >
                         <div class="audio-item-front">
@@ -110,7 +113,7 @@ function formatRelativeTime(iso: string): string {
                                         <template v-if="item.news_source">{{ item.news_source }} · </template>{{ formatRelativeTime(item.created_at) }}
                                     </span>
                                 </div>
-                                <span v-if="isPlaying(index)" class="now-playing-bars" aria-hidden="true">
+                                <span v-if="isPlaying(item)" class="now-playing-bars" aria-hidden="true">
                                     <span></span><span></span><span></span>
                                 </span>
                             </div>

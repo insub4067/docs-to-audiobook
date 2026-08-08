@@ -6,6 +6,7 @@ import NewsListSheetView from "../components/News/NewsListSheet_View.vue";
 import { useNewsState } from "../components/News/News_State.vue";
 import type { ReaderLogic } from "../Reader/Reader_Logic.vue";
 import type { NewsItem } from "../components/News/News_State.vue";
+import { nowPlayingId } from "../services/nowPlaying";
 
 // 목록에서 지금 듣고 있는 것이 어느 것인지 보이지 않아, 어디까지 왔는지
 // 알 수 없었다. 특히 "전체 듣기"로 열 개를 이어 들을 때 그렇다.
@@ -20,10 +21,14 @@ function newsItem(id: string, title: string): NewsItem {
 
 const ITEMS = [newsItem("1", "기사A"), newsItem("2", "기사B"), newsItem("3", "기사C")];
 
-function setup(queueIndex: number) {
+/** playingIndex는 "몇 번째 기사를 듣고 있나"를 읽기 쉽게 쓴 것이고,
+ *  실제 판정 기준은 id다 — 자리로 판정하면 다른 문서를 재생해도 표시가
+ *  남는다(실제로 그 버그가 있었다). */
+function setup(playingIndex: number) {
     const state = useNewsState();
     state.items.value = [...ITEMS];
-    state.queueIndex.value = queueIndex;
+    nowPlayingId.value = ITEMS[playingIndex]?.id ?? null;
+    state.queueIndex.value = playingIndex;
     state.isListOpen.value = true;
     // 로딩 자리표시자가 아니라 실제 목록을 그리게 한다.
     state.loaded.value = true;
@@ -70,13 +75,41 @@ describe("재생 중인 항목 표시", () => {
     });
 
     it("재생이 다음 기사로 넘어가면 표시도 따라간다", async () => {
-        const { state, wrapper } = setup(0);
+        const { wrapper } = setup(0);
 
-        state.queueIndex.value = 2;
+        nowPlayingId.value = ITEMS[2].id;
         await wrapper.vm.$nextTick();
 
         const rows = wrapper.findAll(".audio-item-news");
         expect(rows.map((r) => r.classes().includes("is-playing"))).toEqual([false, false, true]);
+    });
+
+    it("⚠️ 다른 문서를 재생하면 뉴스 표시가 사라진다", () => {
+        // 실제로 겪은 버그다. 뉴스 목록만 queueIndex(뉴스 큐 안의 자리)로
+        // 판정하고 있어서, 개인 오디오북을 듣는 중에도 마지막에 듣던 기사에
+        // "재생 중"이 그대로 남아 있었다. 판정 기준을 id 하나로 모았다.
+        const { wrapper } = setup(0);
+        expect(wrapper.findAll(".audio-item-news")[0].classes()).toContain("is-playing");
+
+        // 뉴스 큐 위치는 그대로 두고, 재생 중인 것만 다른 문서로 바꾼다.
+        nowPlayingId.value = "개인-오디오북-id";
+
+        return wrapper.vm.$nextTick().then(() => {
+            const rows = wrapper.findAll(".audio-item-news");
+            expect(rows.some((r) => r.classes().includes("is-playing"))).toBe(false);
+            wrapper.unmount();
+        });
+    });
+
+    it("아무것도 재생 중이 아니면 큐 위치가 남아 있어도 표시하지 않는다", async () => {
+        const { state, wrapper } = setup(1);
+        expect(state.queueIndex.value).toBe(1);
+
+        nowPlayingId.value = null;
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.findAll(".audio-item-news").some((r) => r.classes().includes("is-playing"))).toBe(false);
+        wrapper.unmount();
     });
 
     it("lucide 아이콘은 토글하지 않는다", () => {

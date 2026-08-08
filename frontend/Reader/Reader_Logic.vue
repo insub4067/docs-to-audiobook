@@ -25,6 +25,11 @@ export interface SharedReaderModeOptions {
     // 서버에 이어 듣기용으로 저장/복원할 수 있다 — 24시간짜리 임시 공유
     // 링크(shareId)에는 해당 없다.
     audiobookId?: string | null;
+    // 목록에서 "이 행이 지금 듣는 것"을 표시할 때 쓰는 id. 보통 audiobookId와
+    // 같지만, 뉴스는 audiobooks 행이 없어(audiobookId가 null) 기사 id를 따로
+    // 받는다. 이게 없으면 뉴스 목록만 다른 기준을 쓰게 되고, 실제로 그래서
+    // 다른 문서를 듣는 중에도 뉴스 항목에 "재생 중"이 남아 있었다.
+    playingId?: string | null;
     resumeSeconds?: number;
     // 재생목록 안에서 항목만 바꿀 때는 읽기 화면을 펼치지 않는다 —
     // 미니 플레이어에서 스와이프로 넘기거나, 듣던 기사가 끝나 다음으로
@@ -302,7 +307,10 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
     }
 
     function openSharedReaderMode(title: string, sharedSentences: ReaderSentence[], audioUrl: string, options: SharedReaderModeOptions = {}): void {
-        const { shareId = null, onEnded, playlistKind = null, audiobookId = null, resumeSeconds = 0, openReaderUI = true } = options;
+        const {
+            shareId = null, onEnded, playlistKind = null, audiobookId = null,
+            playingId = audiobookId, resumeSeconds = 0, openReaderUI = true,
+        } = options;
         const el = state.audioEl.value;
         if (!el) return;
         state.sharedPlaylistKind.value = playlistKind;
@@ -310,9 +318,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         sharedAudioUrl = audioUrl;
         sharedShareId = shareId;
         sharedAudiobookId = audiobookId;
-        // 라이브러리 작품도 서버 id가 있어 목록에서 같은 방식으로 표시한다.
-        // 뉴스는 audiobookId가 없는데, 뉴스 목록은 queueIndex로 따로 표시한다.
-        setNowPlaying(audiobookId);
+        setNowPlaying(playingId);
         state.currentAudioObject.value = null;
         sentences = sharedSentences;
         playbackStartTracked = false;

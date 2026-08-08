@@ -4,6 +4,7 @@ import type { ReaderState } from "../Reader/Reader_State.vue";
 import type { ReaderLogic } from "../Reader/Reader_Logic.vue";
 import type { AudioListState } from "../components/Library/AudioList_State.vue";
 import { getAudiobookDisplayTitle } from "../utils/format";
+import { nowPlayingId } from "../services/nowPlaying";
 import {
     usePlaylistNavigation, isNewsItem, type PlaylistItem,
 } from "../components/MiniPlayer/playlistNavigation";
@@ -23,10 +24,10 @@ function itemTitle(item: PlaylistItem): string {
     return isNewsItem(item) ? item.title : getAudiobookDisplayTitle(item.title);
 }
 
-// 목록에서 지금 듣고 있는 것이 어느 것인지 보이지 않아, 어디까지 왔는지
-// 알 수 없었다. 미니 플레이어 스와이프와 같은 위치를 본다.
-function isPlaying(index: number): boolean {
-    return index === playlist.currentIndex.value;
+// ⚠️ 목록 안의 자리가 아니라 "지금 재생 중인 id"로 판정한다. 자리로 보면
+// 목록이 바뀌거나 다른 문서를 재생했을 때 엉뚱한 행에 표시가 남는다.
+function isPlaying(item: PlaylistItem): boolean {
+    return nowPlayingId.value === item.id;
 }
 
 function onItemClick(item: PlaylistItem): void {
@@ -56,12 +57,12 @@ function onBackdropClick(event: MouseEvent): void {
             <div class="playlist-list-scroll">
                 <div class="audio-list">
                     <button
-                        v-for="(item, index) in playlistItems"
+                        v-for="item in playlistItems"
                         :key="item.id"
                         type="button"
                         class="audio-item audio-item-news"
-                        :class="{ 'is-playing': isPlaying(index) }"
-                        :aria-current="isPlaying(index) ? 'true' : undefined"
+                        :class="{ 'is-playing': isPlaying(item) }"
+                        :aria-current="isPlaying(item) ? 'true' : undefined"
                         @click="onItemClick(item)"
                     >
                         <div class="audio-item-front">
@@ -72,7 +73,7 @@ function onBackdropClick(event: MouseEvent): void {
                                      아이콘은 그대로 두고 표시를 덧붙인다. -->
                                 <i data-lucide="play-circle"></i>
                                 <span class="audio-title">{{ itemTitle(item) }}</span>
-                                <span v-if="isPlaying(index)" class="now-playing-bars" aria-hidden="true">
+                                <span v-if="isPlaying(item)" class="now-playing-bars" aria-hidden="true">
                                     <span></span><span></span><span></span>
                                 </span>
                             </div>
