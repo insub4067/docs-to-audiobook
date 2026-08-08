@@ -162,3 +162,70 @@ async def test_chunk_endpoint_rejects_other_users(tmp_path, monkeypatch):
 
     assert response.status_code == 403
     del jobs[job_id]
+
+
+def _processing_job(sentences: list[dict]) -> dict:
+    return {
+        "status": "processing", "user_id": "owner", "ready_chunks": 1,
+        "chunk_durations": [1500], "sentences": sentences,
+        "completed_chunks": 1, "total_chunks": 9, "audio_path": None,
+        "headings": [], "display_markdown": "", "error": None,
+    }
+
+
+SENTENCES = [
+    {"text": "첫 문장", "start": 0, "end": 900},
+    {"text": "둘째 문장", "start": 900, "end": 1800},
+    {"text": "셋째 문장", "start": 1800, "end": 2700},
+]
+
+
+@pytest.mark.asyncio
+async def test_status_returns_only_sentences_after_since():
+    """예전에는 2초마다 문장 배열 전체를 다시 보냈다. 긴 문서일수록 같은
+    데이터를 수백 번 나르므로, 받아 간 지점 뒤만 잘라 준다."""
+    job_id = "job-since"
+    jobs[job_id] = _processing_job(SENTENCES)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        first = await client.get(f"/api/job/{job_id}", headers=_auth_headers())
+        rest = await client.get(f"/api/job/{job_id}?since=2", headers=_auth_headers())
+        nothing_new = await client.get(f"/api/job/{job_id}?since=3", headers=_auth_headers())
+
+    # since가 없으면 처음부터 — 예전 클라이언트도 그대로 동작한다.
+    assert first.json()["sentences"] == SENTENCES
+    assert rest.json()["sentences"] == [SENTENCES[2]]
+    assert nothing_new.json()["sentences"] == []
+    del jobs[job_id]
+
+
+@pytest.mark.asyncio
+async def test_status_ignores_negative_since():
+    """음수를 그대로 슬라이스에 넘기면 뒤에서부터 잘려 엉뚱한 구간이 나간다."""
+    job_id = "job-since-negative"
+    jobs[job_id] = _processing_job(SENTENCES)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(f"/api/job/{job_id}?since=-2", headers=_auth_headers())
+
+    assert response.json()["sentences"] == SENTENCES
+    del jobs[job_id]
+
+
+@pytest.mark.asyncio
+async def test_completed_status_ignores_since(tmp_path, monkeypatch):
+    """⚠️ 완료 응답만은 전체를 보낸다. 합성이 끝나면 서버가 타이밍을 다시 매긴
+    배열로 통째로 갈아끼우므로(process_synthesis_task), 여기서 잘라 보내면
+    클라이언트가 합성 중에 받아 둔 예전 값을 그대로 들고 있게 된다."""
+    monkeypatch.setattr("routes.tts.JOB_AUDIO_DIR", str(tmp_path))
+    job_id = "job-since-completed"
+    jobs[job_id] = {
+        "status": "completed", "user_id": "owner", "sentences": SENTENCES,
+        "headings": [], "display_markdown": "", "audio_path": str(tmp_path / "a.mp3"),
+    }
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(f"/api/job/{job_id}?since=2", headers=_auth_headers())
+
+    assert response.json()["sentences"] == SENTENCES
+    del jobs[job_id]

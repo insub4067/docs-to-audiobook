@@ -163,3 +163,81 @@ describe("합성 중 점진 수신", () => {
         expect(server.chunkRequests).toEqual([0, 1, 2, 3, 4]);
     });
 });
+
+/** 문장 배열 전체를 2초마다 다시 보내던 것을 델타로 바꿨다. 클라이언트가
+ *  받아 둔 개수를 ?since=로 알리면 서버는 그 뒤만 잘라 준다.
+ *
+ *  이 목 서버는 진짜 서버처럼 since를 실제로 반영한다 — 위쪽 mockServer는
+ *  since를 무시하므로 이어붙이기가 틀려도 통과한다. */
+function deltaServer(allSentences: { text: string }[], readyAfter: number) {
+    const sinceValues: number[] = [];
+    let polls = 0;
+
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+        if (/\/chunk\/\d+$/.test(url)) return { ok: true, blob: async () => new Blob(["X"]) };
+        if (url.includes("/audio")) return { ok: true, blob: async () => new Blob(["WHOLE"]) };
+
+        const since = Number(new URL(url, "http://x").searchParams.get("since"));
+        sinceValues.push(since);
+        polls += 1;
+
+        // readyAfter번째 폴링까지는 문장이 하나씩 늘어나고, 그다음 완료된다.
+        if (polls <= readyAfter) {
+            return { ok: true, json: async () => ({
+                status: "processing", ready_chunks: 0, total_chunks: 1, completed_chunks: polls,
+                sentences: allSentences.slice(since, polls),
+            }) };
+        }
+        // 완료 응답은 최종본 전체다(서버가 타이밍을 다시 매겨 갈아끼운다).
+        return { ok: true, json: async () => ({
+            status: "completed", ready_chunks: 1, total_chunks: 1,
+            sentences: allSentences, headings: [], display_markdown: "", audio_url: "/api/job/j/audio",
+        }) };
+    }));
+
+    return { sinceValues: () => sinceValues };
+}
+
+describe("문장 델타 수신", () => {
+    const ALL = [{ text: "첫" }, { text: "둘" }, { text: "셋" }];
+
+    it("이미 받아 둔 문장 수를 since로 보낸다", async () => {
+        const server = deltaServer(ALL, 3);
+
+        await runToCompletion(streamJobAudio("j", HEADERS, {}));
+
+        // 0개 → 1개 → 2개 → 3개 순으로 누적된 개수를 알린다.
+        expect(server.sinceValues()).toEqual([0, 1, 2, 3]);
+    });
+
+    it("나눠 온 문장을 이어붙여 온전한 배열을 돌려준다", async () => {
+        deltaServer(ALL, 3);
+
+        const result = await runToCompletion(streamJobAudio("j", HEADERS, {})) as { sentences: { text: string }[] };
+
+        expect(result.sentences.map((s) => s.text)).toEqual(["첫", "둘", "셋"]);
+    });
+
+    it("⚠️ 완료 응답의 전체 문장을 이어붙이지 않고 갈아끼운다", async () => {
+        // 서버는 합성이 끝나면 타이밍을 다시 매긴 배열로 통째로 교체한다.
+        // 그걸 델타로 착각해 이어붙이면 문장이 두 배가 되고, 하이라이트가
+        // 문서 중간부터 전부 어긋난다.
+        deltaServer(ALL, 2);
+
+        const result = await runToCompletion(streamJobAudio("j", HEADERS, {})) as { sentences: { text: string }[] };
+
+        expect(result.sentences).toHaveLength(3);
+    });
+
+    it("재생 가능해진 시점에도 그때까지 받은 문장을 모두 넘긴다", async () => {
+        // 첫 청크를 트는 순간 그 구간의 하이라이트가 이미 맞아야 한다.
+        deltaServer(ALL, 2);
+        const handed: number[] = [];
+
+        await runToCompletion(
+            streamJobAudio("j", HEADERS, { onPlayable: (_blob, sentences) => handed.push(sentences.length) }),
+        );
+
+        expect(handed[handed.length - 1]).toBe(3);
+    });
+});

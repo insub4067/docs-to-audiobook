@@ -48,6 +48,7 @@ export async function streamJobAudio(
     handlers: ProgressiveHandlers = {},
 ): Promise<ProgressiveResult> {
     const parts: Blob[] = [];
+    let sentences: ReaderSentence[] = [];
 
     async function fetchReadyChunks(readyChunks: number): Promise<boolean> {
         let added = false;
@@ -66,7 +67,9 @@ export async function streamJobAudio(
     }
 
     for (;;) {
-        const response = await fetch(`/api/job/${jobId}`, { headers });
+        // 이미 받아 둔 문장 수를 알려 그 뒤로 늘어난 것만 받는다. 전체를
+        // 다시 받으면 긴 문서에서 같은 배열을 2초마다 수백 번 나른다.
+        const response = await fetch(`/api/job/${jobId}?since=${sentences.length}`, { headers });
         if (!response.ok) throw new Error("작업 상태 통신 실패");
         const job = await response.json();
 
@@ -75,10 +78,16 @@ export async function streamJobAudio(
             throw new Error("알 수 없는 작업 상태입니다.");
         }
 
+        // 합성 중에는 늘어난 만큼만 오므로 이어붙인다. 완료 응답만 최종본
+        // 전체다 — 서버가 끝날 때 타이밍을 다시 매겨 통째로 갈아끼우므로
+        // (backend process_synthesis_task), 여기에 이어붙이면 문장이 두 배가 된다.
+        const delta: ReaderSentence[] = job.sentences || [];
+        sentences = job.status === "completed" ? delta : sentences.concat(delta);
+
         handlers.onProgress?.(Number(job.completed_chunks) || 0, Number(job.total_chunks) || 0);
 
         const grew = await fetchReadyChunks(Number(job.ready_chunks) || 0);
-        if (grew) handlers.onPlayable?.(new Blob(parts, { type: "audio/mpeg" }), job.sentences || []);
+        if (grew) handlers.onPlayable?.(new Blob(parts, { type: "audio/mpeg" }), sentences);
 
         if (job.status === "completed") {
             // 청크를 다 받아 뒀으면 합본을 다시 받지 않는다. 두 결과물은
@@ -89,7 +98,7 @@ export async function streamJobAudio(
                 : await downloadWholeAudio(job.audio_url, headers);
             return {
                 blob,
-                sentences: job.sentences || [],
+                sentences,
                 headings: job.headings || [],
                 displayMarkdown: job.display_markdown || "",
             };

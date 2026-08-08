@@ -606,14 +606,23 @@ async def synthesize_text(
 @router.get("/api/job/{job_id}")
 async def get_job_status(
     job_id: str,
+    since: int = 0,
     authorization: str = Header(None),
     anonymous_session: str = Header(None, alias="X-Anonymous-Session")
 ):
+    """since는 클라이언트가 이미 받아 둔 문장 수다. 합성 중에는 그 뒤로 늘어난
+    것만 돌려준다 — 예전에는 2초마다 문장 배열 전체를 다시 보내서, 긴 문서일수록
+    같은 데이터를 수백 번 반복 전송했다."""
     job = require_job_owner(job_id, authorization, anonymous_session)
 
     if job["status"] == "completed":
         # 오디오는 별도 엔드포인트에서 파일로 스트리밍한다. 여기서는
         # 메타데이터만 주고 job은 남겨둔다(오디오를 받아가야 정리된다).
+        #
+        # 완료 응답만 문장 전체를 싣는다. 합성이 끝나면 타이밍을 다시 매긴
+        # annotated_sentences로 통째로 갈아끼우기 때문에(process_synthesis_task),
+        # 여기서 잘라 보내면 클라이언트가 합성 중에 받아 둔 예전 값을 그대로
+        # 들고 있게 된다. 한 번만 나가는 응답이라 전체를 보내도 낭비가 아니다.
         return JSONResponse(content={
             "status": "completed",
             "audio_url": f"/api/job/{job_id}/audio",
@@ -632,7 +641,9 @@ async def get_job_status(
         "total_chunks": job.get("total_chunks", 0),
         "ready_chunks": job.get("ready_chunks", 0),
         "chunk_durations": job.get("chunk_durations", []),
-        "sentences": job.get("sentences", []),
+        # 합성 중 문장은 앞에서부터 쌓이기만 한다(publish_ready_chunks). 그래서
+        # 받아 간 지점부터 잘라 보내도 클라이언트가 이어붙이면 원본과 같아진다.
+        "sentences": job.get("sentences", [])[max(since, 0):],
         "headings": job.get("headings", []),
         "display_markdown": job.get("display_markdown", ""),
     })
