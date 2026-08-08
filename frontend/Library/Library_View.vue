@@ -3,6 +3,7 @@ import { computed, onMounted, watch } from "vue";
 import type { ReaderLogic } from "../Reader/Reader_Logic.vue";
 import { useLibraryState, type LibraryItem, type LibrarySortKey } from "./Library_State.vue";
 import { useLibraryLogic } from "./Library_Logic.vue";
+import ListRowPlaceholderView from "../components/Placeholder/ListRowPlaceholder_View.vue";
 
 const props = defineProps<{ logic: ReaderLogic; hasMiniPlayer?: boolean; active?: boolean; readerOpen?: boolean }>();
 const state = useLibraryState();
@@ -137,7 +138,14 @@ watch(() => props.readerOpen, (open, wasOpen) => {
                 >{{ SORT_LABELS[key] }}</button>
             </div>
 
-            <div v-if="categories.length > 1" class="library-category-chips">
+            <!-- 칩도 목록보다 위에 있어서, 나중에 생기면 목록을 통째로 밀어낸다. -->
+            <div v-if="!state.loaded.value" class="library-category-chips" aria-hidden="true">
+                <span class="redacted redacted-chip" style="width: 52px"></span>
+                <span class="redacted redacted-chip" style="width: 78px"></span>
+                <span class="redacted redacted-chip" style="width: 66px"></span>
+            </div>
+
+            <div v-else-if="categories.length > 1" class="library-category-chips">
                 <button
                     type="button"
                     class="library-chip"
@@ -166,7 +174,17 @@ watch(() => props.readerOpen, (open, wasOpen) => {
                 </template>
             </div>
 
-            <div class="audio-list">
+            <!-- 작품 목록은 네트워크에서 온다. 자리를 안 잡아 두면 빈 화면이었다가
+                 목록이 통째로 나타나며 화면이 뛴다. 서점은 목록이 길어 몇 줄만
+                 깔아도 첫 화면이 채워진다. -->
+            <div v-if="!state.loaded.value" class="audio-list">
+                <ListRowPlaceholderView title-width="86%" />
+                <ListRowPlaceholderView title-width="70%" />
+                <ListRowPlaceholderView title-width="78%" />
+                <ListRowPlaceholderView title-width="64%" />
+            </div>
+
+            <div v-else class="audio-list">
                 <!-- "이어 듣기"를 안에 넣어야 해서 행 자체는 button이 아니다
                      — button 안에 button은 중첩할 수 없다. -->
                 <div

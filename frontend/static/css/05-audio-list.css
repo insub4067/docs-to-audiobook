@@ -606,7 +606,7 @@
 
    색은 --text-color를 아주 옅게 깔아 테마를 따라간다 — 고정 회색을 쓰면
    다크 테마에서 블록만 밝게 떠 보인다. */
-.news-placeholder {
+.list-row-placeholder {
     cursor: default;
     pointer-events: none;
 }
@@ -650,4 +650,11 @@
     .redacted {
         animation: none;
     }
+}
+
+/* 카테고리 칩 자리표시자. 칩은 목록보다 위에 있어서, 나중에 생기면
+   목록을 통째로 밀어낸다. */
+.redacted-chip {
+    height: 34px;
+    border-radius: 17px;
 }

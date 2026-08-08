@@ -88,7 +88,18 @@ function onChapterClick(entry: TocEntry): void {
                     </button>
                 </div>
 
-                <div v-if="toc.length > 0" class="library-detail-section">
+                <!-- 목차는 문장 데이터를 받아 와야 만들어진다. 자리를 안 잡아
+                     두면 상세를 연 뒤 아래쪽에 목차가 통째로 끼어들며 화면이 뛴다. -->
+                <div v-if="isLoadingToc" class="library-detail-section" aria-hidden="true">
+                    <h4>목차</h4>
+                    <div class="index-sheet-list">
+                        <span class="redacted redacted-toc" style="width: 72%"></span>
+                        <span class="redacted redacted-toc" style="width: 58%"></span>
+                        <span class="redacted redacted-toc" style="width: 66%"></span>
+                    </div>
+                </div>
+
+                <div v-else-if="toc.length > 0" class="library-detail-section">
                     <h4>목차</h4>
                     <div class="index-sheet-list">
                         <div

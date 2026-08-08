@@ -26,6 +26,12 @@ const authLogic = useAuthLogic();
 const isSettingsExpanded = ref(false);
 const isLogoutConfirmOpen = ref(false);
 
+// /api/auth/me 응답 전에는 store.user가 null이라 isLoggedIn도 false다.
+// 그동안 계정 카드가 통째로 없다가 나중에 맨 위에 끼어들면서 아래 설정
+// 카드를 밀어냈다. 토큰은 localStorage에 동기적으로 있으므로 "로그인한
+// 사용자일 것"임은 즉시 알 수 있다 — 그때는 자리만 잡아 둔다.
+const isVerifyingSession = computed(() => !authStore.isLoggedIn && authLogic.isLoggedIn());
+
 const profileName = computed(() => authStore.user?.full_name || authStore.user?.email || "사용자");
 const profileInitial = computed(() => profileName.value.trim().split(/\s+/)[0].slice(0, 2));
 const themeLabel = computed(() => APP_THEME_OPTIONS.find((o) => o.value === props.themeState.activeTheme.value)?.label ?? "");
@@ -48,7 +54,21 @@ function onLogoutBackdropClick(event: MouseEvent): void {
 
 <template>
     <main class="app-main profile-root" v-show="active" :class="{ 'has-mini-player': hasMiniPlayer }">
-        <div class="glass-card profile-section profile-account-card" v-if="authStore.isLoggedIn">
+        <div
+            v-if="isVerifyingSession"
+            class="glass-card profile-section profile-account-card"
+            aria-hidden="true"
+        >
+            <div class="profile-account-row">
+                <span class="redacted redacted-avatar"></span>
+                <div class="profile-account-info">
+                    <span class="redacted redacted-title" style="width: 40%"></span>
+                    <span class="redacted redacted-subtitle" style="width: 62%"></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-card profile-section profile-account-card" v-else-if="authStore.isLoggedIn">
             <div class="profile-account-row">
                 <span class="profile-avatar" aria-hidden="true">{{ profileInitial }}</span>
                 <div class="profile-account-info">

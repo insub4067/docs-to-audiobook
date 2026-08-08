@@ -939,3 +939,10 @@
         line-height: calc(var(--reader-line-height, 2.0) - 0.2);
     }
 }
+
+/* 목차를 만들기 전 자리표시자. .index-item과 같은 높이여야 목차가
+   도착해도 상세 화면이 밀리지 않는다. */
+.redacted-toc {
+    height: 1.1rem;
+    margin: 12px 0;
+}

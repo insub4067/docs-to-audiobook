@@ -4,7 +4,7 @@ import type { ReaderLogic } from "../../Reader/Reader_Logic.vue";
 import { useNewsState } from "./News_State.vue";
 import { useNewsLogic } from "./News_Logic.vue";
 import { useSwipeToDismiss } from "../../utils/swipeToDismiss";
-import NewsPlaceholderRowView from "./NewsPlaceholderRow_View.vue";
+import ListRowPlaceholderView from "../Placeholder/ListRowPlaceholder_View.vue";
 
 const props = defineProps<{ logic: ReaderLogic }>();
 const state = useNewsState();
@@ -78,9 +78,9 @@ function formatRelativeTime(iso: string): string {
                      대신 자리표시자를 보여 준다. 너비를 다르게 준 건 진짜
                      목록처럼 보이게 하려는 것이다. -->
                 <div v-if="!state.loaded.value" class="audio-list">
-                    <NewsPlaceholderRowView title-width="88%" />
-                    <NewsPlaceholderRowView title-width="72%" />
-                    <NewsPlaceholderRowView title-width="80%" />
+                    <ListRowPlaceholderView title-width="88%" />
+                    <ListRowPlaceholderView title-width="72%" />
+                    <ListRowPlaceholderView title-width="80%" />
                 </div>
                 <div v-else class="audio-list">
                     <button

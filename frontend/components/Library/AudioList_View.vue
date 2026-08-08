@@ -7,6 +7,7 @@ import type { AudiobookRecord } from "../../services/indexedDb";
 import type { MyFilesLogic } from "../../Files/MyFiles_Logic.vue";
 import AudioListItemView from "./AudioListItem_View.vue";
 import ActionSheetView from "../../Sheet/ActionSheet_View.vue";
+import ListRowPlaceholderView from "../Placeholder/ListRowPlaceholder_View.vue";
 
 const props = withDefaults(defineProps<{
     state: AudioListState;
@@ -43,10 +44,17 @@ function onListenEarly(item: GeneratingItem): void {
     (window as any).__openPartialReaderMode?.(item.title, item.playableSentences ?? [], url);
 }
 
+// ⚠️ 아직 못 읽었으면 "없다"고 하면 안 된다. 예전에는 IndexedDB를 읽는
+// 동안 "아직 생성된 책이 없습니다"가 잠깐 떴다가 목록이 들어차며 사라졌다.
 const isEmpty = computed(() =>
-    (!props.showGeneratingItems || (props.generatingItems.length === 0 && props.state.backgroundJobItems.value.length === 0))
+    props.state.loaded.value
+    && (!props.showGeneratingItems || (props.generatingItems.length === 0 && props.state.backgroundJobItems.value.length === 0))
     && displayedItems.value.length === 0
 );
+
+// 목록을 넘겨받는 쪽(즐겨찾기 등)은 자체 로딩이 없다 — 이미 읽어 둔 것을
+// 걸러서 주므로 자리표시자가 필요 없다.
+const showPlaceholders = computed(() => !props.state.loaded.value && props.items === undefined);
 
 onMounted(() => {
     if (props.autoLoad) props.logic.load();
@@ -76,7 +84,12 @@ onMounted(() => {
                 <span>{{ emptyHint }}</span>
             </div>
 
-            <div class="audio-list">
+            <div v-if="showPlaceholders" class="audio-list">
+                <ListRowPlaceholderView title-width="80%" />
+                <ListRowPlaceholderView title-width="66%" />
+            </div>
+
+            <div v-else class="audio-list">
                 <template v-if="showGeneratingItems">
                     <div v-for="item in generatingItems" :key="item.id" class="audio-item audio-item-generating">
                         <div class="audio-title-group">

@@ -3,7 +3,7 @@ import { computed, onMounted } from "vue";
 import type { ReaderLogic } from "../../Reader/Reader_Logic.vue";
 import { useNewsState } from "./News_State.vue";
 import { useNewsLogic } from "./News_Logic.vue";
-import NewsPlaceholderRowView from "./NewsPlaceholderRow_View.vue";
+import ListRowPlaceholderView from "../Placeholder/ListRowPlaceholder_View.vue";
 
 const props = defineProps<{ logic: ReaderLogic }>();
 const state = useNewsState();
@@ -45,7 +45,7 @@ onMounted(() => {
         </div>
         <div class="library-container">
             <div v-if="!state.loaded.value" class="audio-list">
-                <NewsPlaceholderRowView />
+                <ListRowPlaceholderView />
             </div>
             <div v-else class="audio-list">
                 <button type="button" class="audio-item audio-item-news" @click="newsLogic.openNewsItem(topItem)">

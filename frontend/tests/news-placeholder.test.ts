@@ -51,7 +51,7 @@ describe("경제 뉴스 로딩 자리표시자", () => {
         const wrapper = mount(TodayNewsView, { props: { logic: readerLogic } });
 
         expect(wrapper.find(".library-section").exists()).toBe(true);
-        expect(wrapper.find(".news-placeholder").exists()).toBe(true);
+        expect(wrapper.find(".list-row-placeholder").exists()).toBe(true);
         wrapper.unmount();
     });
 
@@ -62,7 +62,7 @@ describe("경제 뉴스 로딩 자리표시자", () => {
         pendingFetch();
 
         const wrapper = mount(TodayNewsView, { props: { logic: readerLogic } });
-        const placeholder = wrapper.find(".news-placeholder");
+        const placeholder = wrapper.find(".list-row-placeholder");
 
         expect(placeholder.find(".redacted-icon").exists()).toBe(true);
         expect(placeholder.find(".redacted-title").exists()).toBe(true);
@@ -75,7 +75,7 @@ describe("경제 뉴스 로딩 자리표시자", () => {
         pendingFetch();
 
         const wrapper = mount(TodayNewsView, { props: { logic: readerLogic } });
-        const placeholder = wrapper.find(".news-placeholder");
+        const placeholder = wrapper.find(".list-row-placeholder");
 
         // <button>이면 탭이 여기서 멈추고 스크린 리더도 읽는다.
         expect(placeholder.element.tagName).toBe("DIV");
@@ -92,7 +92,7 @@ describe("경제 뉴스 로딩 자리표시자", () => {
         await vi.waitFor(() => expect(state.loaded.value).toBe(true));
         await wrapper.vm.$nextTick();
 
-        expect(wrapper.find(".news-placeholder").exists()).toBe(false);
+        expect(wrapper.find(".list-row-placeholder").exists()).toBe(false);
         expect(wrapper.text()).toContain("기사 a");
         wrapper.unmount();
     });

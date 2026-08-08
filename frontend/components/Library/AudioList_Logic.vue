@@ -60,6 +60,8 @@ export function useAudioListLogic(state: AudioListState): AudioListLogic {
         } catch (error) {
             console.error("Library render error: ", error);
             showToast("보관함을 불러올 수 없습니다.", "error");
+        } finally {
+            state.loaded.value = true;
         }
     }
 
