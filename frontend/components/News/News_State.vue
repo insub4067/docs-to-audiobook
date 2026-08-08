@@ -26,6 +26,10 @@ export interface NewsState {
     // "전체 듣기"로 시작한 연속 재생인가. 반복이 꺼져 있을 때 다음 기사로
     // 자동으로 넘어갈지를 가른다(개별 재생은 한 기사만 듣고 끝난다).
     isContinuous: Ref<boolean>;
+    // 다음에 재생할 기사를 미리 받아 둔 것. ⚠️ 모듈 전역이 아니라 여기 두는
+    // 이유는, 목록이 갈리면 함께 무효가 되는 값이기 때문이다. 전역에 두면
+    // 예전 목록의 기사가 새 목록에서 같은 자리인 척 재생될 수 있다.
+    prefetchedNext: Ref<{ id: string; item: NewsItem; sentences: unknown[] } | null>;
 }
 
 // 홈의 요약 카드와 전체 목록 시트가 같은 목록/재생 큐를 공유해야 해서
@@ -37,6 +41,7 @@ const state: NewsState = {
     isListOpen: ref(false),
     queueIndex: ref(-1),
     isContinuous: ref(false),
+    prefetchedNext: ref(null),
 };
 
 export function useNewsState(): NewsState {

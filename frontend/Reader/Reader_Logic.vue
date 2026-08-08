@@ -335,6 +335,11 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
             el.play().catch((error) => console.log("Autoplay blocked:", error));
             state.isPlaying.value = true;
         };
+        // ⚠️ 여기서도 한 번 더 부른다. onloadedmetadata는 메타데이터를 받은
+        // 뒤에야 도는데, 화면이 백그라운드면 그 사이에 재생 권한이 끊겨
+        // 자동재생으로 막힌다. load() 직후 같은 흐름에서 요청해 두면
+        // 브라우저가 그 요청을 이어지는 재생으로 취급한다(연속 재생이
+        // PWA를 벗어나면 멈추던 원인).
         el.onplay = () => { state.isPlaying.value = true; trackPlaybackStartOnce(); };
         el.onpause = () => { state.isPlaying.value = false; };
         el.ontimeupdate = () => {
@@ -371,6 +376,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         };
         el.src = audioUrl;
         el.load();
+        el.play().catch(() => { /* onloadedmetadata에서 다시 시도한다 */ });
 
         if (openReaderUI) {
             state.isOpen.value = true;

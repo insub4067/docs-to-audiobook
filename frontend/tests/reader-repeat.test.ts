@@ -59,6 +59,10 @@ describe("반복 모드가 실제 audio 엘리먼트에 연결된다", () => {
             onEnded: onQueueEnded,
             playlistKind: "news",
         });
+        // 열 때 이미 한 번 재생을 요청한다 — 백그라운드에서도 다음 곡이
+        // 이어지도록 load() 직후 같은 흐름에서 부른다. 여기서 확인하려는
+        // 건 ended '이후'의 재생이므로 그 한 번은 지우고 본다.
+        play.mockClear();
         el.onended?.(new Event("ended"));
 
         expect(onQueueEnded).toHaveBeenCalledWith("all");
@@ -100,6 +104,10 @@ describe("반복 모드가 실제 audio 엘리먼트에 연결된다", () => {
 
         controlsLogic.selectRepeatMode("off");
         readerLogic.openSharedReaderMode("작품", SENTENCES, "blob:fake", {});
+        // 열 때 이미 한 번 재생을 요청한다 — 백그라운드에서도 다음 곡이
+        // 이어지도록 load() 직후 같은 흐름에서 부른다. 여기서 확인하려는
+        // 건 ended '이후'의 재생이므로 그 한 번은 지우고 본다.
+        play.mockClear();
         el.onended?.(new Event("ended"));
 
         expect(play).not.toHaveBeenCalled();
