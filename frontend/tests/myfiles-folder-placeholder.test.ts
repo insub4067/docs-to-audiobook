@@ -12,10 +12,9 @@ import { useFolderBrowserLogic } from "../Files/FolderBrowser_Logic.vue";
 // 있어, 앱을 새로 켠 직후에도 밀리지 않는다.
 
 function setup() {
-    const state = useFolderBrowserState();
-    state.currentFolderId.value = null;
-    state.subfolders.value = [];
-    state.breadcrumb.value = [{ id: null, name: "서재" }];
+    // 호출마다 새 상태를 만드는 팩토리다(내 파일과 폴더 이동 시트가 각자
+    // 독립된 탐색 스택을 가져야 해서). 그래서 테스트 간 격리가 자동이다.
+    const state = useFolderBrowserState("서재");
     return { state, logic: useFolderBrowserLogic(state) };
 }
 
