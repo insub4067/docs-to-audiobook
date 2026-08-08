@@ -90,7 +90,8 @@ describe("프로필 계정 카드 자리표시자", () => {
                 controlsLogic: { openSheet: vi.fn() },
                 hasMiniPlayer: false,
             } as never,
-            global: { stubs: true },
+            // 자식 컴포넌트는 전부 스텁 — 이 화면 자체의 마크업만 본다.
+            shallow: true,
         });
     }
 
