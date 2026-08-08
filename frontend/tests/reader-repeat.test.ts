@@ -130,11 +130,12 @@ describe("일반 오디오북(open)에서도 반복이 연결된다", () => {
     }
 
     it("반복이 켜져 있으면 끝났을 때 처음부터 다시 재생한다", () => {
-        const { readerLogic, el, play } = setup();
+        const { readerLogic, el, play, controlsLogic } = setup();
 
-        // open()은 오디오북 레코드에 저장된 repeatMode를 적용한다.
-        readerLogic.open(localAudiobook("all") as never, { autoplay: false });
+        controlsLogic.selectRepeatMode("all");
+        readerLogic.open(localAudiobook("off") as never, { autoplay: false });
         el.currentTime = 42;
+        play.mockClear();
         el.onended?.(new Event("ended"));
 
         expect(el.currentTime).toBe(0);
@@ -142,11 +143,28 @@ describe("일반 오디오북(open)에서도 반복이 연결된다", () => {
     });
 
     it("반복이 꺼져 있으면 끝났을 때 그대로 멈춘다", () => {
-        const { readerLogic, el, play } = setup();
+        const { readerLogic, el, play, controlsLogic } = setup();
 
-        readerLogic.open(localAudiobook("off") as never, { autoplay: false });
+        controlsLogic.selectRepeatMode("off");
+        readerLogic.open(localAudiobook("all") as never, { autoplay: false });
+        play.mockClear();
         el.onended?.(new Event("ended"));
 
         expect(play).not.toHaveBeenCalled();
+    });
+
+    it("⚠️ 문서에 저장된 반복 모드는 무시하고 지금 설정을 쓴다", () => {
+        // 반복은 사용자의 재생 취향이지 문서의 속성이 아니다. 문서마다
+        // 되살리면 기본값을 바꿔도 예전에 듣던 문서를 열 때마다 그때 값으로
+        // 돌아가, 설정이 제멋대로 바뀌는 것처럼 보인다.
+        //
+        // 위 두 테스트가 이미 "저장된 값과 반대"로 열어서 이 성질을 쓰고
+        // 있지만, 규칙 자체를 직접 못 박아 둔다.
+        const { readerLogic, controlsState, controlsLogic } = setup();
+
+        controlsLogic.selectRepeatMode("chapter");
+        readerLogic.open(localAudiobook("one") as never, { autoplay: false });
+
+        expect(controlsState.repeatMode.value).toBe("chapter");
     });
 });

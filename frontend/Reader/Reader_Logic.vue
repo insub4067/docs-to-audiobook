@@ -217,7 +217,12 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         lastPositionSaveSecond = -1;
         playbackStartTracked = false;
         previousTimeSecond = 0;
-        readerControls.applyPlaybackSettings({ playbackSpeed: audio.playbackSpeed, repeatMode: audio.repeatMode });
+        // ⚠️ 반복 모드는 문서마다 되살리지 않는다. 재생 속도는 "이 문서는
+        // 빠르게 듣는다"가 말이 되지만, 반복은 사용자의 재생 취향이지 문서의
+        // 속성이 아니다. 되살리면 기본값을 바꿔도 예전에 듣던 문서를 열 때마다
+        // 그때 값으로 돌아가, 설정이 제멋대로 바뀌는 것처럼 보인다.
+        // 전역 값(localStorage)만 쓴다.
+        readerControls.applyPlaybackSettings({ playbackSpeed: audio.playbackSpeed });
         state.title.value = getAudiobookDisplayTitle(audio.title);
         state.isPlaying.value = false;
         state.showShareBtn.value = true;

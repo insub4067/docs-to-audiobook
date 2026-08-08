@@ -20,7 +20,10 @@ export interface ReaderControlsState {
 
 export function useReaderControlsState(): ReaderControlsState {
     return {
-        repeatMode: ref("off"),
+        // 기본값은 "전체 문서 반복"이다. 이 앱은 문서 하나를 끝까지 듣고
+        // 마는 것보다, 틀어 놓고 이어 듣는 쓰임이 많다(경제 뉴스 연속 듣기,
+        // 경전 정주행). 껐다 켤 때마다 다시 켜야 하는 쪽이 번거롭다.
+        repeatMode: ref("all"),
         stopAtChapterEnd: ref(false),
         playbackSpeed: ref(1.0),
         timerLabel: ref("사용 안 함"),
