@@ -50,6 +50,11 @@ function onSaveSharedClick(): void {
     props.logic.closeMoreSheet();
     props.logic.saveSharedAudiobook();
 }
+
+function onPlaylistClick(): void {
+    props.logic.closeMoreSheet();
+    props.logic.openPlaylistSheet();
+}
 </script>
 
 <template>
@@ -82,6 +87,15 @@ function onSaveSharedClick(): void {
             <button v-if="state.showSaveSharedBtn.value" class="action-sheet-btn" type="button" @click="onSaveSharedClick">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                 내 오디오북에 저장
+            </button>
+            <button
+                v-if="state.sharedPlaylistKind.value === 'news' || !!state.currentAudioObject.value?.folderId"
+                class="action-sheet-btn"
+                type="button"
+                @click="onPlaylistClick"
+            >
+                <i data-lucide="list-music"></i>
+                재생목록
             </button>
             <button class="action-sheet-btn" type="button" @click="onSettingsClick">
                 <i data-lucide="settings-2"></i>

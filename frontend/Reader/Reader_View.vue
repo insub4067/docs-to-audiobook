@@ -27,12 +27,6 @@ const props = defineProps<{
     themeLogic: ThemeLogic;
 }>();
 
-// 폴더에 담겨 있거나 경제 뉴스로 열렸을 때만 "같이 묶인 다른 항목"이
-// 있을 수 있어, 그때만 제목을 눌러 재생목록을 고를 수 있게 한다.
-const hasPlaylist = computed(() =>
-    props.state.sharedPlaylistKind.value === "news" || !!props.state.currentAudioObject.value?.folderId
-);
-
 // 긴 제목은 한 줄 말줄임이라 화면에서 끝을 알 수 없다. 눌러서 전체를
 // 보여준다 — 모바일에는 hover 툴팁이 없어 title 속성만으로는 부족하다.
 const isTitleExpanded = ref(false);
@@ -115,7 +109,7 @@ useSwipeToDismiss(props.state.containerEl, () => props.logic.closeReader(), head
 <template>
     <div class="reader-overlay" :class="{ show: state.isOpen.value }" role="dialog" aria-modal="true" aria-label="오디오북 듣기">
         <div class="reader-container" :ref="setContainerEl">
-            <header class="reader-header" ref="header">
+            <header class="reader-header" :class="{ scrolled: state.isHeaderScrolled.value }" ref="header">
                 <button class="btn-reader-close" aria-label="오디오북 듣기 닫기" type="button" @click="logic.closeReader">
                     <i data-lucide="chevron-left"></i>
                 </button>
@@ -125,16 +119,6 @@ useSwipeToDismiss(props.state.containerEl, () => props.logic.closeReader(), head
                     @click="onTitleClick"
                 >{{ state.title.value }}</h3>
                 <div class="reader-header-actions">
-                    <button
-                        v-if="hasPlaylist"
-                        type="button"
-                        class="btn-reader-close"
-                        :class="{ 'is-active': state.isPlaylistSheetOpen.value }"
-                        aria-label="재생목록"
-                        @click="logic.openPlaylistSheet"
-                    >
-                        <i data-lucide="list-music"></i>
-                    </button>
                     <button class="btn-reader-close" aria-label="더보기" type="button" @click="logic.openMoreSheet">
                         <i data-lucide="more-horizontal"></i>
                     </button>

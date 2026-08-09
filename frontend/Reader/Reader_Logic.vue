@@ -194,8 +194,9 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
     // .reader-content의 @scroll에 연결한다. 활성 문장이 보이는 영역을
     // 벗어나면 "현재 위치로" 버튼을 띄운다.
     function onReaderContentScroll(): void {
-        if (Date.now() < suppressScrollAwayUntil) return;
         const content = state.contentEl.value;
+        if (content) state.isHeaderScrolled.value = content.scrollTop > 8;
+        if (Date.now() < suppressScrollAwayUntil) return;
         if (!content || state.activeIndex.value < 0) return;
         const activeSpan = document.getElementById(`sent-${state.activeIndex.value}`);
         if (!activeSpan) return;

@@ -293,7 +293,13 @@
     background-color: var(--reader-surface);
 }
 
-:root[data-app-theme] .reader-header,
+:root[data-app-theme] .reader-header {
+    background-color: var(--reader-bg);
+}
+:root[data-app-theme] .reader-header.scrolled {
+    border-color: var(--reader-border);
+    background-color: var(--reader-surface);
+}
 :root[data-app-theme] .reader-controls {
     border-color: var(--reader-border);
     background-color: var(--reader-surface);
@@ -310,7 +316,6 @@
 
 :root[data-app-theme] .reader-sentence.highlight {
     background-color: var(--reader-highlight-bg);
-    box-shadow: inset 3px 0 0 var(--reader-accent);
 }
 
 /* 상단 안전영역 고정 블러 스트립. 헤더가 접혀도 본문이 다이나믹
@@ -336,15 +341,18 @@
     left: 0;
     right: 0;
     z-index: 10;
-    /* 우측 칸은 버튼이 2개(재생목록·더보기)라 좌측(닫기 1개)보다 넓다 —
-       제목이 수학적으로 정확히 중앙은 아니지만 실사용 폭 차이는
-       미미하고, 대신 좌우 칸 너비를 고정해 텍스트 길이에 따라
-       칸 자체가 밀리는 것만 막는다. */
     display: grid;
     grid-template-columns: 44px 1fr auto;
     align-items: center;
     padding: calc(16px + env(safe-area-inset-top)) 20px 16px;
-    border-bottom: 1px solid var(--reader-border);
+    border-bottom: 1px solid transparent;
+    background-color: var(--reader-bg);
+    transition: border-color 0.25s ease, background-color 0.25s ease,
+                backdrop-filter 0.25s ease;
+}
+
+.reader-header.scrolled {
+    border-bottom-color: var(--reader-border);
     background-color: var(--reader-surface);
     backdrop-filter: blur(24px) saturate(160%);
     -webkit-backdrop-filter: blur(24px) saturate(160%);
@@ -687,7 +695,6 @@
 .reader-sentence.highlight {
     background-color: var(--reader-highlight-bg);
     border-radius: 5px;
-    box-shadow: inset 3px 0 0 var(--reader-accent);
     text-shadow: 0 0 0.02em currentColor;
 }
 

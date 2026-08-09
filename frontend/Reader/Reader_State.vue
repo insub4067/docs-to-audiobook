@@ -13,6 +13,7 @@ export interface ReaderState {
     isScrolledAway: Ref<boolean>;
     /** 벗어난 활성 문장이 화면 아래쪽에 있는가. "현재 위치로" 화살표 방향이 이 값에서 나온다. */
     isCurrentBelow: Ref<boolean>;
+    isHeaderScrolled: Ref<boolean>;
     currentTimeLabel: Ref<string>;
     durationLabel: Ref<string>;
     /** 총 재생시간(초). 마지막 장의 길이를 계산하려면 숫자가 필요하다. */
@@ -43,6 +44,7 @@ export function useReaderState(): ReaderState {
         activeIndex: ref(-1),
         isScrolledAway: ref(false),
         isCurrentBelow: ref(false),
+        isHeaderScrolled: ref(false),
         currentTimeLabel: ref("00:00"),
         durationLabel: ref("00:00"),
         durationSeconds: ref(0),
