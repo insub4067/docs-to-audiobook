@@ -7,7 +7,6 @@ import os
 import asyncio
 import time
 import uuid
-import json
 import logging
 import secrets
 import shutil
@@ -19,7 +18,7 @@ from starlette.background import BackgroundTask
 from state import (
     BASE_DIR, JOB_AUDIO_DIR, jobs, text_storage, MAX_SYNTH_CHARS,
     DOCUMENT_PART_CONCURRENCY, background_synthesis_lock, _has_enough_disk_for_synthesis,
-    _supabase_or_503, _object_paths, AUDIOBOOK_BUCKET, resolve_job_owner, require_job_owner,
+    _supabase_or_503, upload_audiobook_objects, resolve_job_owner, require_job_owner,
     enforce_rate_limit, _validate_folder_ownership,
 )
 from text_processing import (
@@ -430,21 +429,11 @@ def _store_background_audiobook(user_id: str, title: str, job: dict, folder_id: 
     """
     supabase = _supabase_or_503()
     audiobook_id = str(uuid.uuid4())
-    audio_path, sentences_path = _object_paths(user_id, audiobook_id)
-    storage = supabase.storage.from_(AUDIOBOOK_BUCKET)
 
     with open(job["audio_path"], "rb") as audio_file:
-        storage.upload(audio_path, audio_file, {"content-type": "audio/mpeg"})
-    try:
-        storage.upload(
-            sentences_path,
-            json.dumps(job["sentences"], ensure_ascii=False).encode("utf-8"),
-            {"content-type": "application/json"},
+        audio_path = upload_audiobook_objects(
+            supabase, user_id, audiobook_id, audio_file, job["sentences"]
         )
-    except Exception:
-        # 문장 데이터 업로드가 실패하면 방금 올린 mp3도 고아가 되므로 함께 지운다.
-        storage.remove([audio_path])
-        raise
 
     if folder_id:
         # 작업을 큐에 올릴 때는 폴더 소유권을 확인했지만, 몇 시간짜리

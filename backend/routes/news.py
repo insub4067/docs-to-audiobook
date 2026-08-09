@@ -12,7 +12,10 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException
 
-from state import _supabase_or_503, require_admin_user, AUDIOBOOK_BUCKET, _object_paths
+from state import (
+    _supabase_or_503, require_admin_user, AUDIOBOOK_BUCKET, _object_paths,
+    upload_audiobook_objects,
+)
 from routes.audiobooks import audiobook_items_with_urls
 from routes.content_jobs import queue_jobs, run_jobs, progress_callback_for
 from routes.tts import synthesize_document
@@ -99,18 +102,7 @@ async def store_news_item(supabase, admin_user_id: str, item: dict, job_id: str)
         raise RuntimeError("음성 합성 결과가 비어 있습니다.")
 
     audiobook_id = str(uuid.uuid4())
-    audio_path, sentences_path = _object_paths(admin_user_id, audiobook_id)
-    storage = supabase.storage.from_(AUDIOBOOK_BUCKET)
-    storage.upload(audio_path, audio_bytes, {"content-type": "audio/mpeg"})
-    try:
-        storage.upload(
-            sentences_path,
-            json.dumps(sentences, ensure_ascii=False).encode("utf-8"),
-            {"content-type": "application/json"},
-        )
-    except Exception:
-        storage.remove([audio_path])
-        raise
+    audio_path = upload_audiobook_objects(supabase, admin_user_id, audiobook_id, audio_bytes, sentences)
 
     # 목록 헤더에 "총 N개 · 약 M분"을 보여주려고 미리 계산해 둔다 — library.py와
     # 동일한 패턴 (매번 sentences 파일을 내려받으면 목록 화면이 느려진다).

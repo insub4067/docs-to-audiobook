@@ -5,6 +5,7 @@
 객체를 공유한다(각자 새로 만들면 안 된다).
 """
 import os
+import json
 import time
 import shutil
 import asyncio
@@ -214,6 +215,35 @@ def _object_paths(user_id: str, audiobook_id: str):
     컬럼이 없어 스키마 변경 없이 버킷에 함께 보관한다."""
     base = f"{user_id}/{audiobook_id}"
     return f"{base}.mp3", f"{base}.sentences.json"
+
+
+def upload_audiobook_objects(supabase, user_id: str, audiobook_id: str, audio, sentences: list) -> str:
+    """오디오와 문장 JSON을 한 쌍으로 올린다. 반환값은 오디오의 storage 경로.
+
+    이 함수가 지키는 불변식은 **둘은 항상 함께 존재한다**는 것이다. 문장
+    업로드가 실패했는데 mp3만 남으면 리더가 하이라이트 없이 열리는 반쪽짜리
+    오디오북이 되므로, 실패하면 올린 오디오를 되돌린다.
+
+    audio는 bytes이거나 열린 파일 객체다 — 백그라운드 합성은 결과가 디스크에
+    있어 파일을 그대로 넘기고, 뉴스·라이브러리는 메모리에 있다.
+
+    (news.py·library.py·tts.py 세 곳에 같은 코드가 있었다. 셋 다 이 불변식을
+    각자 지키고 있었고, 한 곳만 고치면 조용히 어긋나는 자리였다.)
+    """
+    audio_path, sentences_path = _object_paths(user_id, audiobook_id)
+    storage = supabase.storage.from_(AUDIOBOOK_BUCKET)
+
+    storage.upload(audio_path, audio, {"content-type": "audio/mpeg"})
+    try:
+        storage.upload(
+            sentences_path,
+            json.dumps(sentences, ensure_ascii=False).encode("utf-8"),
+            {"content-type": "application/json"},
+        )
+    except Exception:
+        storage.remove([audio_path])
+        raise
+    return audio_path
 
 def _validate_folder_ownership(supabase, user_id: str, folder_id: str) -> None:
     """folder_id가 이 사용자 소유인지 확인한다. 아니면 404.

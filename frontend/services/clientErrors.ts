@@ -8,6 +8,8 @@
 // 그래서 console.error는 그대로 두고(디버깅에는 여전히 필요하다) 서버에도
 // 같은 내용을 보낸다. 관리자 지표 화면의 "조용한 실패"에서 볼 수 있다.
 
+import { readAuthToken } from "./authToken";
+
 /** 서버 CLIENT_ERROR_LABELS와 짝이 맞아야 한다. 없는 값은 400으로 거절된다. */
 export type ClientErrorScope =
     | "playback_save"
@@ -37,7 +39,7 @@ export function reportClientError(scope: ClientErrorScope, error: unknown): void
     if (previous !== undefined && now - previous < THROTTLE_MS) return;
     lastSentAt.set(scope, now);
 
-    const token = localStorage.getItem("authToken");
+    const token = readAuthToken();
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (token) headers.Authorization = `Bearer ${token}`;
 
