@@ -12,6 +12,8 @@
 // 취소는 기존 AbortController를 그대로 받는다. 호출부의 cancelUpload와
 // isAbortError를 손대지 않으려고 DOMException("AbortError")로 맞춰 거절한다.
 
+export interface UploadError extends Error { code?: string; }
+
 /** percent는 0~100, 전송이 끝나 서버 처리로 넘어가면 null. */
 export type UploadProgressHandler = (percent: number | null) => void;
 
@@ -45,7 +47,7 @@ export function postFormWithProgress(
         xhr.upload.onload = () => onProgress(null);
 
         xhr.onload = () => {
-            let body: { detail?: string } | null = null;
+            let body: { detail?: string; code?: string } | null = null;
             try {
                 body = JSON.parse(xhr.responseText);
             } catch {
@@ -55,7 +57,9 @@ export function postFormWithProgress(
                 resolve(body);
                 return;
             }
-            reject(new Error(body?.detail || "텍스트 추출 실패"));
+            const err = new Error(body?.detail || "텍스트 추출 실패");
+            if (body?.code) (err as UploadError).code = body.code;
+            reject(err);
         };
         xhr.onerror = () => reject(new Error("네트워크가 끊겨 업로드하지 못했습니다."));
         xhr.ontimeout = () => reject(new Error("업로드가 시간 안에 끝나지 않았습니다."));

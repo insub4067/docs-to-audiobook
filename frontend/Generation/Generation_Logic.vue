@@ -10,7 +10,7 @@ import type { GenerationState, GeneratingItem } from "./Generation_State.vue";
 import type { VoiceLogic } from "../Voices/Voice_Logic.vue";
 import { pickGoogleDriveFile, preloadGoogleDrivePicker } from "../Auth/GoogleDrivePicker";
 import { streamJobAudio } from "../services/progressiveAudio";
-import { postFormWithProgress } from "../services/uploadProgress";
+import { postFormWithProgress, type UploadError } from "../services/uploadProgress";
 
 export interface GenerationArguments {
     textId: string;
@@ -202,6 +202,8 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
         } catch (error) {
             if (isAbortError(error)) {
                 showToast("업로드를 취소했어요", "info");
+            } else if ((error as UploadError).code === "pdf_ocr_required") {
+                showToast("이 PDF는 고성능 처리가 필요합니다. Plus 요금제에서 사용할 수 있습니다.", "error");
             } else {
                 reportClientError("generation", error);
                 console.error(error);

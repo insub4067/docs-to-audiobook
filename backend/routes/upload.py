@@ -4,6 +4,7 @@ import uuid
 import time
 import asyncio
 from fastapi import APIRouter, Request, UploadFile, File, Header, HTTPException
+from fastapi.responses import JSONResponse
 
 from state import (
     UPLOAD_DIR, upload_limit_for, synth_limit_for, MAX_UPLOAD_BYTES,
@@ -63,6 +64,11 @@ async def upload_file(request: Request, file: UploadFile = File(...), authorizat
         if fallback_text is None:
             if os.path.exists(temp_path):
                 os.remove(temp_path)
+            if is_pdf and not is_admin:
+                return JSONResponse(status_code=400, content={
+                    "detail": "이 PDF는 일반 방식으로 읽을 수 없습니다.",
+                    "code": "pdf_ocr_required",
+                })
             raise original_error
         text = fallback_text
     except Exception as e:
@@ -76,6 +82,11 @@ async def upload_file(request: Request, file: UploadFile = File(...), authorizat
             fallback_text = await _pdf_ocr_fallback_text(temp_path, is_admin, is_pdf)
             if fallback_text is not None:
                 text = fallback_text
+            elif is_pdf and not is_admin:
+                return JSONResponse(status_code=400, content={
+                    "detail": "이 PDF는 일반 방식으로 읽을 수 없습니다.",
+                    "code": "pdf_ocr_required",
+                })
             else:
                 raise HTTPException(status_code=400, detail="추출된 텍스트가 없습니다. 빈 파일이거나 읽을 수 없는 문서입니다.")
 
