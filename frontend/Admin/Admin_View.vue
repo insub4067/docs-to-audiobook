@@ -138,6 +138,13 @@ onUnmounted(() => {
                         <strong data-metric="client_errors_7d">{{ formatMetric('client_errors_7d', metrics.client_errors_7d) }}</strong>
                         <span>최근 7일 · 사용자에게 안 보인 오류</span>
                     </a>
+                    <!-- 요금제를 정할 때 보는 값. 지금 두 음성은 모두 edge_tts라
+                         비용이 0이고, Google 음성을 붙이면 여기서 올라간다. -->
+                    <a class="metric-card" href="/admin/metrics/synthesis_characters_30d">
+                        <p>사용자당 TTS 비용</p>
+                        <strong data-metric="tts_cost_per_active_user_usd">{{ formatMetric('tts_cost_per_active_user_usd', metrics.tts_cost_per_active_user_usd) }}</strong>
+                        <span><b>{{ formatMetric('synthesis_characters_30d', metrics.synthesis_characters_30d) }}</b>자 합성 · 최근 30일</span>
+                    </a>
                 </div>
             </section>
 

@@ -54,6 +54,14 @@ def load_admin_metrics():
     except Exception:
         client_errors = []
 
+    # 가격을 정하려면 "사용자 한 명이 얼마를 쓰는가"를 알아야 한다. 이 표가
+    # 비어 있으면 요금제는 감으로 정하는 수밖에 없다.
+    try:
+        usage = supabase.table("synthesis_usage").select("user_id,provider,characters,audio_seconds,succeeded,created_at") \
+            .gte("created_at", thirty_days_ago.isoformat()).execute().data or []
+    except Exception:
+        usage = []
+
     dated_events = [(event, _parse_event_time(event.get("created_at"))) for event in events]
     recent_events = [(event, event_time) for event, event_time in dated_events if event_time]
     weekly_active_users = {event["user_id"] for event, event_time in recent_events if event_time >= week_ago}
@@ -103,6 +111,29 @@ def load_admin_metrics():
         if event["event_name"] == "playback_started":
             playback_counts[user_id] = playback_counts.get(user_id, 0) + 1
 
+    # 문자 수만 쌓아 두고 금액은 여기서 곱한다. 단가는 바뀌므로 파생값을
+    # DB에 굳히지 않는다. edge_tts는 비공식 무료 엔드포인트라 0이고, 지금
+    # 카탈로그의 두 음성은 모두 edge_tts다 — 즉 현재 TTS 한계비용은 0이다.
+    # google 단가는 Cloud TTS 요금표를 보고 갱신할 것(2026-08 기준 추정치).
+    usd_per_million_chars = {"edge_tts": 0.0, "google": 16.0}
+    usage_by_user = {}
+    total_characters = 0
+    estimated_usd = 0.0
+    failed_characters = 0
+    for row in usage:
+        characters = int(row.get("characters") or 0)
+        rate = usd_per_million_chars.get(row.get("provider"), 0.0)
+        total_characters += characters
+        estimated_usd += characters / 1_000_000 * rate
+        if not row.get("succeeded", True):
+            failed_characters += characters
+        user_id = row.get("user_id")
+        if user_id:
+            bucket = usage_by_user.setdefault(user_id, {"characters": 0, "audio_seconds": 0.0, "runs": 0})
+            bucket["characters"] += characters
+            bucket["audio_seconds"] += float(row.get("audio_seconds") or 0)
+            bucket["runs"] += 1
+
     audiobook_counts = {}
     for audiobook in audiobooks:
         user_id = audiobook.get("user_id")
@@ -135,6 +166,13 @@ def load_admin_metrics():
             audiobook_counts,
             {user_id: f"오디오북 {count}권" for user_id, count in audiobook_counts.items()},
         ),
+        "synthesis_characters_30d": user_list(
+            usage_by_user,
+            {
+                user_id: f"{bucket['characters']:,}자 · 오디오 {round(bucket['audio_seconds'] / 60):,}분 · {bucket['runs']}회"
+                for user_id, bucket in usage_by_user.items()
+            },
+        ),
         # 이 목록만 사람이 아니라 사건이다. 상세 화면의 세 칸(name/email/meta)에
         # 각각 범위·발생자·내용을 싣는다 — 칸 하나를 위해 화면을 새로 만들 만큼
         # 자주 볼 지표가 아니다.
@@ -162,6 +200,13 @@ def load_admin_metrics():
         "week_one_retention_rate": round(len(returning_users) / len(week_one_cohort) * 100) if week_one_cohort else None,
         "retention_cohort_size": len(week_one_cohort),
         "client_errors_7d": len(client_errors),
+        "synthesis_characters_30d": total_characters,
+        "synthesis_failed_characters_30d": failed_characters,
+        "synthesis_estimated_usd_30d": round(estimated_usd, 2),
+        # 요금제를 정할 때 보는 값. 활성 사용자 한 명이 30일간 만드는 TTS 비용이다.
+        "tts_cost_per_active_user_usd": (
+            round(estimated_usd / len(weekly_active_users), 4) if weekly_active_users else None
+        ),
         "metric_details": metric_details,
     }
 

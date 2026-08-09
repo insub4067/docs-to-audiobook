@@ -37,6 +37,9 @@ export function useAdminLogic(
     function formatMetric(name: AdminMetricName, value: number | null | undefined): string {
         if (value === null || value === undefined) return "—";
         if (name.endsWith("_rate")) return `${value}%`;
+        // 사용자당 비용은 센트 단위가 의미를 가진다. 천 단위로 반올림하면
+        // "$0"으로 보여 비용이 없는 것처럼 읽힌다.
+        if (name.endsWith("_usd")) return `$${Number(value).toFixed(2)}`;
         return Number(value).toLocaleString("ko-KR");
     }
 

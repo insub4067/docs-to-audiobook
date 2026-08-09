@@ -340,7 +340,35 @@ async def synthesize_document_to_file(
     return annotated_sentences, heading_index, display_markdown
 
 
+def _record_synthesis_usage(job_id: str, raw_text: str, voice: str, elapsed: float, succeeded: bool) -> None:
+    """사용자 한 명이 실제로 얼마의 TTS 비용을 만드는지 알기 위한 원자료.
+
+    추정 단가가 아니라 원단위(문자 수)만 남긴다 — 단가는 바뀌고 provider마다
+    다르므로, 계산은 조회 시점에 한다.
+
+    실패한 합성도 남긴다. 문자는 이미 소모됐으므로 빼고 세면 실비용을
+    과소평가한다(특히 Edge TTS는 호스트에 따라 간헐적으로 실패한다).
+
+    기록 실패가 합성을 망치면 안 된다 — 지표는 부수적이고 오디오가 본체다.
+    """
+    job = jobs.get(job_id, {})
+    audio_ms = sum(job.get("chunk_durations", []))
+    try:
+        _supabase_or_503().table("synthesis_usage").insert({
+            "user_id": job.get("user_id"),
+            "provider": provider_for_voice(voice),
+            "voice": voice,
+            "characters": len(raw_text),
+            "audio_seconds": round(audio_ms / 1000, 2) if audio_ms else None,
+            "elapsed_seconds": round(elapsed, 2),
+            "succeeded": succeeded,
+        }).execute()
+    except Exception as e:
+        print(f"[synthesis-usage] 기록 실패: {e}", flush=True)
+
+
 async def process_synthesis_task(job_id: str, raw_text: str, voice: str, rate: str, pitch: str):
+    started_at = time.monotonic()
     try:
         def update_progress(completed_chunks: int, total_chunks: int):
             jobs[job_id]["completed_chunks"] = completed_chunks
@@ -372,6 +400,7 @@ async def process_synthesis_task(job_id: str, raw_text: str, voice: str, rate: s
         if not os.path.exists(audio_path) or os.path.getsize(audio_path) == 0:
             jobs[job_id]["status"] = "error"
             jobs[job_id]["error"] = "음성 합성 결과가 비어 있습니다."
+            _record_synthesis_usage(job_id, raw_text, voice, time.monotonic() - started_at, succeeded=False)
             return
 
         jobs[job_id]["audio_path"] = audio_path
@@ -379,10 +408,12 @@ async def process_synthesis_task(job_id: str, raw_text: str, voice: str, rate: s
         jobs[job_id]["headings"] = heading_index
         jobs[job_id]["display_markdown"] = display_markdown
         jobs[job_id]["status"] = "completed"
+        _record_synthesis_usage(job_id, raw_text, voice, time.monotonic() - started_at, succeeded=True)
 
     except Exception as e:
         jobs[job_id]["status"] = "error"
         jobs[job_id]["error"] = str(e)
+        _record_synthesis_usage(job_id, raw_text, voice, time.monotonic() - started_at, succeeded=False)
 
 
 def _store_background_audiobook(user_id: str, title: str, job: dict, folder_id: str | None = None) -> str:

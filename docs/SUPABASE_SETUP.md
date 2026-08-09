@@ -289,6 +289,32 @@ revoke all on table public.client_errors from anon, authenticated;
 grant select, insert, delete on table public.client_errors to service_role;
 ```
 
+### 2.9 TTS 사용량 테이블
+
+가격을 정하려면 "사용자 한 명이 얼마를 쓰는가"를 알아야 한다. `product_events`에는 `user_id`와 `event_name`밖에 없어 그 계산이 불가능했다. 추정 단가가 아니라 **원단위(문자 수)만** 저장한다 — 단가는 바뀌고 공급자마다 다르므로 금액 계산은 조회 시점에 한다(`backend/routes/system.py`의 `usd_per_million_chars`).
+
+```sql
+create table public.synthesis_usage (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references public.users(id) on delete set null,
+  provider varchar(30) not null,
+  voice varchar(100) not null,
+  characters integer not null,
+  audio_seconds numeric(10, 2),
+  elapsed_seconds numeric(10, 2),
+  succeeded boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+create index synthesis_usage_created_at_idx on public.synthesis_usage(created_at desc);
+create index synthesis_usage_user_id_idx on public.synthesis_usage(user_id);
+alter table public.synthesis_usage enable row level security;
+revoke all on table public.synthesis_usage from anon, authenticated;
+grant select, insert, delete on table public.synthesis_usage to service_role;
+```
+
+실패한 합성도 남긴다(`succeeded = false`). 문자는 이미 소모됐으므로 성공만 세면 실비용을 과소평가한다 — Edge TTS는 호스트에 따라 간헐적으로 실패한다.
+
 `scope`는 `backend/routes/system.py`의 `CLIENT_ERROR_LABELS`에 있는 값만 받는다
 (`playback_save` / `product_event` / `generation` / `cloud_sync` / `default_book`).
 아무 문자열이나 받으면 오타 하나로 지표가 두 갈래로 갈라지기 때문이다.
