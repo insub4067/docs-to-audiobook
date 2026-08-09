@@ -219,12 +219,12 @@
        .theme-preview(테마 시트 안의 짧은 미리보기 문구)도 같은 변수를
        써서 실제 리더 화면과 똑같은 색으로 보인다. */
     --reader-bg: #FAF5E6;
-    --reader-surface: rgba(250, 245, 230, 0.88);
+    --reader-surface: rgba(250, 245, 230, 0.78);
     --reader-text: #2C1F1A;
     --reader-text-muted: #7A6559;
     --reader-accent: #A67C52;
-    --reader-border: rgba(120, 90, 60, 0.1);
-    --reader-highlight-bg: rgba(198, 154, 88, 0.15);
+    --reader-border: rgba(120, 90, 60, 0.06);
+    --reader-highlight-bg: rgba(198, 154, 88, 0.10);
 }
 
 .reader-container {
@@ -247,12 +247,12 @@
     /* 순백(#fff)은 장시간 읽기에 눈이 부시다. 웜보다는 확실히 밝게 두되
        아주 옅은 미색을 섞어 눈부심만 덜어낸다(본문 대비는 17:1로 유지). */
     --reader-bg: #F8F6F1;
-    --reader-surface: rgba(248, 246, 241, 0.88);
+    --reader-surface: rgba(248, 246, 241, 0.78);
     --reader-text: #1a1a1a;
     --reader-text-muted: #6b6b6b;
     --reader-accent: #8a6d3b;
-    --reader-border: rgba(0, 0, 0, 0.1);
-    --reader-highlight-bg: rgba(138, 109, 59, 0.10);
+    --reader-border: rgba(0, 0, 0, 0.06);
+    --reader-highlight-bg: rgba(138, 109, 59, 0.07);
 }
 
 :root[data-app-theme="dark"] .reader-container,
@@ -428,7 +428,7 @@
     left: 0;
     overflow-y: auto;
     padding: calc(var(--reader-header-h, 96px) + 24px) 32px
-             calc(var(--reader-controls-h, 120px) + var(--reader-controls-inset) + 24px);
+             calc(var(--reader-controls-h, 120px) + var(--reader-controls-inset) + 32px);
     font-family: var(--font-serif);
     font-size: calc(1.15rem * var(--reader-font-scale, 1));
     line-height: var(--reader-line-height, 2.0);
@@ -781,9 +781,9 @@
     border-radius: 20px;
     border: 1px solid var(--reader-border);
     background: var(--reader-surface);
-    backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.10), var(--glass-highlight);
+    backdrop-filter: blur(32px) saturate(150%);
+    -webkit-backdrop-filter: blur(32px) saturate(150%);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), var(--glass-highlight);
 }
 
 
@@ -990,7 +990,7 @@
         /* 좌우만 좁히고 상/하는 바 높이 확보를 유지해야 한다 —
            여기서 padding을 통째로 덮으면 문서 처음/끝이 바에 가려진다 */
         padding: calc(var(--reader-header-h, 96px) + 30px) 22px
-                 calc(var(--reader-controls-h, 120px) + var(--reader-controls-inset) + 30px);
+                 calc(var(--reader-controls-h, 120px) + var(--reader-controls-inset) + 36px);
         font-size: calc(1.12rem * var(--reader-font-scale, 1));
         line-height: calc(var(--reader-line-height, 2.0) - 0.2);
     }
