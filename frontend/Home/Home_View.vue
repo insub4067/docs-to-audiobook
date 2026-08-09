@@ -173,9 +173,17 @@ function measureBarHeights(): void {
     const tabBar = document.querySelector<HTMLElement>(".tab-bar");
     const header = document.querySelector<HTMLElement>(".app-header");
     const miniPlayer = document.querySelector<HTMLElement>(".mini-player");
-    if (tabBar) root.setProperty("--tab-bar-h", `${tabBar.offsetHeight}px`);
+    if (tabBar) {
+        const tabStyle = getComputedStyle(tabBar);
+        const tabTotalH = tabBar.offsetHeight + parseFloat(tabStyle.marginTop) + parseFloat(tabStyle.marginBottom);
+        root.setProperty("--tab-bar-h", `${tabTotalH}px`);
+    }
     if (header) root.setProperty("--header-h", `${header.offsetHeight}px`);
-    if (miniPlayer) root.setProperty("--mini-player-h", `${miniPlayer.offsetHeight}px`);
+    if (miniPlayer) {
+        const mpStyle = getComputedStyle(miniPlayer);
+        const mpTotalH = miniPlayer.offsetHeight + parseFloat(mpStyle.marginTop) + parseFloat(mpStyle.marginBottom);
+        root.setProperty("--mini-player-h", `${mpTotalH}px`);
+    }
 }
 
 // 폰트·아이콘이 늦게 로드되며 높이가 미세하게 바뀔 수 있어 계속 맞춘다.

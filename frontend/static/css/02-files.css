@@ -2,12 +2,14 @@
    (Home_View.vue가 v-show로 제어). */
 .tab-bar {
     display: flex;
-    padding-bottom: env(safe-area-inset-bottom);
+    margin: 0 16px;
+    margin-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+    border-radius: 20px;
     background: var(--glass-bg);
-    border-top: 1px solid var(--glass-border);
+    border: 1px solid var(--glass-border);
     backdrop-filter: blur(var(--glass-blur)) saturate(140%);
     -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-    box-shadow: var(--glass-shadow);
+    box-shadow: var(--glass-shadow), var(--glass-highlight);
 }
 
 .tab-bar-btn {
