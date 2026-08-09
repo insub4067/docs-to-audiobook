@@ -14,12 +14,10 @@ from fastapi import APIRouter, BackgroundTasks, Header, HTTPException
 
 from state import (
     supabase_or_503, require_admin_user, AUDIOBOOK_BUCKET, object_paths,
-    upload_audiobook_objects,
+    remove_audiobook_objects,
 )
 from routes.audiobooks import audiobook_items_with_urls
-from routes.content_jobs import queue_jobs, run_jobs, progress_callback_for
-from routes.tts import synthesize_document
-from tts_providers.voice_catalog import DEFAULT_VOICE_KEY
+from routes.content_jobs import queue_jobs, run_jobs, synthesize_into_storage
 from push_notifications import send_news_ready_broadcast
 
 router = APIRouter()
@@ -95,30 +93,32 @@ def _parse_news_payload(raw_text: str) -> list[dict]:
 
 async def store_news_item(supabase, admin_user_id: str, item: dict, job_id: str) -> str:
     """content_jobs 처리기가 호출하는 저장 함수(kind='news')."""
-    audio_bytes, sentences, _headings = await synthesize_document(
-        item["content"], DEFAULT_VOICE_KEY, "+5%", "+0Hz", progress_callback=progress_callback_for(job_id)
-    )
-    if not audio_bytes:
-        raise RuntimeError("음성 합성 결과가 비어 있습니다.")
-
     audiobook_id = str(uuid.uuid4())
-    audio_path = upload_audiobook_objects(supabase, admin_user_id, audiobook_id, audio_bytes, sentences)
+    audio_path, sentences = await synthesize_into_storage(
+        supabase, admin_user_id, audiobook_id, item["content"], job_id
+    )
 
     # 목록 헤더에 "총 N개 · 약 M분"을 보여주려고 미리 계산해 둔다 — library.py와
     # 동일한 패턴 (매번 sentences 파일을 내려받으면 목록 화면이 느려진다).
     duration_seconds = round(max((s.get("end", 0) for s in sentences), default=0) / 1000)
 
-    supabase.table("audiobooks").insert({
-        "id": audiobook_id,
-        "user_id": admin_user_id,
-        "title": item["title"],
-        "file_name": item["title"],
-        "storage_path": audio_path,
-        "duration_seconds": duration_seconds,
-        "is_news": True,
-        "news_category": item.get("category"),
-        "news_source": item.get("source"),
-    }).execute()
+    try:
+        supabase.table("audiobooks").insert({
+            "id": audiobook_id,
+            "user_id": admin_user_id,
+            "title": item["title"],
+            "file_name": item["title"],
+            "storage_path": audio_path,
+            "duration_seconds": duration_seconds,
+            "is_news": True,
+            "news_category": item.get("category"),
+            "news_source": item.get("source"),
+        }).execute()
+    except Exception:
+        # 행이 없으면 이 파일들을 가리키는 것이 아무것도 없다 — 버킷에만
+        # 남아 영영 지워지지 않는다.
+        remove_audiobook_objects(supabase, admin_user_id, audiobook_id)
+        raise
     return audiobook_id
 
 

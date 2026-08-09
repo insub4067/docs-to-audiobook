@@ -543,3 +543,19 @@ def test_now_playing_row_background_is_opaque():
     assert background, "재생 중 강조 배경이 없다"
     assert "rgba" not in background.group(1)
     assert "transparent" not in background.group(1)
+
+
+def test_service_worker_install_does_not_depend_on_external_cdns():
+    """cache.addAll()은 하나라도 실패하면 전부 실패한다. 외부 CDN이 잠깐
+    흔들렸다고 서비스 워커 설치가 무산되면 오프라인 캐시와 웹 푸시가 통째로
+    죽는다 — 우리 서버는 멀쩡한데도."""
+    source = SW_JS.read_text(encoding="utf-8")
+
+    required_block = source[source.index("const REQUIRED_ASSETS"):source.index("const OPTIONAL_ASSETS")]
+    assert "https://" not in required_block, "필수 자원에 외부 출처가 섞여 있다"
+
+    optional_block = source[source.index("const OPTIONAL_ASSETS"):]
+    assert "unpkg.com" in optional_block
+    assert "fonts.googleapis.com" in optional_block
+    # 외부 자원은 개별로 담고 실패를 삼켜야 한다.
+    assert "allSettled" in source

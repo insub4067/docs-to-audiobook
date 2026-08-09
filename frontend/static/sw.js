@@ -1,13 +1,25 @@
-const CACHE_NAME = "2026.08.10.1";
+const CACHE_NAME = "2026.08.10.2";
 
 // Vue SPA(/)의 JS/CSS는 파일명에 빌드 해시가 붙어(app-<hash>.js) 여기에
 // 고정 경로로 적을 수 없다 — fetch 핸들러가 런타임에 캐시한다. 이 목록은
 // 해시가 붙지 않는 자산만 담는다.
-const ASSETS_TO_CACHE = [
+// ⚠️ 필수 자원과 선택 자원을 나눈 이유:
+//
+// cache.addAll()은 하나라도 실패하면 **전부** 실패한다. 예전에는 unpkg와
+// Google Fonts가 이 목록에 함께 있어서, 남의 CDN이 잠깐 흔들리면 서비스
+// 워커 설치 자체가 무산됐다 — 그러면 오프라인 캐시도 웹 푸시도 활성화되지
+// 않는다. 우리 서버는 멀쩡한데 외부 CDN 때문에 앱이 앱답지 않게 된다.
+//
+// 우리 출처의 자원만 설치 성공 조건으로 두고, 외부 자원은 되면 좋고 안 되면
+// 마는 것으로 내린다(둘 다 실패해도 아이콘 폰트가 늦게 뜰 뿐 동작한다).
+const REQUIRED_ASSETS = [
   "/",
   "/static/admin.css",
   "/static/admin-metric.js",
-  "/static/textaudio-icon.png",
+  "/static/textaudio-icon.png"
+];
+
+const OPTIONAL_ASSETS = [
   "https://unpkg.com/lucide@latest",
   "https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Noto+Sans+KR:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Noto+Serif+KR:wght@300;400;500;700&display=swap"
 ];
@@ -15,10 +27,14 @@ const ASSETS_TO_CACHE = [
 // Install Event
 self.addEventListener("install", (e) => {
   e.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      console.log("Caching essential assets...");
-      return cache.addAll(ASSETS_TO_CACHE);
-    }).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then((cache) =>
+      // 필수 자원은 addAll — 하나라도 실패하면 설치가 실패하는 게 맞다.
+      cache.addAll(REQUIRED_ASSETS).then(() =>
+        // 외부 자원은 개별로, 실패는 삼킨다. allSettled라 하나가 깨져도
+        // 나머지가 캐시되고 설치는 계속된다.
+        Promise.allSettled(OPTIONAL_ASSETS.map((url) => cache.add(url)))
+      )
+    ).then(() => self.skipWaiting())
   );
 });
 

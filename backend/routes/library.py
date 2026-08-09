@@ -16,16 +16,28 @@ import logging
 import uuid
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException
 
-from state import supabase_or_503, require_admin_user, require_user_id, upload_audiobook_objects
+from state import (
+    MAX_ADMIN_SYNTH_CHARS, supabase_or_503, require_admin_user, require_user_id,
+    remove_audiobook_objects,
+)
 from routes.audiobooks import audiobook_items_with_urls
-from routes.content_jobs import queue_jobs, run_jobs, progress_callback_for
-from routes.tts import synthesize_document
-from tts_providers.voice_catalog import DEFAULT_VOICE_KEY
+from routes.content_jobs import queue_jobs, run_jobs, synthesize_into_storage
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 LIBRARY_STATUSES = {"review", "published"}
+
+# 한 번에 등록할 수 있는 작품 수와 작품 하나의 본문 길이 상한.
+#
+# 관리자용이라 악의가 아니라 실수를 막는 장치다. 붙여넣기 한 번에 긴 경전
+# 수십 편이 들어오면 합성이 몇 시간 이어지고, 그동안 공유 CPU 하나를 물고
+# 있어 일반 사용자 변환까지 굶는다. 상한에 걸리면 나눠서 등록하면 된다.
+#
+# 본문 상한은 개인 문서의 관리자 합성 상한과 같은 값으로 맞춘다
+# (state.MAX_ADMIN_SYNTH_CHARS) — 같은 엔진으로 같은 일을 하는데 경로에
+# 따라 다른 한계를 두면 설명할 수 없다.
+MAX_LIBRARY_ITEMS_PER_REQUEST = 20
 
 
 def _parse_library_payload(raw_text: str) -> list[dict]:
@@ -43,6 +55,12 @@ def _parse_library_payload(raw_text: str) -> list[dict]:
 
     if not isinstance(items, list) or not items:
         raise HTTPException(status_code=400, detail="작품 배열이 비어 있습니다.")
+    if len(items) > MAX_LIBRARY_ITEMS_PER_REQUEST:
+        raise HTTPException(
+            status_code=413,
+            detail=f"한 번에 최대 {MAX_LIBRARY_ITEMS_PER_REQUEST}편까지 등록할 수 있습니다 "
+                   f"(현재 {len(items)}편). 나눠서 등록해 주세요.",
+        )
 
     parsed = []
     for item in items:
@@ -52,6 +70,12 @@ def _parse_library_payload(raw_text: str) -> list[dict]:
         content = (item.get("content") or "").strip()
         if not title or not content:
             continue
+        if len(content) > MAX_ADMIN_SYNTH_CHARS:
+            raise HTTPException(
+                status_code=413,
+                detail=f"'{title[:40]}'의 본문이 너무 깁니다. 최대 {MAX_ADMIN_SYNTH_CHARS:,}자까지 "
+                       f"등록할 수 있습니다 (현재 {len(content):,}자).",
+            )
         status = item.get("status") if item.get("status") in LIBRARY_STATUSES else "review"
         parsed.append({
             "title": title[:255],
@@ -73,37 +97,38 @@ def _parse_library_payload(raw_text: str) -> list[dict]:
 async def store_library_item(supabase, admin_user_id: str, item: dict, job_id: str) -> str:
     """content_jobs 처리기가 호출하는 저장 함수(kind='library')."""
     status = item.get("status") if item.get("status") in LIBRARY_STATUSES else "review"
-    audio_bytes, sentences, _headings = await synthesize_document(
-        item["content"], DEFAULT_VOICE_KEY, "+5%", "+0Hz", progress_callback=progress_callback_for(job_id)
-    )
-    if not audio_bytes:
-        raise RuntimeError("음성 합성 결과가 비어 있습니다.")
-
     audiobook_id = str(uuid.uuid4())
-    audio_path = upload_audiobook_objects(supabase, admin_user_id, audiobook_id, audio_bytes, sentences)
+    audio_path, sentences = await synthesize_into_storage(
+        supabase, admin_user_id, audiobook_id, item["content"], job_id
+    )
 
     # 목록 카드에 재생시간/장 수를 보여주려고 미리 계산해 둔다 — 매번
     # sentences 파일을 내려받아 계산하면 목록 화면이 N배 느려진다.
     duration_seconds = round(max((s.get("end", 0) for s in sentences), default=0) / 1000)
     chapter_count = sum(1 for s in sentences if s.get("type") == "heading")
 
-    supabase.table("audiobooks").insert({
-        "id": audiobook_id,
-        "user_id": admin_user_id,
-        "title": item["title"],
-        "file_name": item["title"],
-        "storage_path": audio_path,
-        "duration_seconds": duration_seconds,
-        "is_library": True,
-        "library_status": status,
-        "library_category": item.get("category"),
-        "library_edition": item.get("edition"),
-        "library_translator": item.get("translator"),
-        "library_source": item.get("source"),
-        "library_rights": item.get("rights"),
-        "library_description": item.get("description"),
-        "library_chapter_count": chapter_count,
-    }).execute()
+    try:
+        supabase.table("audiobooks").insert({
+            "id": audiobook_id,
+            "user_id": admin_user_id,
+            "title": item["title"],
+            "file_name": item["title"],
+            "storage_path": audio_path,
+            "duration_seconds": duration_seconds,
+            "is_library": True,
+            "library_status": status,
+            "library_category": item.get("category"),
+            "library_edition": item.get("edition"),
+            "library_translator": item.get("translator"),
+            "library_source": item.get("source"),
+            "library_rights": item.get("rights"),
+            "library_description": item.get("description"),
+            "library_chapter_count": chapter_count,
+        }).execute()
+    except Exception:
+        # 행이 없으면 이 파일들을 가리키는 것이 아무것도 없다.
+        remove_audiobook_objects(supabase, admin_user_id, audiobook_id)
+        raise
     return audiobook_id
 
 

@@ -11,6 +11,33 @@ from routes.audiobooks import audiobook_items_with_urls
 router = APIRouter()
 
 
+def _rejects_move_into_own_subtree(supabase, user_id: str, folder_id: str, new_parent_id: str) -> bool:
+    """새 상위 폴더가 자기 자신의 자손인지 확인한다.
+
+    자기 자신으로 옮기는 것만 막으면 A → B → C에서 A를 C 밑으로 넣을 수
+    있고, 그러면 A → B → C → A 고리가 생긴다. 고리에 들어간 폴더들은 어느
+    루트에서도 도달할 수 없어 화면에서 사라지고, 트리를 훑는 코드는 무한히
+    돈다.
+
+    사용자의 폴더를 한 번에 받아 부모를 따라 올라간다. 폴더 수는 사람이
+    손으로 만드는 규모라 한 번의 조회로 충분하고, 단계마다 질의하는 것보다
+    왕복이 적다. 데이터가 이미 깨져 고리가 있더라도 방문한 곳을 기억해
+    빠져나온다.
+    """
+    rows = supabase.table("folders").select("id, parent_folder_id") \
+        .eq("user_id", user_id).execute().data or []
+    parent_of = {row["id"]: row.get("parent_folder_id") for row in rows}
+
+    current = new_parent_id
+    seen = set()
+    while current and current not in seen:
+        if current == folder_id:
+            return True
+        seen.add(current)
+        current = parent_of.get(current)
+    return False
+
+
 @router.post("/api/folders")
 async def create_folder(payload: dict, authorization: str = Header(None)):
     user_id = require_user_id(authorization)
@@ -100,6 +127,11 @@ async def update_folder(folder_id: str, payload: dict, authorization: str = Head
                 .eq("id", new_parent).eq("user_id", user_id).execute().data
             if not found:
                 raise HTTPException(status_code=404, detail="상위 폴더를 찾을 수 없습니다.")
+            if _rejects_move_into_own_subtree(supabase, user_id, folder_id, new_parent):
+                raise HTTPException(
+                    status_code=400,
+                    detail="폴더를 자기 하위 폴더 안으로 옮길 수 없습니다.",
+                )
         updates["parent_folder_id"] = new_parent
 
     if not updates:

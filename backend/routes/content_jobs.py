@@ -10,10 +10,11 @@
 넣는다"는 점이 같아서 kind로만 구분하고 같은 테이블·같은 처리 경로를 쓴다.
 """
 import logging
+import os
 import uuid
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException
 
-from state import supabase_or_503, require_admin_user
+from state import JOB_AUDIO_DIR, supabase_or_503, require_admin_user, upload_audiobook_objects
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -33,6 +34,47 @@ def progress_callback_for(job_id: str):
         if total:
             _job_progress[job_id] = round(done * 100 / total)
     return on_progress
+
+
+async def synthesize_into_storage(supabase, admin_user_id: str, audiobook_id: str, text: str, job_id: str):
+    """본문을 합성해 Storage에 올리고 (오디오 경로, 문장 목록)을 돌려준다.
+
+    디스크 경유 경로(synthesize_document_to_file)를 쓴다. 예전에는 뉴스·
+    라이브러리가 메모리 경로(synthesize_document)를 썼는데, 그건 완성된 MP3
+    전체를 바이트로 들고 있다가 업로드했다. 12시간짜리 경전이면 그 자체로
+    수백 MB이고, 1GB 머신에서 관리자가 긴 작품 몇 개를 등록하면 죽는다.
+
+    디스크 경로는 청크를 파일로 흘려보내고 묶음 수도 제한한다
+    (DOCUMENT_PART_CONCURRENCY) — 메모리 사용이 문서 길이에 비례하지 않는다.
+
+    뉴스와 라이브러리가 이 함수를 함께 쓴다. 둘의 차이는 audiobooks에 넣는
+    컬럼뿐이고, 합성·업로드는 정확히 같다.
+    """
+    from routes.tts import synthesize_document_to_file
+    from tts_providers.voice_catalog import DEFAULT_VOICE_KEY
+
+    output_path = os.path.join(JOB_AUDIO_DIR, f"content-{audiobook_id}.mp3")
+    try:
+        sentences, _headings, _markdown = await synthesize_document_to_file(
+            text, DEFAULT_VOICE_KEY, "+5%", "+0Hz", output_path,
+            progress_callback=progress_callback_for(job_id),
+        )
+        if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
+            raise RuntimeError("음성 합성 결과가 비어 있습니다.")
+
+        with open(output_path, "rb") as audio_file:
+            audio_path = upload_audiobook_objects(
+                supabase, admin_user_id, audiobook_id, audio_file, sentences
+            )
+    finally:
+        # 업로드가 끝나면 서버에 남길 이유가 없다. 실패해도 마찬가지다 —
+        # 원문은 content_jobs에 있으니 재시도는 언제나 가능하다.
+        try:
+            os.remove(output_path)
+        except OSError:
+            pass
+
+    return audio_path, sentences
 
 
 def queue_jobs(supabase, kind: str, admin_user_id: str, items: list[dict]) -> list[str]:
@@ -128,13 +170,39 @@ async def retry_content_job(job_id: str, background_tasks: BackgroundTasks, auth
     require_admin_user(authorization)
     supabase = supabase_or_503()
     try:
-        response = supabase.table("content_jobs").select("id").eq("id", job_id).maybe_single().execute()
+        response = supabase.table("content_jobs").select("id, status").eq("id", job_id).maybe_single().execute()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"작업을 확인하지 못했습니다: {e}")
     if not response or not response.data:
         raise HTTPException(status_code=404, detail="등록 작업을 찾을 수 없습니다.")
 
-    supabase.table("content_jobs").update({"status": "queued", "error": None}).eq("id", job_id).execute()
+    # 예전에는 상태를 가리지 않고 무조건 queued로 바꾼 뒤 실행을 예약해서,
+    # 재시도 버튼을 연달아 누르면 같은 원문이 동시에 합성되고 오디오북이
+    # 중복으로 만들어졌다. 두 가지로 막는다.
+    #
+    # 1) 이미 queued면 거부한다. queued는 "실행이 예약됐고 아직 시작 전"이라
+    #    다시 예약할 이유가 없다. 두 번째 클릭이 여기서 걸린다.
+    #    'processing'은 일부러 허용한다 — 배포 중 재시작으로 멈춰 버린 작업을
+    #    되살리는 건 관리자가 판단할 일이고, 이 버튼의 원래 용도 중 하나다.
+    # 2) 방금 읽은 상태를 조건으로 걸어 원자적으로 선점한다. 두 요청이 동시에
+    #    같은 상태를 읽어도 update가 실제로 걸리는 쪽은 하나뿐이다
+    #    (resume_background_synthesis_jobs와 같은 방식).
+    current_status = response.data.get("status")
+    if current_status == "queued":
+        raise HTTPException(
+            status_code=409,
+            detail="이미 실행이 예약된 작업입니다. 완료되거나 실패한 뒤에 다시 시도해 주세요.",
+        )
+
+    claimed = supabase.table("content_jobs") \
+        .update({"status": "queued", "error": None}) \
+        .eq("id", job_id).eq("status", current_status).execute().data or []
+    if not claimed:
+        raise HTTPException(
+            status_code=409,
+            detail="방금 다른 요청이 이 작업을 다시 시작했습니다. 잠시 후 상태를 확인해 주세요.",
+        )
+
     background_tasks.add_task(run_jobs, [job_id])
     return {"status": "queued"}
 

@@ -70,3 +70,27 @@ def test_audio_upload_failure_does_not_try_to_remove():
         )
 
     storage.remove.assert_not_called()
+
+
+def test_orphan_pair_is_removed_when_the_db_row_fails():
+    """파일을 올린 뒤 audiobooks insert가 실패하면, 그 파일들을 가리키는
+    것이 아무것도 없어 버킷에만 영영 남는다."""
+    from state import remove_audiobook_objects
+
+    storage = MagicMock()
+    supabase = _supabase_with_storage(storage)
+
+    remove_audiobook_objects(supabase, "user-1", "book-1")
+
+    storage.remove.assert_called_once_with(list(object_paths("user-1", "book-1")))
+
+
+def test_cleanup_failure_does_not_mask_the_original_error():
+    """호출부는 이미 다른 실패를 처리하는 중이다. 정리에 또 실패했다고
+    예외를 올리면 무엇이 근본 원인인지 알 수 없게 된다."""
+    from state import remove_audiobook_objects
+
+    storage = MagicMock()
+    storage.remove.side_effect = RuntimeError("storage down")
+
+    remove_audiobook_objects(_supabase_with_storage(storage), "user-1", "book-1")

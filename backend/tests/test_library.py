@@ -5,6 +5,7 @@
 목록/상세에서 절대 나오면 안 된다 — 판본별 저작권이 확인되기 전까지
 공개하지 않는다는 원칙 때문이다.
 """
+import json
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -21,8 +22,12 @@ def _auth_headers():
     return {"Authorization": f"Bearer {token}"}
 
 
-async def _fake_synthesize_document(text, voice, rate, pitch, progress_callback=None, provider_name=None):
-    return b"fake-mp3-bytes", [{"text": text, "start": 0, "end": 1000}], []
+# 뉴스·라이브러리는 디스크 경유 경로로 합성한다(메모리에 MP3 전체를 들고
+# 있지 않기 위해서). 가짜도 output_path에 파일을 써야 한다.
+async def _fake_synthesize_document(text, voice, rate, pitch, output_path, progress_callback=None, **kwargs):
+    with open(output_path, "wb") as audio_file:
+        audio_file.write(b"fake-mp3-bytes")
+    return [{"text": text, "start": 0, "end": 1000}], [], ""
 
 
 @pytest.fixture
@@ -58,7 +63,7 @@ async def test_add_library_defaults_to_review_status(mock_supabase_tables):
     payload_text = '[{"title": "도덕경", "content": "도가도 비상도", "category": "철학·사상"}]'
 
     with patch("routes.library.require_admin_user", return_value="admin-user"), \
-         patch("routes.library.synthesize_document", side_effect=_fake_synthesize_document):
+         patch("routes.tts.synthesize_document_to_file", side_effect=_fake_synthesize_document):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post("/api/admin/library", json={"text": payload_text}, headers=_auth_headers())
 
@@ -78,7 +83,7 @@ async def test_add_library_honors_explicit_published_status(mock_supabase_tables
     payload_text = '[{"title": "논어", "content": "학이시습지", "status": "published"}]'
 
     with patch("routes.library.require_admin_user", return_value="admin-user"), \
-         patch("routes.library.synthesize_document", side_effect=_fake_synthesize_document):
+         patch("routes.tts.synthesize_document_to_file", side_effect=_fake_synthesize_document):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post("/api/admin/library", json={"text": payload_text}, headers=_auth_headers())
 
@@ -93,7 +98,7 @@ async def test_add_library_rejects_unknown_status_value(mock_supabase_tables):
     payload_text = '[{"title": "테스트", "content": "본문", "status": "definitely-verified-trust-me"}]'
 
     with patch("routes.library.require_admin_user", return_value="admin-user"), \
-         patch("routes.library.synthesize_document", side_effect=_fake_synthesize_document):
+         patch("routes.tts.synthesize_document_to_file", side_effect=_fake_synthesize_document):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             await client.post("/api/admin/library", json={"text": payload_text}, headers=_auth_headers())
 
@@ -363,3 +368,41 @@ async def test_update_library_item_rejects_empty_payload(mock_supabase):
             response = await client.patch("/api/admin/library/book-1", json={}, headers=_auth_headers())
 
     assert response.status_code == 400
+
+
+def test_library_payload_rejects_too_many_items_at_once():
+    """긴 경전 수십 편이 한 번에 들어오면 합성이 몇 시간 이어지고, 그동안
+    공유 CPU 하나를 물고 있어 일반 사용자 변환까지 굶는다."""
+    from routes.library import _parse_library_payload, MAX_LIBRARY_ITEMS_PER_REQUEST
+
+    too_many = json.dumps([
+        {"title": f"작품 {i}", "content": "본문"}
+        for i in range(MAX_LIBRARY_ITEMS_PER_REQUEST + 1)
+    ])
+
+    with pytest.raises(HTTPException) as exc:
+        _parse_library_payload(too_many)
+    assert exc.value.status_code == 413
+
+
+def test_library_payload_rejects_a_single_oversized_work():
+    from state import MAX_ADMIN_SYNTH_CHARS
+    from routes.library import _parse_library_payload
+
+    huge = json.dumps([{"title": "너무 긴 경전", "content": "가" * (MAX_ADMIN_SYNTH_CHARS + 1)}])
+
+    with pytest.raises(HTTPException) as exc:
+        _parse_library_payload(huge)
+    assert exc.value.status_code == 413
+
+
+def test_library_payload_accepts_a_normal_batch():
+    """상한이 정상 등록을 막으면 안 된다."""
+    from routes.library import _parse_library_payload, MAX_LIBRARY_ITEMS_PER_REQUEST
+
+    normal = json.dumps([
+        {"title": f"작품 {i}", "content": "본문입니다."}
+        for i in range(MAX_LIBRARY_ITEMS_PER_REQUEST)
+    ])
+
+    assert len(_parse_library_payload(normal)) == MAX_LIBRARY_ITEMS_PER_REQUEST

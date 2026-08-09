@@ -18,7 +18,8 @@ from starlette.background import BackgroundTask
 from state import (
     BASE_DIR, JOB_AUDIO_DIR, jobs, text_storage, MAX_SYNTH_CHARS,
     DOCUMENT_PART_CONCURRENCY, background_synthesis_lock, has_enough_disk_for_synthesis,
-    supabase_or_503, upload_audiobook_objects, resolve_job_owner, require_job_owner,
+    supabase_or_503, upload_audiobook_objects, remove_audiobook_objects,
+    resolve_job_owner, require_job_owner,
     enforce_rate_limit, validate_folder_ownership,
 )
 from text_processing import (
@@ -435,23 +436,29 @@ def _store_background_audiobook(user_id: str, title: str, job: dict, folder_id: 
             supabase, user_id, audiobook_id, audio_file, job["sentences"]
         )
 
-    if folder_id:
-        # 작업을 큐에 올릴 때는 폴더 소유권을 확인했지만, 몇 시간짜리
-        # 작업이 끝나기 전에 그 폴더가 삭제됐을 수 있다 — 그 경우 오류로
-        # 날리지 말고 루트에 저장한다.
-        found = supabase.table("folders").select("id") \
-            .eq("id", folder_id).eq("user_id", user_id).execute().data
-        if not found:
-            folder_id = None
+    try:
+        if folder_id:
+            # 작업을 큐에 올릴 때는 폴더 소유권을 확인했지만, 몇 시간짜리
+            # 작업이 끝나기 전에 그 폴더가 삭제됐을 수 있다 — 그 경우 오류로
+            # 날리지 말고 루트에 저장한다.
+            found = supabase.table("folders").select("id") \
+                .eq("id", folder_id).eq("user_id", user_id).execute().data
+            if not found:
+                folder_id = None
 
-    supabase.table("audiobooks").insert({
-        "id": audiobook_id,
-        "user_id": user_id,
-        "title": title[:255],
-        "file_name": title[:255],
-        "storage_path": audio_path,
-        "folder_id": folder_id,
-    }).execute()
+        supabase.table("audiobooks").insert({
+            "id": audiobook_id,
+            "user_id": user_id,
+            "title": title[:255],
+            "file_name": title[:255],
+            "storage_path": audio_path,
+            "folder_id": folder_id,
+        }).execute()
+    except Exception:
+        # 행이 없으면 방금 올린 두 파일을 가리키는 것이 아무것도 없다 —
+        # 버킷에만 남아 영영 지워지지 않는다.
+        remove_audiobook_objects(supabase, user_id, audiobook_id)
+        raise
     return audiobook_id
 
 

@@ -21,8 +21,12 @@ def _auth_headers():
     return {"Authorization": f"Bearer {token}"}
 
 
-async def _fake_synthesize_document(text, voice, rate, pitch, progress_callback=None, provider_name=None):
-    return b"fake-mp3-bytes", [{"text": text, "start": 0, "end": 1000}], []
+# 뉴스·라이브러리는 디스크 경유 경로로 합성한다(메모리에 MP3 전체를 들고
+# 있지 않기 위해서). 가짜도 output_path에 파일을 써야 한다.
+async def _fake_synthesize_document(text, voice, rate, pitch, output_path, progress_callback=None, **kwargs):
+    with open(output_path, "wb") as audio_file:
+        audio_file.write(b"fake-mp3-bytes")
+    return [{"text": text, "start": 0, "end": 1000}], [], ""
 
 
 @pytest.fixture
@@ -71,7 +75,7 @@ async def test_add_news_strips_json_code_fence_and_stores_items(mock_supabase_ta
     )
 
     with patch("routes.news.require_admin_user", return_value="admin-user"), \
-         patch("routes.news.synthesize_document", side_effect=_fake_synthesize_document):
+         patch("routes.tts.synthesize_document_to_file", side_effect=_fake_synthesize_document):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post("/api/admin/news", json={"text": payload_text}, headers=_auth_headers())
 
@@ -97,12 +101,12 @@ async def test_add_news_strips_chatgpt_citation_markers_from_content(mock_supaba
 
     captured_text = {}
 
-    async def capturing_synthesize(text, voice, rate, pitch, progress_callback=None, provider_name=None):
+    async def capturing_synthesize(text, voice, rate, pitch, output_path, **kwargs):
         captured_text["content"] = text
-        return await _fake_synthesize_document(text, voice, rate, pitch)
+        return await _fake_synthesize_document(text, voice, rate, pitch, output_path)
 
     with patch("routes.news.require_admin_user", return_value="admin-user"), \
-         patch("routes.news.synthesize_document", side_effect=capturing_synthesize):
+         patch("routes.tts.synthesize_document_to_file", side_effect=capturing_synthesize):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post("/api/admin/news", json={"text": payload_text}, headers=_auth_headers())
 
@@ -117,7 +121,7 @@ async def test_add_news_skips_items_missing_title_or_content(mock_supabase_table
     payload_text = '[{"title": "제목만 있음"}, {"title": "정상 뉴스", "content": "본문 내용"}]'
 
     with patch("routes.news.require_admin_user", return_value="admin-user"), \
-         patch("routes.news.synthesize_document", side_effect=_fake_synthesize_document):
+         patch("routes.tts.synthesize_document_to_file", side_effect=_fake_synthesize_document):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post("/api/admin/news", json={"text": payload_text}, headers=_auth_headers())
 
@@ -137,14 +141,14 @@ async def test_add_news_reports_partial_failure_without_failing_whole_request(mo
 
     calls = {"n": 0}
 
-    async def flaky_synthesize(text, voice, rate, pitch, progress_callback=None, provider_name=None):
+    async def flaky_synthesize(text, voice, rate, pitch, output_path, **kwargs):
         calls["n"] += 1
         if calls["n"] == 1:
             raise RuntimeError("합성 실패")
-        return await _fake_synthesize_document(text, voice, rate, pitch)
+        return await _fake_synthesize_document(text, voice, rate, pitch, output_path)
 
     with patch("routes.news.require_admin_user", return_value="admin-user"), \
-         patch("routes.news.synthesize_document", side_effect=flaky_synthesize):
+         patch("routes.tts.synthesize_document_to_file", side_effect=flaky_synthesize):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post("/api/admin/news", json={"text": payload_text}, headers=_auth_headers())
 
@@ -162,7 +166,7 @@ async def test_add_news_broadcasts_push_after_background_processing(mock_supabas
     payload_text = '[{"title": "첫 뉴스", "content": "본문1"}, {"title": "둘째 뉴스", "content": "본문2"}]'
 
     with patch("routes.news.require_admin_user", return_value="admin-user"), \
-         patch("routes.news.synthesize_document", side_effect=_fake_synthesize_document), \
+         patch("routes.tts.synthesize_document_to_file", side_effect=_fake_synthesize_document), \
          patch("routes.news.send_news_ready_broadcast") as broadcast:
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post("/api/admin/news", json={"text": payload_text}, headers=_auth_headers())
@@ -175,11 +179,11 @@ async def test_add_news_broadcasts_push_after_background_processing(mock_supabas
 async def test_add_news_skips_broadcast_when_nothing_created(mock_supabase_tables):
     payload_text = '[{"title": "실패할 뉴스", "content": "본문"}]'
 
-    async def always_fails(text, voice, rate, pitch, progress_callback=None, provider_name=None):
+    async def always_fails(*args, **kwargs):
         raise RuntimeError("합성 실패")
 
     with patch("routes.news.require_admin_user", return_value="admin-user"), \
-         patch("routes.news.synthesize_document", side_effect=always_fails), \
+         patch("routes.tts.synthesize_document_to_file", side_effect=always_fails), \
          patch("routes.news.send_news_ready_broadcast") as broadcast:
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post("/api/admin/news", json={"text": payload_text}, headers=_auth_headers())
@@ -209,7 +213,7 @@ async def test_add_news_replaces_all_previous_news(mock_supabase_tables):
     )
 
     with patch("routes.news.require_admin_user", return_value="admin-user"), \
-         patch("routes.news.synthesize_document", side_effect=_fake_synthesize_document):
+         patch("routes.tts.synthesize_document_to_file", side_effect=_fake_synthesize_document):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post(
                 "/api/admin/news",
@@ -249,7 +253,7 @@ async def test_add_news_keeps_previous_news_when_every_item_fails(mock_supabase_
         raise RuntimeError("합성 실패")
 
     with patch("routes.news.require_admin_user", return_value="admin-user"), \
-         patch("routes.news.synthesize_document", side_effect=always_fails):
+         patch("routes.tts.synthesize_document_to_file", side_effect=always_fails):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post(
                 "/api/admin/news",
@@ -276,7 +280,7 @@ async def test_add_news_keeps_at_most_ten_rows_in_db(mock_supabase_tables):
     ])
 
     with patch("routes.news.require_admin_user", return_value="admin-user"), \
-         patch("routes.news.synthesize_document", side_effect=_fake_synthesize_document):
+         patch("routes.tts.synthesize_document_to_file", side_effect=_fake_synthesize_document):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             await client.post(
                 "/api/admin/news",
@@ -301,7 +305,7 @@ async def test_add_news_drops_duplicate_titles_within_one_batch(mock_supabase_ta
     ], ensure_ascii=False)
 
     with patch("routes.news.require_admin_user", return_value="admin-user"), \
-         patch("routes.news.synthesize_document", side_effect=_fake_synthesize_document):
+         patch("routes.tts.synthesize_document_to_file", side_effect=_fake_synthesize_document):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post(
                 "/api/admin/news", json={"text": payload}, headers=_auth_headers()
@@ -345,11 +349,11 @@ async def test_add_news_cleanup_runs_even_when_every_item_fails(mock_supabase_ta
         data=[{"id": "stale-1", "user_id": "admin-user"}]
     )
 
-    async def always_fails(text, voice, rate, pitch, progress_callback=None, provider_name=None):
+    async def always_fails(*args, **kwargs):
         raise RuntimeError("합성 실패")
 
     with patch("routes.news.require_admin_user", return_value="admin-user"), \
-         patch("routes.news.synthesize_document", side_effect=always_fails):
+         patch("routes.tts.synthesize_document_to_file", side_effect=always_fails):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post(
                 "/api/admin/news",
