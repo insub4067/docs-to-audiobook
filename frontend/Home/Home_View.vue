@@ -44,9 +44,6 @@ import { useThemeState } from "../Theme/Theme_State.vue";
 import { useThemeLogic } from "../Theme/Theme_Logic.vue";
 import { useMyFilesState } from "../Files/MyFiles_State.vue";
 import { useMyFilesLogic } from "../Files/MyFiles_Logic.vue";
-import { useAuthStore } from "../stores/auth";
-
-const authStore = useAuthStore();
 const pwaState = usePwaState();
 const themeState = useThemeState();
 const themeLogic = useThemeLogic(themeState);

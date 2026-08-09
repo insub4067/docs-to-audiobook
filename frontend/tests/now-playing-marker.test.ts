@@ -6,7 +6,7 @@ import NewsListSheetView from "../components/News/NewsListSheet_View.vue";
 import { useNewsState } from "../components/News/News_State.vue";
 import type { ReaderLogic } from "../Reader/Reader_Logic.vue";
 import type { NewsItem } from "../components/News/News_State.vue";
-import { nowPlayingId, setNowPlaying, setNowPlayingState } from "../services/nowPlaying";
+import { setNowPlaying, setNowPlayingState } from "../services/nowPlaying";
 
 // 목록에서 지금 듣고 있는 것이 어느 것인지 보이지 않아, 어디까지 왔는지
 // 알 수 없었다. 특히 "전체 듣기"로 열 개를 이어 들을 때 그렇다.

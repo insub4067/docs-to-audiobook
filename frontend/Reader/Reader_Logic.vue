@@ -19,7 +19,7 @@ let _accumulatedPlayMs = 0;
 let _playStartedAt: number | null = null;
 let _play5minFired = false;
 let _play5minTimer: ReturnType<typeof setTimeout> | null = null;
-try { _play5minFired = localStorage.getItem("play_5min_fired") === "true"; } catch {}
+try { _play5minFired = localStorage.getItem("play_5min_fired") === "true"; } catch { /* localStorage 접근 불가 시 무시 */ }
 
 export interface SharedReaderModeOptions {
     shareId?: string | null;
@@ -114,7 +114,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
     function firePlay5min(): void {
         _play5minFired = true;
         if (_play5minTimer) { clearTimeout(_play5minTimer); _play5minTimer = null; }
-        try { localStorage.setItem("play_5min_fired", "true"); } catch {}
+        try { localStorage.setItem("play_5min_fired", "true"); } catch { /* localStorage 접근 불가 시 무시 */ }
         authLogic.trackProductEvent("play_5min");
     }
 
