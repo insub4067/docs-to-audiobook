@@ -4,7 +4,7 @@ import type { ReaderLogic } from "../../Reader/Reader_Logic.vue";
 import { useNewsState, type NewsItem } from "./News_State.vue";
 import { useNewsLogic } from "./News_Logic.vue";
 import { useSwipeToDismiss } from "../../utils/swipeToDismiss";
-import { nowPlayingId } from "../../services/nowPlaying";
+import { nowPlayingId, nowPlayingState } from "../../services/nowPlaying";
 import ListRowPlaceholderView from "../Placeholder/ListRowPlaceholder_View.vue";
 
 const props = defineProps<{ logic: ReaderLogic }>();
@@ -46,12 +46,12 @@ function onBackdropClick(event: MouseEvent): void {
     if (event.target === event.currentTarget) newsLogic.closeList();
 }
 
-// ⚠️ 재생 위치(queueIndex)가 아니라 "지금 재생 중인 id"로 판정한다.
-// queueIndex는 뉴스 큐 안에서의 자리라, 다른 문서를 재생해도 그대로 남는다.
-// 실제로 개인 오디오북을 듣는 중에 뉴스 첫 기사에 "재생 중"이 붙어 있었다.
-// 모든 목록이 같은 값 하나(nowPlayingId)를 본다.
-function isPlaying(item: NewsItem): boolean {
+function isCurrent(item: NewsItem): boolean {
     return nowPlayingId.value === item.id;
+}
+
+function isItemPlaying(item: NewsItem): boolean {
+    return isCurrent(item) && nowPlayingState.value === "playing";
 }
 
 function formatRelativeTime(iso: string): string {
@@ -97,15 +97,16 @@ function formatRelativeTime(iso: string): string {
                         :key="item.id"
                         type="button"
                         class="audio-item audio-item-news"
-                        :class="{ 'is-playing': isPlaying(item) }"
-                        :aria-current="isPlaying(item) ? 'true' : undefined"
+                        :class="{ 'is-playing': isCurrent(item), 'is-paused': isCurrent(item) && !isItemPlaying(item) }"
+                        :aria-current="isCurrent(item) ? 'true' : undefined"
                         @click="newsLogic.openNewsItem(item)"
                     >
                         <div class="audio-item-front">
                             <div class="audio-title-group">
-                                <!-- ⚠️ lucide가 <i>를 <svg>로 갈아치우므로 토글하지 않는다.
-                                     아이콘은 그대로 두고 표시를 덧붙인다. -->
-                                <i data-lucide="play-circle"></i>
+                                <span class="row-play-icon">
+                                    <i data-lucide="play-circle"></i>
+                                    <span class="row-play-bars" aria-hidden="true"><span></span><span></span><span></span></span>
+                                </span>
                                 <div class="audio-title-col">
                                     <span class="audio-title">{{ item.title }}</span>
                                     <span class="audio-subtitle">
@@ -113,9 +114,6 @@ function formatRelativeTime(iso: string): string {
                                         <template v-if="item.news_source">{{ item.news_source }} · </template>{{ formatRelativeTime(item.created_at) }}
                                     </span>
                                 </div>
-                                <span v-if="isPlaying(item)" class="now-playing-bars" aria-hidden="true">
-                                    <span></span><span></span><span></span>
-                                </span>
                             </div>
                         </div>
                     </button>

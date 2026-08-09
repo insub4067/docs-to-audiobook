@@ -6,7 +6,7 @@ import NewsListSheetView from "../components/News/NewsListSheet_View.vue";
 import { useNewsState } from "../components/News/News_State.vue";
 import type { ReaderLogic } from "../Reader/Reader_Logic.vue";
 import type { NewsItem } from "../components/News/News_State.vue";
-import { nowPlayingId } from "../services/nowPlaying";
+import { nowPlayingId, setNowPlaying, setNowPlayingState } from "../services/nowPlaying";
 
 // 목록에서 지금 듣고 있는 것이 어느 것인지 보이지 않아, 어디까지 왔는지
 // 알 수 없었다. 특히 "전체 듣기"로 열 개를 이어 들을 때 그렇다.
@@ -27,7 +27,7 @@ const ITEMS = [newsItem("1", "기사A"), newsItem("2", "기사B"), newsItem("3",
 function setup(playingIndex: number) {
     const state = useNewsState();
     state.items.value = [...ITEMS];
-    nowPlayingId.value = ITEMS[playingIndex]?.id ?? null;
+    setNowPlaying(ITEMS[playingIndex]?.id ?? null);
     state.queueIndex.value = playingIndex;
     state.isListOpen.value = true;
     // 로딩 자리표시자가 아니라 실제 목록을 그리게 한다.
@@ -54,11 +54,10 @@ describe("재생 중인 항목 표시", () => {
     });
 
     it("표시는 색만이 아니라 움직이는 막대로도 알린다", () => {
-        // 색만 쓰면 색각 이상이나 강한 햇빛 아래에서 놓친다.
         const { rows } = setup(0);
 
-        expect(rows[0].find(".now-playing-bars").exists()).toBe(true);
-        expect(rows[1].find(".now-playing-bars").exists()).toBe(false);
+        expect(rows[0].find(".row-play-bars").exists()).toBe(true);
+        expect(rows[1].find(".row-play-bars").exists()).toBe(true);
     });
 
     it("보조 기술에도 현재 항목임을 알린다", () => {
@@ -77,7 +76,7 @@ describe("재생 중인 항목 표시", () => {
     it("재생이 다음 기사로 넘어가면 표시도 따라간다", async () => {
         const { wrapper } = setup(0);
 
-        nowPlayingId.value = ITEMS[2].id;
+        setNowPlaying(ITEMS[2].id);
         await wrapper.vm.$nextTick();
 
         const rows = wrapper.findAll(".audio-item-news");
@@ -92,7 +91,7 @@ describe("재생 중인 항목 표시", () => {
         expect(wrapper.findAll(".audio-item-news")[0].classes()).toContain("is-playing");
 
         // 뉴스 큐 위치는 그대로 두고, 재생 중인 것만 다른 문서로 바꾼다.
-        nowPlayingId.value = "개인-오디오북-id";
+        setNowPlaying("개인-오디오북-id");
 
         return wrapper.vm.$nextTick().then(() => {
             const rows = wrapper.findAll(".audio-item-news");
@@ -105,10 +104,25 @@ describe("재생 중인 항목 표시", () => {
         const { state, wrapper } = setup(1);
         expect(state.queueIndex.value).toBe(1);
 
-        nowPlayingId.value = null;
+        setNowPlaying(null);
         await wrapper.vm.$nextTick();
 
         expect(wrapper.findAll(".audio-item-news").some((r) => r.classes().includes("is-playing"))).toBe(false);
+        wrapper.unmount();
+    });
+
+    it("일시정지하면 is-paused 클래스가 추가된다", async () => {
+        const { wrapper, rows } = setup(1);
+
+        expect(rows[1].classes()).toContain("is-playing");
+        expect(rows[1].classes()).not.toContain("is-paused");
+
+        setNowPlayingState("paused");
+        await wrapper.vm.$nextTick();
+
+        const updated = wrapper.findAll(".audio-item-news");
+        expect(updated[1].classes()).toContain("is-playing");
+        expect(updated[1].classes()).toContain("is-paused");
         wrapper.unmount();
     });
 
@@ -128,21 +142,21 @@ describe("재생 중인 항목 표시", () => {
 describe("보관함 목록에도 같은 표시", () => {
     it("지금 듣는 오디오북 행에만 표시가 붙는다", async () => {
         const { mount } = await import("@vue/test-utils");
-        const { nowPlayingId } = await import("../services/nowPlaying");
+        const { nowPlayingId, setNowPlaying } = await import("../services/nowPlaying");
         const AudioListItemView = (await import("../components/Library/AudioListItem_View.vue")).default;
 
         const audio = { id: "a1", title: "데미안.pdf", timestamp: 0 };
-        nowPlayingId.value = "a1";
+        setNowPlaying("a1");
         const playing = mount(AudioListItemView, {
             props: { audio: audio as never, logic: {} as never },
         });
-        nowPlayingId.value = "다른-것";
+        setNowPlaying("다른-것");
         const idle = mount(AudioListItemView, {
             props: { audio: audio as never, logic: {} as never },
         });
 
         expect(playing.find(".audio-item").classes()).toContain("is-playing");
-        expect(playing.find(".now-playing-bars").exists()).toBe(true);
+        expect(playing.find(".row-play-bars").exists()).toBe(true);
         expect(idle.find(".audio-item").classes()).not.toContain("is-playing");
         nowPlayingId.value = null;
         playing.unmount();
@@ -151,7 +165,7 @@ describe("보관함 목록에도 같은 표시", () => {
 
     it("재생이 바뀌면 표시도 따라간다", async () => {
         const { mount } = await import("@vue/test-utils");
-        const { nowPlayingId } = await import("../services/nowPlaying");
+        const { nowPlayingId, setNowPlaying } = await import("../services/nowPlaying");
         const AudioListItemView = (await import("../components/Library/AudioListItem_View.vue")).default;
 
         nowPlayingId.value = null;
@@ -160,7 +174,7 @@ describe("보관함 목록에도 같은 표시", () => {
         });
         expect(wrapper.find(".audio-item").classes()).not.toContain("is-playing");
 
-        nowPlayingId.value = "a1";
+        setNowPlaying("a1");
         await wrapper.vm.$nextTick();
 
         expect(wrapper.find(".audio-item").classes()).toContain("is-playing");

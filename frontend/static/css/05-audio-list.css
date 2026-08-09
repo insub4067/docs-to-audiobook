@@ -634,15 +634,11 @@
 }
 
 /* ===== 지금 듣고 있는 항목 표시 ===== */
-/* 목록에서 어느 것을 듣고 있는지 보이지 않아 어디까지 왔는지 알 수 없었다.
-   목차의 "현재 장"(.index-item.is-current)과 같은 시각 언어를 쓴다 —
-   왼쪽에 얇은 강조선 + 옅은 배경. 같은 앱 안에서 "여기가 현재"라는 신호가
-   화면마다 다르면 매번 새로 배워야 한다. */
+/* "여기가 현재"라는 신호를 모든 목록(내 파일·뉴스·재생목록)에서 같은
+   시각 언어로 쓴다 — 왼쪽 강조선 + 옅은 배경 + 아이콘 자리에 파형 막대.
+   .is-playing = 현재 항목(재생 중이든 일시정지든)
+   .is-paused  = 현재 항목이지만 소리가 멈춘 상태 (강조를 약하게) */
 .audio-item.is-playing .audio-item-front {
-    /* ⚠️ 반투명이면 안 된다. 내 파일 목록의 행 아래에는 스와이프 삭제용
-       빨간 레이어(.audio-item-bg)가 깔려 있어서, 투명도가 있으면 그게
-       비쳐 보인다(hover/active 규칙이 이미 같은 이유로 불투명하다).
-       카드 배경 위에 강조색을 섞어 같은 색을 불투명하게 만든다. */
     background-color: color-mix(in srgb, var(--primary-color) 14%, var(--card-bg-solid));
     box-shadow: inset 3px 0 0 var(--primary-color);
 }
@@ -652,37 +648,61 @@
     font-weight: 700;
 }
 
-/* 정지 화면에서도 "재생 중"이 읽히도록 색만 쓰지 않고 움직이는 막대를 함께
-   둔다. 색은 색각 이상이나 강한 햇빛 아래에서 놓치기 쉽다. */
-.now-playing-bars {
-    display: flex;
-    align-items: flex-end;
-    gap: 2px;
-    flex-shrink: 0;
-    width: 14px;
-    height: 14px;
-    margin-left: auto;
+.audio-item.is-playing.is-paused .audio-item-front {
+    background-color: color-mix(in srgb, var(--primary-color) 7%, var(--card-bg-solid));
+    box-shadow: inset 3px 0 0 color-mix(in srgb, var(--primary-color) 50%, transparent);
 }
 
-.now-playing-bars span {
-    flex: 1;
+.audio-item.is-playing.is-paused .audio-title {
+    font-weight: 600;
+}
+
+/* --- 행 아이콘 자리: play-circle ↔ 파형 막대 전환 --- */
+.row-play-icon {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+}
+
+.row-play-bars {
+    display: none;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 2px;
+    position: absolute;
+    inset: 2px;
+}
+
+.row-play-bars span {
+    width: 3px;
     border-radius: 1px;
     background-color: var(--primary-color);
     animation: now-playing-bounce 0.9s ease-in-out infinite;
 }
 
-.now-playing-bars span:nth-child(1) { animation-delay: -0.6s; }
-.now-playing-bars span:nth-child(2) { animation-delay: -0.3s; }
+.row-play-bars span:nth-child(1) { animation-delay: -0.6s; }
+.row-play-bars span:nth-child(2) { animation-delay: -0.3s; }
+
+.audio-item.is-playing:not(.is-paused) .row-play-icon > [data-lucide],
+.audio-item.is-playing:not(.is-paused) .row-play-icon > svg {
+    visibility: hidden;
+}
+
+.audio-item.is-playing:not(.is-paused) .row-play-bars {
+    display: flex;
+}
 
 @keyframes now-playing-bounce {
     0%, 100% { height: 30%; }
     50% { height: 100%; }
 }
 
-/* 움직임을 줄이는 설정에서는 멈춘 막대로 남긴다 — 사라지면 "재생 중"을
-   알리는 유일한 비색상 신호가 없어진다. */
 @media (prefers-reduced-motion: reduce) {
-    .now-playing-bars span {
+    .row-play-bars span {
         height: 65%;
         animation: none;
     }

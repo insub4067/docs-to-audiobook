@@ -15,6 +15,22 @@ import { ref, type Ref } from "vue";
 
 export const nowPlayingId: Ref<string | null> = ref(null);
 
-export function setNowPlaying(id: string | null): void {
+// id만으로는 "지금 듣는 것"과 "듣다 멈춘 것"을 구분할 수 없다. 목록에서
+// 재생 중인 행에 ▶가 남아 있어 "재생 중인가, 눌러야 하는가"가 모호했는데,
+// 그걸 고치려면 화면이 재생 상태를 알아야 한다.
+//
+// loading·finished·error는 넣지 않는다. 지금 그 상태를 만드는 코드가 없어
+// 죽은 분기가 된다 — 필요해질 때 그때 늘린다.
+export type NowPlayingState = "playing" | "paused";
+
+export const nowPlayingState: Ref<NowPlayingState> = ref("paused");
+
+export function setNowPlaying(id: string | null, state: NowPlayingState = "playing"): void {
     nowPlayingId.value = id;
+    nowPlayingState.value = id ? state : "paused";
+}
+
+export function setNowPlayingState(state: NowPlayingState): void {
+    // 아무것도 재생 중이 아닐 때 들어오는 pause 이벤트는 무시한다.
+    if (nowPlayingId.value) nowPlayingState.value = state;
 }

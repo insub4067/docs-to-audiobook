@@ -4,7 +4,7 @@ import type { ReaderState } from "../Reader/Reader_State.vue";
 import type { ReaderLogic } from "../Reader/Reader_Logic.vue";
 import type { AudioListState } from "../components/Library/AudioList_State.vue";
 import { getAudiobookDisplayTitle } from "../utils/format";
-import { nowPlayingId } from "../services/nowPlaying";
+import { nowPlayingId, nowPlayingState } from "../services/nowPlaying";
 import {
     usePlaylistNavigation, isNewsItem, type PlaylistItem,
 } from "../components/MiniPlayer/playlistNavigation";
@@ -24,10 +24,12 @@ function itemTitle(item: PlaylistItem): string {
     return isNewsItem(item) ? item.title : getAudiobookDisplayTitle(item.title);
 }
 
-// ⚠️ 목록 안의 자리가 아니라 "지금 재생 중인 id"로 판정한다. 자리로 보면
-// 목록이 바뀌거나 다른 문서를 재생했을 때 엉뚱한 행에 표시가 남는다.
-function isPlaying(item: PlaylistItem): boolean {
+function isCurrent(item: PlaylistItem): boolean {
     return nowPlayingId.value === item.id;
+}
+
+function isItemPlaying(item: PlaylistItem): boolean {
+    return isCurrent(item) && nowPlayingState.value === "playing";
 }
 
 function onItemClick(item: PlaylistItem): void {
@@ -61,21 +63,17 @@ function onBackdropClick(event: MouseEvent): void {
                         :key="item.id"
                         type="button"
                         class="audio-item audio-item-news"
-                        :class="{ 'is-playing': isPlaying(item) }"
-                        :aria-current="isPlaying(item) ? 'true' : undefined"
+                        :class="{ 'is-playing': isCurrent(item), 'is-paused': isCurrent(item) && !isItemPlaying(item) }"
+                        :aria-current="isCurrent(item) ? 'true' : undefined"
                         @click="onItemClick(item)"
                     >
                         <div class="audio-item-front">
                             <div class="audio-title-group">
-                                <!-- ⚠️ lucide가 <i>를 <svg>로 갈아치우므로 이 아이콘을
-                                     v-if/v-show로 토글하면 안 된다. Vue의 vnode가 사라진
-                                     <i>를 가리키게 돼 크래시가 난다(프로필 화면에서 겪었다).
-                                     아이콘은 그대로 두고 표시를 덧붙인다. -->
-                                <i data-lucide="play-circle"></i>
-                                <span class="audio-title">{{ itemTitle(item) }}</span>
-                                <span v-if="isPlaying(item)" class="now-playing-bars" aria-hidden="true">
-                                    <span></span><span></span><span></span>
+                                <span class="row-play-icon">
+                                    <i data-lucide="play-circle"></i>
+                                    <span class="row-play-bars" aria-hidden="true"><span></span><span></span><span></span></span>
                                 </span>
+                                <span class="audio-title">{{ itemTitle(item) }}</span>
                             </div>
                         </div>
                     </button>

@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import type { AudiobookRecord } from "../../services/indexedDb";
 import type { AudioListLogic } from "./AudioList_Logic.vue";
 import { getAudiobookDisplayTitle } from "../../utils/format";
-import { nowPlayingId } from "../../services/nowPlaying";
+import { nowPlayingId, nowPlayingState } from "../../services/nowPlaying";
 
 const props = withDefaults(defineProps<{
     audio: AudiobookRecord;
@@ -15,7 +15,10 @@ const props = withDefaults(defineProps<{
 
 // 지금 듣고 있는 항목은 목록에서 바로 알아볼 수 있어야 한다. 재생목록
 // 시트와 같은 표시를 쓴다 — 화면마다 신호가 다르면 매번 새로 배워야 한다.
-const isPlaying = computed(() => nowPlayingId.value === props.audio.id);
+// "지금 듣는 것"과 "듣다 멈춘 것"을 나눈다. 행 강조는 둘 다에 걸고,
+// 움직이는 막대는 실제로 소리가 날 때만 보여준다.
+const isCurrent = computed(() => nowPlayingId.value === props.audio.id);
+const isPlaying = computed(() => isCurrent.value && nowPlayingState.value === "playing");
 
 const root = ref<HTMLElement | null>(null);
 const front = ref<HTMLElement | null>(null);
@@ -152,8 +155,8 @@ onUnmounted(() => document.removeEventListener("touchstart", onDocumentTouchStar
     <div
         ref="root"
         class="audio-item"
-        :class="{ 'deleting-row': isDeleting, 'swipe-open': isSwipeOpen, 'is-playing': isPlaying }"
-        :aria-current="isPlaying ? 'true' : undefined"
+        :class="{ 'deleting-row': isDeleting, 'swipe-open': isSwipeOpen, 'is-playing': isCurrent, 'is-paused': isCurrent && !isPlaying }"
+        :aria-current="isCurrent ? 'true' : undefined"
         @click="onItemClick"
     >
         <div class="audio-item-bg" @click="onBgClick"><i data-lucide="trash-2"></i></div>
@@ -166,7 +169,10 @@ onUnmounted(() => document.removeEventListener("touchstart", onDocumentTouchStar
             @touchend.passive="onTouchEnd"
         >
             <div class="audio-title-group">
-                <i data-lucide="play-circle"></i>
+                <span class="row-play-icon">
+                    <i data-lucide="play-circle"></i>
+                    <span class="row-play-bars" aria-hidden="true"><span></span><span></span><span></span></span>
+                </span>
                 <div class="audio-title-col">
                     <span class="audio-title" :title="getAudiobookDisplayTitle(audio.title)">{{ getAudiobookDisplayTitle(audio.title) }}</span>
                     <span v-if="subtitleLabel" class="audio-subtitle">{{ subtitleLabel }}</span>
@@ -185,9 +191,6 @@ onUnmounted(() => document.removeEventListener("touchstart", onDocumentTouchStar
                 <span v-if="audio.isDefault" class="default-badge" title="기본 제공 오디오북">기본 제공</span>
                 <svg v-if="audio.isBookmarked" class="bookmark-star" width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none" title="즐겨찾기"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
             </div>
-            <span v-if="isPlaying" class="now-playing-bars" aria-hidden="true">
-                <span></span><span></span><span></span>
-            </span>
             <div class="audio-actions">
                 <button class="btn-icon-round btn-more" aria-label="더보기" @click.stop="logic.openActionSheet(audio)">
                     <i data-lucide="more-horizontal"></i>

@@ -12,7 +12,7 @@ import { useToastLogic, setReaderOpenForToast } from "../components/Toast/Toast_
 import { useToastState } from "../components/Toast/Toast_State.vue";
 import { useAuthLogic } from "../Auth/Auth_Logic.vue";
 import { swallowed } from "../services/clientErrors";
-import { setNowPlaying } from "../services/nowPlaying";
+import { setNowPlaying, setNowPlayingState } from "../services/nowPlaying";
 
 export interface SharedReaderModeOptions {
     shareId?: string | null;
@@ -285,8 +285,8 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
                 state.isPlaying.value = true;
             }
         };
-        el.onplay = () => { state.isPlaying.value = true; trackPlaybackStartOnce(); };
-        el.onpause = () => { state.isPlaying.value = false; };
+        el.onplay = () => { state.isPlaying.value = true; setNowPlayingState("playing"); trackPlaybackStartOnce(); };
+        el.onpause = () => { state.isPlaying.value = false; setNowPlayingState("paused"); };
         // 반복 모드 처리. resetAudioHandlers()가 onended를 지우므로 매번 다시
         // 걸어야 한다 — 이걸 빠뜨려서 "전체 문서 반복"을 골라도 재생이 그냥
         // 끝나 버렸다.
@@ -376,8 +376,8 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         // 자동재생으로 막힌다. load() 직후 같은 흐름에서 요청해 두면
         // 브라우저가 그 요청을 이어지는 재생으로 취급한다(연속 재생이
         // PWA를 벗어나면 멈추던 원인).
-        el.onplay = () => { state.isPlaying.value = true; trackPlaybackStartOnce(); };
-        el.onpause = () => { state.isPlaying.value = false; };
+        el.onplay = () => { state.isPlaying.value = true; setNowPlayingState("playing"); trackPlaybackStartOnce(); };
+        el.onpause = () => { state.isPlaying.value = false; setNowPlayingState("paused"); };
         el.ontimeupdate = () => {
             const currentSec = el.currentTime;
             const duration = el.duration || 0;
