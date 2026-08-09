@@ -228,6 +228,7 @@
 }
 
 .reader-container {
+    --reader-controls-inset: max(10px, env(safe-area-inset-bottom));
     width: 100%;
     max-width: 760px;
     position: absolute;
@@ -419,7 +420,7 @@
     left: 0;
     overflow-y: auto;
     padding: calc(var(--reader-header-h, 96px) + 24px) 32px
-             calc(var(--reader-controls-h, 120px) + 24px);
+             calc(var(--reader-controls-h, 120px) + var(--reader-controls-inset) + 24px);
     font-family: var(--font-serif);
     font-size: calc(1.15rem * var(--reader-font-scale, 1));
     line-height: var(--reader-line-height, 2.0);
@@ -729,7 +730,7 @@
 .reader-back-to-current {
     position: absolute;
     left: 50%;
-    bottom: calc(var(--reader-controls-h, 120px) + 16px);
+    bottom: calc(var(--reader-controls-h, 120px) + var(--reader-controls-inset) + 16px);
     transform: translateX(-50%);
     z-index: 15;
     display: flex;
@@ -765,23 +766,25 @@
    완전히 숨기면 매번 스크롤을 되돌려야 한다. */
 .reader-controls {
     position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
+    bottom: var(--reader-controls-inset);
+    left: 12px;
+    right: 12px;
     z-index: 10;
-    padding: 8px 20px max(12px, env(safe-area-inset-bottom));
-    border-top: 1px solid var(--glass-border);
+    padding: 14px 16px 16px;
+    border-radius: 20px;
+    border: 1px solid var(--reader-border);
     background: var(--reader-surface);
     backdrop-filter: blur(var(--glass-blur)) saturate(140%);
     -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.06), var(--glass-highlight);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.10), var(--glass-highlight);
 }
 
 
 .reader-player-ui {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: space-between;
+    gap: 6px;
     width: 100%;
 }
 
@@ -795,8 +798,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 44px;
-    height: 44px;
+    width: 48px;
+    height: 48px;
     background-color: var(--primary-color);
     color: #ffffff;
     border: none;
@@ -870,8 +873,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 34px;
-    height: 34px;
+    width: 30px;
+    height: 30px;
     background: transparent;
     border: none;
     color: var(--text-muted);
@@ -885,8 +888,8 @@
 }
 
 .btn-reader-secondary i {
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
 }
 
 .btn-reader-secondary:hover {
@@ -918,10 +921,10 @@
 .player-progress-bar {
     height: 4px;
     background-color: var(--border-color);
-    border-radius: 0;
+    border-radius: 2px;
     position: relative;
     cursor: pointer;
-    margin: -8px -20px 10px;
+    margin: 0 0 10px;
 }
 
 /* 보이는 선은 4px지만 손가락으로 4px를 정확히 누를 수는 없다. 실제로
@@ -937,6 +940,7 @@
     width: 0%;
     height: 100%;
     background-color: var(--accent-color);
+    border-radius: 2px;
     position: absolute;
     top: 0;
     left: 0;
@@ -971,7 +975,7 @@
         /* 좌우만 좁히고 상/하는 바 높이 확보를 유지해야 한다 —
            여기서 padding을 통째로 덮으면 문서 처음/끝이 바에 가려진다 */
         padding: calc(var(--reader-header-h, 96px) + 30px) 22px
-                 calc(var(--reader-controls-h, 120px) + 30px);
+                 calc(var(--reader-controls-h, 120px) + var(--reader-controls-inset) + 30px);
         font-size: calc(1.12rem * var(--reader-font-scale, 1));
         line-height: calc(var(--reader-line-height, 2.0) - 0.2);
     }
