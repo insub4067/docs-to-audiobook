@@ -1,11 +1,19 @@
 <script lang="ts">
 import { ref, type Ref } from "vue";
 import type { AudiobookRecord } from "../../services/indexedDb";
+import type { ReaderSentence } from "../../Reader/sentenceDisplay";
 
 export interface BackgroundJobItem {
     jobId: string;
     title: string;
     folderId: string | null;
+    /** 합성 중 앞 구간을 미리 듣기 위해 받아 둔 것. 눌렀을 때 받기 시작한다 —
+     *  백그라운드로 도는 문서는 스캔본처럼 길어서, 들을지 모르는 오디오를
+     *  미리 통째로 내려받으면 안 된다. */
+    playableAudio?: Blob;
+    playableSentences?: ReaderSentence[];
+    /** 눌러서 받는 중. 버튼을 두 번 눌러 두 벌 받지 않게 한다. */
+    isPreparingPreview?: boolean;
 }
 
 export interface AudioListState {

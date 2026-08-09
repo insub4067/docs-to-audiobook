@@ -124,6 +124,18 @@ onMounted(() => {
                                 <span class="generating-status">서버에서 생성 중...</span>
                             </div>
                         </div>
+                        <!-- 서버는 백그라운드 작업에도 준비된 앞 구간을 내준다.
+                             그동안 그걸 받아 오는 코드가 포그라운드에만 있어,
+                             정작 오래 걸리는 문서에서 못 쓰고 있었다. -->
+                        <button
+                            type="button"
+                            class="generating-listen-btn"
+                            :disabled="item.isPreparingPreview"
+                            @click.stop="logic.listenEarlyToBackgroundJob(item.jobId)"
+                        >
+                            <i data-lucide="play"></i>
+                            <span>{{ item.isPreparingPreview ? "준비 중..." : "먼저 듣기" }}</span>
+                        </button>
                     </div>
                 </template>
 

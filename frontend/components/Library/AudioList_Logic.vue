@@ -14,7 +14,8 @@ import { useToastLogic } from "../Toast/Toast_Logic.vue";
 import { useToastState } from "../Toast/Toast_State.vue";
 import { usePromptSheetLogic } from "../../Sheet/PromptSheet_Logic.vue";
 import { usePromptSheetState } from "../../Sheet/PromptSheet_State.vue";
-import type { AudioListState } from "./AudioList_State.vue";
+import type { AudioListState, BackgroundJobItem } from "./AudioList_State.vue";
+import { streamJobAudio } from "../../services/progressiveAudio";
 import { reportClientError } from "../../services/clientErrors";
 
 export interface SyncResult {
@@ -39,8 +40,9 @@ export interface AudioListLogic {
     deleteAudiobook(id: string): Promise<void>;
     sync(options?: { silent?: boolean }): Promise<SyncResult>;
     savePlaybackState(entry: AudiobookRecord, position: number, playbackSettings: { playbackSpeed: number; repeatMode: string }): Promise<void>;
-    showBackgroundJob(jobId: string, title?: string): void;
+    showBackgroundJob(jobId: string, title?: string, folderId?: string | null): void;
     removeBackgroundJob(jobId: string): void;
+    listenEarlyToBackgroundJob(jobId: string): Promise<void>;
 }
 
 let syncing = false;
@@ -557,6 +559,67 @@ export function useAudioListLogic(state: AudioListState): AudioListLogic {
         state.backgroundJobItems.value = state.backgroundJobItems.value.filter((item) => item.jobId !== jobId);
     }
 
+    /** 백그라운드로 도는 작업의 앞 구간을 받아 듣는다.
+     *
+     * 서버는 백그라운드 작업에도 준비된 청크를 그대로 내준다(ready_chunks).
+     * 그런데 그걸 받아 오는 코드가 모달을 켜둔 포그라운드 경로에만 붙어 있어,
+     * 앱을 나갔다 오면 합성이 끝날 때까지 아무것도 들을 수 없었다 — 정작
+     * 기다림이 가장 긴 문서(스캔본 등)가 전부 이쪽으로 온다.
+     *
+     * 자동으로 받지 않고 누른 뒤에 받는다. 이 경로의 문서는 길어서, 들을지
+     * 모르는 오디오를 미리 통째로 내려받으면 데이터가 아깝다.
+     */
+    async function listenEarlyToBackgroundJob(jobId: string): Promise<void> {
+        const find = () => state.backgroundJobItems.value.find((entry) => entry.jobId === jobId);
+
+        const started = find();
+        if (!started || started.isPreparingPreview) return;
+        // 이미 받아 둔 게 있으면 그걸로 바로 연다.
+        if (started.playableAudio) {
+            openPartialReader(started);
+            return;
+        }
+        patchBackgroundJob(jobId, { isPreparingPreview: true });
+
+        let opened = false;
+        try {
+            await streamJobAudio(jobId, authLogic.authHeaders(), {
+                onPlayable(blob, sentences) {
+                    // 목록에서 사라졌으면(완료·삭제) 더 붙들지 않는다.
+                    if (!find()) return;
+                    patchBackgroundJob(jobId, {
+                        playableAudio: blob,
+                        playableSentences: sentences,
+                        isPreparingPreview: false,
+                    });
+                    // 처음 들을 수 있게 된 순간 한 번만 연다. 이후로도 계속
+                    // 받아 두어, 닫았다 다시 누르면 더 긴 구간이 열린다.
+                    if (!opened) {
+                        opened = true;
+                        openPartialReader(find()!);
+                    }
+                },
+            });
+        } catch (error) {
+            reportClientError("generation", error);
+            if (!opened) showToast("아직 들을 수 있는 구간이 없습니다.", "error");
+        } finally {
+            patchBackgroundJob(jobId, { isPreparingPreview: false });
+        }
+    }
+
+    function patchBackgroundJob(jobId: string, patch: Partial<BackgroundJobItem>): void {
+        state.backgroundJobItems.value = state.backgroundJobItems.value.map((entry) =>
+            entry.jobId === jobId ? { ...entry, ...patch } : entry
+        );
+    }
+
+    function openPartialReader(item: BackgroundJobItem): void {
+        if (!item.playableAudio) return;
+        const url = URL.createObjectURL(item.playableAudio);
+        (window as any).__openPartialReaderMode?.(item.title, item.playableSentences ?? [], url);
+    }
+
     (window as any).__renderLibrary = refresh;
     (window as any).__syncAudiobooksToCloud = sync;
     (window as any).__showBackgroundJobLoading = showBackgroundJob;
@@ -565,7 +628,7 @@ export function useAudioListLogic(state: AudioListState): AudioListLogic {
     return {
         refresh, load, openItem, openActionSheet, closeActionSheet,
         performShare, downloadAudiobook, editAudiobookTitle, toggleBookmark, moveToFolder, deleteAudiobook, sync,
-        savePlaybackState, showBackgroundJob, removeBackgroundJob,
+        savePlaybackState, showBackgroundJob, removeBackgroundJob, listenEarlyToBackgroundJob,
     };
 }
 
