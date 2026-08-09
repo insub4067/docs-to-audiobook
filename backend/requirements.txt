@@ -24,7 +24,4 @@ pywebpush==2.3.0
 supabase>=2.0.0
 python-jose[cryptography]>=3.3.0
 python-dotenv>=1.0.0
-# models.py의 EmailStr이 요구한다. 빠져 있어서 배포 환경에서만
-# models import가 실패하고 회원가입/로그인이 500이 났다.
-email-validator>=2.0.0
 google-auth>=2.25.0
