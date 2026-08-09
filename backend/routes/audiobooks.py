@@ -104,6 +104,31 @@ async def list_audiobooks(authorization: str = Header(None)):
         raise HTTPException(status_code=500, detail=f"목록을 불러오지 못했습니다: {e}")
 
 
+@router.get("/api/audiobooks/{audiobook_id}/media-urls")
+async def get_audiobook_media_urls(audiobook_id: str, authorization: str = Header(None)):
+    """이 오디오북 하나의 서명 URL을 새로 발급한다.
+
+    목록에 실린 URL은 응답을 만들 때 서명한 것이라 한 시간 뒤 죽는다
+    (SIGNED_URL_TTL). PWA는 며칠씩 열려 있으므로, 재생 직전에 새로 받지
+    않으면 저장해 둔 URL로 404가 난다 — 경제 뉴스에서 실제로 겪은 방식이다.
+
+    목록 전체를 다시 받아도 되지만, 재생 한 번 때문에 모든 항목을 서명하는
+    것은 낭비다."""
+    user_id = require_user_id(authorization)
+    supabase = _supabase_or_503()
+
+    rows = supabase.table("audiobooks").select("*").eq("id", audiobook_id) \
+        .eq("user_id", user_id).execute().data or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="오디오북을 찾을 수 없습니다.")
+
+    items = audiobook_items_with_urls(supabase, user_id, rows)
+    if not items:
+        # audiobook_items_with_urls는 오디오가 없는 행을 조용히 건너뛴다.
+        raise HTTPException(status_code=404, detail="오디오 파일을 찾을 수 없습니다.")
+    return {"audio_url": items[0]["audio_url"], "sentences_url": items[0].get("sentences_url")}
+
+
 @router.patch("/api/audiobooks/{audiobook_id}")
 async def update_audiobook(audiobook_id: str, payload: dict, authorization: str = Header(None)):
     """내 오디오북 제목·소속 폴더·북마크 여부를 수정한다."""

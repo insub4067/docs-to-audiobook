@@ -217,9 +217,22 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         }
         const el = state.audioEl.value;
         if (!el) return;
-        const audioBlob = audio.audioData instanceof Blob ? audio.audioData : new Blob([audio.audioData as ArrayBuffer], { type: "audio/mpeg" });
-        const localUrl = URL.createObjectURL(audioBlob);
-        currentObjectUrl = localUrl;
+        // 본체가 손에 있으면 blob으로, 아직 없으면 원격 URL을 그대로 튼다.
+        // 브라우저는 MP3를 다 받지 않아도 앞부분만으로 재생을 시작한다 —
+        // 22분짜리 20MB를 다 기다리던 것이 첫 재생이 오래 걸리던 이유였다.
+        // 받아 두는 일은 호출부가 재생을 막지 않고 뒤에서 한다.
+        let localUrl: string;
+        if (audio.audioData) {
+            const audioBlob = audio.audioData instanceof Blob
+                ? audio.audioData
+                : new Blob([audio.audioData as ArrayBuffer], { type: "audio/mpeg" });
+            localUrl = URL.createObjectURL(audioBlob);
+            currentObjectUrl = localUrl;
+        } else {
+            localUrl = audio.audioUrl as string;
+            // 원격 URL은 우리가 만든 게 아니라 revoke 대상이 아니다.
+            currentObjectUrl = null;
+        }
         isSharedMode = false;
         state.sharedPlaylistKind.value = null;
         sharedAudiobookId = null;

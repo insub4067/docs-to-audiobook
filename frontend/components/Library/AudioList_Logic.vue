@@ -158,20 +158,61 @@ export function useAudioListLogic(state: AudioListState): AudioListLogic {
         return id;
     }
 
-    async function ensureAudioData(entry: AudiobookRecord): Promise<AudiobookRecord> {
-        if (entry.audioData || !entry.audioUrl) return entry;
-        const [audioRes, sentRes] = await Promise.all([
-            fetch(entry.audioUrl), entry.sentencesUrl ? fetch(entry.sentencesUrl) : Promise.resolve(null),
-        ]);
-        if (!audioRes.ok) throw new Error("오디오 다운로드 실패");
-        const buffer = await audioRes.arrayBuffer();
-        let sentences = entry.sentences || [];
-        if (sentRes && sentRes.ok) {
-            try { sentences = await sentRes.json(); } catch { /* 자막 없이도 재생은 된다 */ }
+    /** 재생을 막지 않고 뒤에서 본체를 받아 둔다. 다음부터는 오프라인에서도 열린다. */
+    function cacheAudioInBackground(entry: AudiobookRecord, audioUrl: string): void {
+        (async () => {
+            try {
+                const response = await fetch(audioUrl);
+                if (!response.ok) return;
+                const buffer = await response.arrayBuffer();
+                // 받는 사이에 사용자가 지웠을 수 있다. 지운 것을 되살리면 안 된다.
+                const stillThere = await getAudiobookFromDB(entry.id);
+                if (!stillThere) return;
+                await saveAudiobookToDB({
+                    ...stillThere, audioData: buffer, sizeBytes: buffer.byteLength, cloudOnly: false,
+                });
+            } catch (error) {
+                // 캐시는 부수적이다 — 실패해도 지금 재생은 원격 URL로 멀쩡히 돌아간다.
+                reportClientError("cloud_sync", error);
+            }
+        })();
+    }
+
+    /** 스트리밍으로 곧바로 틀 수 있게 준비한다. 문장(작은 JSON)만 기다린다. */
+    async function prepareStreaming(entry: AudiobookRecord): Promise<AudiobookRecord> {
+        // ⚠️ 저장해 둔 audio_url은 목록을 받을 때 서명한 것이라 한 시간 뒤 죽는다.
+        // PWA는 며칠씩 열려 있으므로 재생 직전에 새로 받는다 — 경제 뉴스가
+        // 정확히 이 방식으로 404가 났었다.
+        let audioUrl = entry.audioUrl;
+        let sentencesUrl = entry.sentencesUrl;
+        if (entry.cloudId && authLogic.isLoggedIn()) {
+            try {
+                const response = await fetch(`/api/audiobooks/${entry.cloudId}/media-urls`, {
+                    headers: authLogic.authHeaders(),
+                });
+                if (response.ok) {
+                    const fresh = await response.json();
+                    audioUrl = fresh.audio_url || audioUrl;
+                    sentencesUrl = fresh.sentences_url || sentencesUrl;
+                }
+            } catch {
+                // 갱신에 실패하면 저장해 둔 URL로 시도한다 — 아직 살아 있을 수 있다.
+            }
         }
-        const filled = { ...entry, audioData: buffer, sentences, sizeBytes: buffer.byteLength, cloudOnly: false };
-        await saveAudiobookToDB(filled);
-        return filled;
+        if (!audioUrl) throw new Error("오디오 주소가 없습니다.");
+
+        let sentences = entry.sentences || [];
+        if (sentencesUrl && sentences.length === 0) {
+            try {
+                const response = await fetch(sentencesUrl);
+                if (response.ok) sentences = await response.json();
+            } catch {
+                // 문장이 없어도 재생은 된다. 하이라이트만 안 될 뿐이다.
+            }
+        }
+
+        cacheAudioInBackground(entry, audioUrl);
+        return { ...entry, audioUrl, sentencesUrl, sentences };
     }
 
     async function fetchPlaybackState(entry: AudiobookRecord): Promise<AudiobookRecord> {
@@ -303,17 +344,19 @@ export function useAudioListLogic(state: AudioListState): AudioListLogic {
             showToast("오디오 데이터를 불러올 수 없습니다. 다시 생성해 주세요.", "error");
             return;
         }
-        if (!freshAudio.audioData && freshAudio.audioUrl) {
-            showToast("클라우드에서 불러오는 중...", "info");
+        if (!freshAudio.audioData) {
+            // 오디오 본체는 기다리지 않는다. 문장(작은 JSON)만 받아 곧바로
+            // 재생을 시작하고, MP3는 원격 URL에서 스트리밍한다 — 예전에는
+            // 20MB를 다 받고서야 리더가 열려 첫 재생이 오래 걸렸다.
             try {
-                freshAudio = await ensureAudioData(freshAudio);
+                freshAudio = await prepareStreaming(freshAudio);
             } catch (error) {
                 console.error(error);
                 showToast("클라우드에서 오디오를 받지 못했습니다.", "error");
                 return;
             }
         }
-        if (!freshAudio.audioData) {
+        if (!freshAudio.audioData && !freshAudio.audioUrl) {
             showToast("오디오 데이터를 불러올 수 없습니다. 다시 생성해 주세요.", "error");
             return;
         }
