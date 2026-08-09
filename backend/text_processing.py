@@ -6,16 +6,74 @@ FastAPI 라우트나 전역 상태에 의존하지 않는다(HTTPException은 �
 """
 import os
 import re
+import zlib
+import zipfile
 import docx
 import pypdf
 from collections import Counter
 from fastapi import HTTPException
 
 
+# 압축 파일(DOCX는 zip, HWP는 zlib 스트림)은 업로드 크기를 지켜도 압축을 풀면
+# 몇 GB가 될 수 있다. 업로드는 로그인 없이 가능하고 머신은 1GB라, 10MB짜리
+# 파일 하나로 프로세스를 죽일 수 있었다.
+#
+# 100MB로 잡은 근거: 이건 서식 XML까지 포함한 크기이고, 텍스트로 치면 대략
+# 5천만 자 안팎이다 — 관리자 합성 상한(MAX_ADMIN_SYNTH_CHARS)과 같은 자리라
+# 정상 문서가 여기 걸릴 일은 사실상 없다.
+MAX_DECOMPRESSED_BYTES = 100 * 1024 * 1024
+# 정상 DOCX는 수십 개 남짓이다. 수만 개짜리는 항목 수로 메모리를 터뜨리는 쪽.
+MAX_ARCHIVE_ENTRIES = 2000
+_DECOMPRESS_CHUNK = 1024 * 1024
+
+
+def _too_big_when_unpacked() -> HTTPException:
+    return HTTPException(
+        status_code=413,
+        detail="압축을 풀었을 때 너무 커지는 파일입니다. 파일이 손상됐거나 지원 범위를 벗어납니다.",
+    )
+
+
+def _reject_zip_bomb(file_path: str) -> None:
+    """DOCX(zip)를 열기 전에 실제 압축 해제 크기를 확인한다.
+
+    zip 헤더의 file_size는 공격자가 마음대로 쓸 수 있는 값이라 그것만 믿으면
+    안 된다. 그래서 항목을 실제로 풀어보되, 상한을 넘는 순간 중단한다 —
+    끝까지 풀고 나서 재보는 건 이미 늦다(read_upload_limited와 같은 이유).
+    """
+    try:
+        with zipfile.ZipFile(file_path) as archive:
+            entries = archive.infolist()
+            if len(entries) > MAX_ARCHIVE_ENTRIES:
+                raise _too_big_when_unpacked()
+
+            total = 0
+            for entry in entries:
+                with archive.open(entry) as stream:
+                    while chunk := stream.read(_DECOMPRESS_CHUNK):
+                        total += len(chunk)
+                        if total > MAX_DECOMPRESSED_BYTES:
+                            raise _too_big_when_unpacked()
+    except zipfile.BadZipFile:
+        raise HTTPException(status_code=400, detail="손상된 파일이거나 지원하지 않는 형식입니다.")
+
+
+def _decompress_limited(data: bytes, remaining: int) -> bytes:
+    """HWP 본문 스트림을 상한까지만 푼다.
+
+    zlib.decompress()는 출력 크기에 제한이 없어, 작은 스트림이 몇 GB로
+    부풀어도 그대로 메모리에 올린다.
+    """
+    decompressor = zlib.decompressobj(-15)
+    unpacked = decompressor.decompress(data, remaining + 1)
+    if len(unpacked) > remaining:
+        raise _too_big_when_unpacked()
+    return unpacked
+
+
 def extract_hwp_text(filepath: str) -> str:
     try:
         import olefile
-        import zlib
         import struct
 
         f = olefile.OleFileIO(filepath)
@@ -27,10 +85,14 @@ def extract_hwp_text(filepath: str) -> str:
 
         sections = [d for d in dirs if d[0] == 'BodyText']
         text_chunks = []
+        remaining = MAX_DECOMPRESSED_BYTES
         for sec in sections:
             stream = f.openstream(sec).read()
             if is_compressed:
-                stream = zlib.decompress(stream, -15)
+                stream = _decompress_limited(stream, remaining)
+            remaining -= len(stream)
+            if remaining < 0:
+                raise _too_big_when_unpacked()
             
             i = 0
             while i < len(stream):
@@ -55,6 +117,10 @@ def extract_hwp_text(filepath: str) -> str:
                     text_chunks.append("".join(clean_chars))
                 i += rec_len
         return "\n".join(text_chunks)
+    except HTTPException:
+        # 압축 폭탄 거부(413)가 아래 일반 처리에 걸려 "해석 실패"(400)로
+        # 둔갑하면, 왜 거부됐는지 사용자도 로그도 알 수 없다.
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"HWP 파일 해석 실패: {str(e)}")
 
@@ -73,6 +139,7 @@ def _looks_like_garbled_pdf_extraction(text: str) -> bool:
 def extract_text(file_path: str, filename: str) -> str:
     ext = os.path.splitext(filename)[1].lower()
     if ext == ".docx":
+        _reject_zip_bomb(file_path)
         doc = docx.Document(file_path)
         return "\n".join([para.text for para in doc.paragraphs])
     elif ext == ".pdf":

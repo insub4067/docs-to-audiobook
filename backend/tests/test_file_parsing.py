@@ -1,3 +1,4 @@
+import zipfile
 import pytest
 from fastapi import HTTPException
 from text_processing import extract_text, _looks_like_garbled_pdf_extraction
@@ -45,8 +46,12 @@ def test_extract_text_docx(tmp_path):
         mock_instance.paragraphs = [mock_para]
         mock_doc.return_value = mock_instance
 
+        # 실제 zip이어야 한다 — extract_text가 python-docx에 넘기기 전에
+        # 압축 해제 크기를 먼저 확인하기 때문이다(압축 폭탄 방어). 이 테스트가
+        # 보는 것은 그 뒤의 위임이므로 내용물 자체는 비어도 된다.
         docx_file = tmp_path / "test.docx"
-        docx_file.write_text("dummy")
+        with zipfile.ZipFile(docx_file, "w") as archive:
+            archive.writestr("word/document.xml", "<document/>")
 
         content = extract_text(str(docx_file), docx_file.name)
         assert content == "Hello Docx"
