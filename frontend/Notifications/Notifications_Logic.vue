@@ -18,7 +18,10 @@ const BACKGROUND_JOB_CLAIM_MS = 5 * 60 * 1000;
 const PUSH_UNSUBSCRIBE_TIMEOUT_MS = 2500;
 const backgroundNotificationTabId = crypto.randomUUID();
 
-let backgroundJobCheckInterval: ReturnType<typeof setInterval> | null = null;
+let backgroundJobCheckTimer: ReturnType<typeof setTimeout> | null = null;
+let backgroundJobCheckDelay = 2000;
+const BG_JOB_MIN_DELAY = 2000;
+const BG_JOB_MAX_DELAY = 30000;
 let checkingBackgroundJobs = false;
 let backgroundNotificationMessageListenerAdded = false;
 
@@ -97,13 +100,29 @@ export function useNotificationsLogic(state: NotificationsState): NotificationsL
         }
     }
 
+    function scheduleNextBackgroundJobCheck(): void {
+        if (backgroundJobCheckTimer) return;
+        backgroundJobCheckTimer = setTimeout(async () => {
+            backgroundJobCheckTimer = null;
+            await checkPendingBackgroundJobs();
+            if (readPendingBackgroundJobs().length > 0) {
+                backgroundJobCheckDelay = Math.min(backgroundJobCheckDelay * 2, BG_JOB_MAX_DELAY);
+                scheduleNextBackgroundJobCheck();
+            } else {
+                backgroundJobCheckDelay = BG_JOB_MIN_DELAY;
+            }
+        }, backgroundJobCheckDelay);
+    }
+
     function updateBackgroundJobCheckInterval(): void {
         const hasPendingJobs = readPendingBackgroundJobs().length > 0;
-        if (hasPendingJobs && !backgroundJobCheckInterval) {
-            backgroundJobCheckInterval = setInterval(checkPendingBackgroundJobs, 30000);
-        } else if (!hasPendingJobs && backgroundJobCheckInterval) {
-            clearInterval(backgroundJobCheckInterval);
-            backgroundJobCheckInterval = null;
+        if (hasPendingJobs && !backgroundJobCheckTimer) {
+            backgroundJobCheckDelay = BG_JOB_MIN_DELAY;
+            scheduleNextBackgroundJobCheck();
+        } else if (!hasPendingJobs && backgroundJobCheckTimer) {
+            clearTimeout(backgroundJobCheckTimer);
+            backgroundJobCheckTimer = null;
+            backgroundJobCheckDelay = BG_JOB_MIN_DELAY;
         }
     }
 
@@ -111,7 +130,12 @@ export function useNotificationsLogic(state: NotificationsState): NotificationsL
         const userId = currentUserId();
         if (!userId || typeof jobId !== "string" || !jobId) return;
         localStorage.setItem(pendingBackgroundJobKey(userId, jobId), JSON.stringify({ title, folderId }));
-        updateBackgroundJobCheckInterval();
+        if (backgroundJobCheckTimer) {
+            clearTimeout(backgroundJobCheckTimer);
+            backgroundJobCheckTimer = null;
+        }
+        backgroundJobCheckDelay = BG_JOB_MIN_DELAY;
+        scheduleNextBackgroundJobCheck();
     }
 
     function forgetBackgroundJob(jobId: string, userId: string | null = currentUserId()): void {
