@@ -122,11 +122,7 @@ async function onImportLink(): Promise<void> {
 const fileInput = ref<HTMLInputElement | null>(null);
 
 // 관리자는 PDF를 "고성능 PDF" 전용 메뉴(Vision OCR 강제)로만 받는다 —
-// 일반 파일 업로드에서 빼서 헷갈리지 않게 한다. 관리자 전용 메뉴가 없는
-// 일반 사용자는 그대로 파일 업로드로 PDF를 올릴 수 있어야 한다.
-const fileInputAccept = computed(() =>
-    authStore.isAdmin ? ".docx,.txt,.md,.markdown,.hwp" : ".docx,.pdf,.txt,.md,.markdown,.hwp"
-);
+const fileInputAccept = ".docx,.pdf,.txt,.md,.markdown,.hwp";
 
 function openFileInput(): void {
     fileInput.value?.click();
