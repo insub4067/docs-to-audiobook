@@ -107,3 +107,15 @@ async def test_serve_shared_page():
         response = await client.get("/share/share123")
         assert response.status_code == 200
         assert "<title>" in response.text
+
+
+async def test_config_exposes_upload_limits():
+    """업로드 상한의 단일 출처. 프론트가 자체 상수를 들고 있다가 백엔드와
+    어긋난 적이 있어(관리자 250MB vs 프론트 50MB), 서버가 값을 내려준다."""
+    from state import MAX_UPLOAD_BYTES, MAX_ADMIN_UPLOAD_BYTES
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        body = (await client.get("/api/config")).json()
+
+    assert body["upload_limit_bytes"] == MAX_UPLOAD_BYTES
+    assert body["admin_upload_limit_bytes"] == MAX_ADMIN_UPLOAD_BYTES

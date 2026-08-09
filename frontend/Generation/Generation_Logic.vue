@@ -10,6 +10,7 @@ import type { GenerationState, GeneratingItem } from "./Generation_State.vue";
 import type { VoiceLogic } from "../Voices/Voice_Logic.vue";
 import { pickGoogleDriveFile, preloadGoogleDrivePicker } from "../Auth/GoogleDrivePicker";
 import { streamJobAudio } from "../services/progressiveAudio";
+import { loadAppConfig, uploadLimitBytes } from "../services/appConfig";
 import { postFormWithProgress, type UploadError } from "../services/uploadProgress";
 
 export interface GenerationArguments {
@@ -61,8 +62,8 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
     const authLogic = useAuthLogic();
     const { showToast } = useToastLogic(useToastState());
 
-    function getUploadLimitBytes(): number {
-        return authStore.isAdmin ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+    function getUploadLimitBytes(): Promise<number | null> {
+        return uploadLimitBytes(authStore.isAdmin);
     }
 
     function getFormattedSpeed(value: number): string {
@@ -217,8 +218,8 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
     }
 
     async function handleFileSelect(file: File): Promise<void> {
-        const maxUploadBytes = getUploadLimitBytes();
-        if (file.size > maxUploadBytes) {
+        const maxUploadBytes = await getUploadLimitBytes();
+        if (maxUploadBytes !== null && file.size > maxUploadBytes) {
             showToast(`파일 크기가 너무 큽니다. 최대 ${maxUploadBytes / 1024 / 1024}MB까지 지원합니다.`, "error");
             return;
         }
@@ -263,10 +264,10 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
     }
 
     async function handleBatchFileSelect(files: FileList | File[]): Promise<void> {
+        const maxUploadBytes = await getUploadLimitBytes();
         const validFiles: File[] = [];
         for (const file of Array.from(files)) {
-            const maxUploadBytes = getUploadLimitBytes();
-            if (file.size > maxUploadBytes) {
+            if (maxUploadBytes !== null && file.size > maxUploadBytes) {
                 showToast(`${file.name}: 파일이 너무 큽니다 (최대 ${maxUploadBytes / 1024 / 1024}MB)`, "error");
             } else {
                 validFiles.push(file);
@@ -390,7 +391,7 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
             return;
         }
         try {
-            const config = await fetch("/api/config").then((r) => r.json());
+            const config = await loadAppConfig();
             const clientId = config.providers?.google;
             if (!clientId) throw new Error("Google 설정이 준비되지 않았습니다.");
             // 로딩 오버레이(취소 버튼 포함)는 실제 업로드/추출 요청이 시작된

@@ -3,6 +3,7 @@ import type { HeaderState } from "./Header_State.vue";
 import { useAuthStore } from "../../stores/auth";
 import { useAuthLogic } from "../../Auth/Auth_Logic.vue";
 import { renderGoogleButton } from "../../Auth/GoogleSignIn";
+import { loadAppConfig } from "../../services/appConfig";
 
 export interface HeaderLogic {
     toggleProfileMenu(): void;
@@ -62,7 +63,7 @@ export function useHeaderLogic({ isProfileMenuOpen, authError, googleButtonSlots
         if (slots.length === 0) return;
 
         try {
-            const config = await fetch("/api/config").then((r) => r.json());
+            const config = await loadAppConfig();
             const clientId = config.providers?.google;
             if (!clientId) {
                 authError.value = "로그인 설정이 준비되지 않았습니다. 관리자에게 문의해 주세요.";
