@@ -12,7 +12,10 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException
 
-from state import supabase_or_503, require_admin_user, AUDIOBOOK_BUCKET, object_paths
+from state import (
+    supabase_or_503, require_admin_user, AUDIOBOOK_BUCKET, object_paths,
+    remove_audiobook_objects,
+)
 from routes.audiobooks import audiobook_items_with_urls
 from routes.content_jobs import queue_jobs, run_jobs, synthesize_into_storage
 from push_notifications import send_news_ready_broadcast
@@ -99,17 +102,23 @@ async def store_news_item(supabase, admin_user_id: str, item: dict, job_id: str)
     # 동일한 패턴 (매번 sentences 파일을 내려받으면 목록 화면이 느려진다).
     duration_seconds = round(max((s.get("end", 0) for s in sentences), default=0) / 1000)
 
-    supabase.table("audiobooks").insert({
-        "id": audiobook_id,
-        "user_id": admin_user_id,
-        "title": item["title"],
-        "file_name": item["title"],
-        "storage_path": audio_path,
-        "duration_seconds": duration_seconds,
-        "is_news": True,
-        "news_category": item.get("category"),
-        "news_source": item.get("source"),
-    }).execute()
+    try:
+        supabase.table("audiobooks").insert({
+            "id": audiobook_id,
+            "user_id": admin_user_id,
+            "title": item["title"],
+            "file_name": item["title"],
+            "storage_path": audio_path,
+            "duration_seconds": duration_seconds,
+            "is_news": True,
+            "news_category": item.get("category"),
+            "news_source": item.get("source"),
+        }).execute()
+    except Exception:
+        # 행이 없으면 이 파일들을 가리키는 것이 아무것도 없다 — 버킷에만
+        # 남아 영영 지워지지 않는다.
+        remove_audiobook_objects(supabase, admin_user_id, audiobook_id)
+        raise
     return audiobook_id
 
 

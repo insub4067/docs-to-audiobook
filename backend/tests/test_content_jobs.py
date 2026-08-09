@@ -202,3 +202,43 @@ async def test_progress_is_reported_while_synthesizing(mock_supabase_tables):
     await _register(*REGISTRATION_PATHS[0][1:], synthesize=synthesize_and_peek)
 
     assert list(seen.values()) == [75]
+
+
+@pytest.mark.asyncio
+async def test_second_retry_is_rejected_while_the_first_is_running(mock_supabase_tables):
+    """재시도 버튼을 연달아 누르면 같은 원문이 동시에 합성되고 오디오북이
+    중복으로 만들어졌다.
+
+    첫 요청이 상태를 queued로 바꾸고 실행을 **예약만** 한 시점이 문제였다 —
+    아직 시작 전이라 두 번째 요청도 통과해 같은 작업이 두 번 예약됐다.
+    run_jobs를 막아 그 창을 그대로 재현한다."""
+    _client, tables = mock_supabase_tables
+    await _register(*REGISTRATION_PATHS[0][1:], synthesize=_always_fails)
+    job_id = tables["content_jobs"].inserted[0]["id"]
+
+    with patch("routes.content_jobs.require_admin_user", return_value="admin-user"), \
+         patch("routes.content_jobs.run_jobs"), \
+         patch("routes.tts.synthesize_document_to_file", side_effect=_fake_synthesize_document):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            first = await client.post(f"/api/admin/content-jobs/{job_id}/retry", headers=_auth_headers())
+            second = await client.post(f"/api/admin/content-jobs/{job_id}/retry", headers=_auth_headers())
+
+    assert first.status_code == 200
+    assert second.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_stuck_processing_job_can_still_be_revived(mock_supabase_tables):
+    """배포 중 재시작으로 'processing'에 멈춘 작업을 되살리는 것은 의도된
+    동작이다 — 경합 방지가 이 능력을 없애면 안 된다."""
+    _client, tables = mock_supabase_tables
+    await _register(*REGISTRATION_PATHS[0][1:], synthesize=_always_fails)
+    job_id = tables["content_jobs"].inserted[0]["id"]
+    tables["content_jobs"].rows[job_id]["status"] = "processing"
+
+    with patch("routes.content_jobs.require_admin_user", return_value="admin-user"), \
+         patch("routes.tts.synthesize_document_to_file", side_effect=_fake_synthesize_document):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(f"/api/admin/content-jobs/{job_id}/retry", headers=_auth_headers())
+
+    assert response.status_code == 200

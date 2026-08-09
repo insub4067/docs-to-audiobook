@@ -23,10 +23,15 @@ class _Query:
         self.job_id = None
         self.status_filter = None
         self.kind_filter = None
+        self.status_condition = None
 
     def eq(self, column, value):
         if column == "id":
             self.job_id = value
+        # 재시도는 "방금 읽은 상태일 때만" 선점한다. 이 조건을 무시하면
+        # 경합 방지 로직을 테스트가 전혀 보지 못한다.
+        if column == "status":
+            self.status_condition = value
         return self
 
     def in_(self, column, values):
@@ -89,9 +94,18 @@ class FakeContentJobsTable:
                 rows = [row for row in rows if row.get("status") in query.status_filter]
             return _Result(rows)
         if query.op == "update":
+            row = self.rows.get(query.job_id)
+            if query.status_condition is not None and (
+                row is None or row.get("status") != query.status_condition
+            ):
+                # 조건이 안 맞으면 아무 행도 갱신되지 않는다 — 실제
+                # Supabase도 빈 목록을 돌려준다.
+                return _Result([])
             self.updates.append((query.job_id, query.payload))
-            if query.job_id in self.rows:
-                self.rows[query.job_id].update(query.payload)
+            if row is not None:
+                row.update(query.payload)
+                return _Result([dict(row)])
+            return _Result([])
         elif query.op == "delete":
             self.deleted.append(query.job_id)
             self.rows.pop(query.job_id, None)

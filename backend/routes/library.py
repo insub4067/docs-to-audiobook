@@ -16,7 +16,10 @@ import logging
 import uuid
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException
 
-from state import MAX_ADMIN_SYNTH_CHARS, supabase_or_503, require_admin_user, require_user_id
+from state import (
+    MAX_ADMIN_SYNTH_CHARS, supabase_or_503, require_admin_user, require_user_id,
+    remove_audiobook_objects,
+)
 from routes.audiobooks import audiobook_items_with_urls
 from routes.content_jobs import queue_jobs, run_jobs, synthesize_into_storage
 
@@ -104,23 +107,28 @@ async def store_library_item(supabase, admin_user_id: str, item: dict, job_id: s
     duration_seconds = round(max((s.get("end", 0) for s in sentences), default=0) / 1000)
     chapter_count = sum(1 for s in sentences if s.get("type") == "heading")
 
-    supabase.table("audiobooks").insert({
-        "id": audiobook_id,
-        "user_id": admin_user_id,
-        "title": item["title"],
-        "file_name": item["title"],
-        "storage_path": audio_path,
-        "duration_seconds": duration_seconds,
-        "is_library": True,
-        "library_status": status,
-        "library_category": item.get("category"),
-        "library_edition": item.get("edition"),
-        "library_translator": item.get("translator"),
-        "library_source": item.get("source"),
-        "library_rights": item.get("rights"),
-        "library_description": item.get("description"),
-        "library_chapter_count": chapter_count,
-    }).execute()
+    try:
+        supabase.table("audiobooks").insert({
+            "id": audiobook_id,
+            "user_id": admin_user_id,
+            "title": item["title"],
+            "file_name": item["title"],
+            "storage_path": audio_path,
+            "duration_seconds": duration_seconds,
+            "is_library": True,
+            "library_status": status,
+            "library_category": item.get("category"),
+            "library_edition": item.get("edition"),
+            "library_translator": item.get("translator"),
+            "library_source": item.get("source"),
+            "library_rights": item.get("rights"),
+            "library_description": item.get("description"),
+            "library_chapter_count": chapter_count,
+        }).execute()
+    except Exception:
+        # 행이 없으면 이 파일들을 가리키는 것이 아무것도 없다.
+        remove_audiobook_objects(supabase, admin_user_id, audiobook_id)
+        raise
     return audiobook_id
 
 

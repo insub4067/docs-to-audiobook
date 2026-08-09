@@ -6,10 +6,13 @@
 """
 import os
 import json
+import logging
 import time
 import shutil
 import asyncio
 from fastapi import HTTPException, Request, UploadFile
+
+logger = logging.getLogger(__name__)
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -244,6 +247,21 @@ def upload_audiobook_objects(supabase, user_id: str, audiobook_id: str, audio, s
         storage.remove([audio_path])
         raise
     return audio_path
+
+
+def remove_audiobook_objects(supabase, user_id: str, audiobook_id: str) -> None:
+    """올려 둔 오디오·문장 쌍을 지운다. 실패해도 예외를 올리지 않는다.
+
+    호출부는 이미 다른 실패를 처리하는 중이다(DB insert가 깨진 상황). 정리에
+    또 실패했다고 원래 오류를 덮어쓰면 무엇이 근본 원인인지 알 수 없게 된다.
+    """
+    try:
+        supabase.storage.from_(AUDIOBOOK_BUCKET).remove(list(object_paths(user_id, audiobook_id)))
+    except Exception as error:
+        logger.warning(
+            "고아 파일 정리 실패 audiobook_id=%s error_type=%s",
+            audiobook_id, type(error).__name__,
+        )
 
 def validate_folder_ownership(supabase, user_id: str, folder_id: str) -> None:
     """folder_id가 이 사용자 소유인지 확인한다. 아니면 404.
