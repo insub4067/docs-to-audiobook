@@ -2,7 +2,7 @@
 import type { ThemeState, AppTheme } from "./Theme_State.vue";
 
 const STORAGE_KEY = "textAudio_appTheme";
-const VALID_THEMES: AppTheme[] = ["light", "dark", "warm", "gray"];
+const VALID_THEMES: AppTheme[] = ["light", "dark", "warm"];
 
 export interface ThemeLogic {
     openSheet(): void;
@@ -17,8 +17,14 @@ export interface ThemeLogic {
 // 한쪽에서 고른 테마가 다른 쪽에서도 유지된다. document는 항상 존재하므로
 // (SSR 아님) 별도 onMounted 없이 여기서 바로 적용한다.
 export function useThemeLogic(state: ThemeState): ThemeLogic {
-    const saved = localStorage.getItem(STORAGE_KEY) as AppTheme | null;
-    if (saved && VALID_THEMES.includes(saved)) state.activeTheme.value = saved;
+    // 없앤 "그레이"를 쓰던 기기는 다크로 넘긴다. 그냥 두면 검증에서 걸러져
+    // 기본값(웜 = 밝은 종이색)으로 떨어지는데, 어두운 테마를 쓰던 사람이
+    // 앱을 열자마자 흰 화면을 보게 된다. 저장값도 함께 고쳐 매번 다시
+    // 옮기지 않게 한다.
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved === "gray") localStorage.setItem(STORAGE_KEY, "dark");
+    const theme = (saved === "gray" ? "dark" : saved) as AppTheme | null;
+    if (theme && VALID_THEMES.includes(theme)) state.activeTheme.value = theme;
     document.documentElement.setAttribute("data-app-theme", state.activeTheme.value);
 
     function openSheet(): void {

@@ -1,7 +1,7 @@
 <script lang="ts">
 import { ref, type Ref } from "vue";
 
-export type AppTheme = "light" | "dark" | "warm" | "gray";
+export type AppTheme = "light" | "dark" | "warm";
 
 export interface AppThemeOption {
     value: AppTheme;
@@ -13,7 +13,6 @@ export const APP_THEME_OPTIONS: AppThemeOption[] = [
     { value: "light", label: "라이트", swatchBg: "#ffffff" },
     { value: "dark", label: "다크", swatchBg: "#121212" },
     { value: "warm", label: "웜", swatchBg: "#FAF5E6" },
-    { value: "gray", label: "그레이", swatchBg: "#1c1c1e" },
 ];
 
 export interface ThemeState {
