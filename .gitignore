@@ -21,3 +21,6 @@ venv/
 # 프론트엔드 빌드 (Vite). 결과물은 Docker 이미지 빌드 시점에 생성한다.
 frontend/node_modules/
 frontend/static/dist/
+
+# 루트에서 vitest를 돌리면 캐시가 여기 생긴다(frontend/ 규칙으로는 안 걸린다).
+node_modules/

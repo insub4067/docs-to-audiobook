@@ -28,7 +28,7 @@ pinned: false
 | **프론트** | Vue 3 SPA (Composition API) + Pinia + Vite, 별도 관리자 SPA |
 | **저장** | Supabase(PostgreSQL + Storage) / 기기 로컬은 IndexedDB |
 | **배포** | Fly.io (Docker), GitHub Actions CI/CD |
-| **테스트** | 백엔드 pytest 247개 + 프론트 Vitest 43개 |
+| **테스트** | 백엔드 pytest 316개 + 프론트 Vitest 187개 |
 
 ---
 
@@ -183,8 +183,8 @@ npm run build       # 관리자 SPA
 npm run build:app   # 사용자 SPA
 
 # 테스트
-python3 -m pytest -q     # 백엔드 247개
-cd frontend && npm test  # 프론트 43개 (Vitest)
+python3 -m pytest -q     # 백엔드 316개
+cd frontend && npm test  # 프론트 187개 (Vitest)
 ```
 
 ### 작업 시 주의
