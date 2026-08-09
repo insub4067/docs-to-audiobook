@@ -14,7 +14,7 @@ import requests
 from urllib.parse import urlparse, urljoin
 from fastapi import APIRouter, Request, HTTPException, Header
 
-from state import require_user_id, enforce_rate_limit, text_storage, _too_large
+from state import require_user_id, enforce_rate_limit, text_storage, too_large
 
 router = APIRouter()
 
@@ -106,7 +106,7 @@ async def extract_url(request: Request, payload: dict, authorization: str = Head
         for chunk in resp.iter_content(chunk_size=64 * 1024):
             total += len(chunk)
             if total > MAX_URL_FETCH_BYTES:
-                raise _too_large(MAX_URL_FETCH_BYTES)
+                raise too_large(MAX_URL_FETCH_BYTES)
             chunks.append(chunk)
         page_bytes = b"".join(chunks)
     except HTTPException:

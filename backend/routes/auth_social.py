@@ -19,7 +19,7 @@ import logging
 import uuid
 from fastapi import APIRouter, Header, HTTPException
 
-from state import _admin_emails
+from state import admin_emails
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -54,7 +54,7 @@ async def get_current_user(authorization: str = Header(None)):
             "email": user["email"],
             "full_name": user.get("full_name"),
             "avatar_url": user.get("avatar_url"),
-            "is_admin": (user.get("email") or "").lower() in _admin_emails(),
+            "is_admin": (user.get("email") or "").lower() in admin_emails(),
             "created_at": user.get("created_at")
         }
 

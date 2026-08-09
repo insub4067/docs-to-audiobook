@@ -5,7 +5,7 @@
 """
 from fastapi import APIRouter, Header, HTTPException
 
-from state import require_user_id, _supabase_or_503
+from state import require_user_id, supabase_or_503
 from routes.audiobooks import audiobook_items_with_urls
 
 router = APIRouter()
@@ -19,7 +19,7 @@ async def create_folder(payload: dict, authorization: str = Header(None)):
         raise HTTPException(status_code=400, detail="폴더 이름이 필요합니다.")
     parent_folder_id = payload.get("parent_folder_id")
 
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
     try:
         if parent_folder_id:
             found = supabase.table("folders").select("id") \
@@ -43,7 +43,7 @@ async def create_folder(payload: dict, authorization: str = Header(None)):
 async def list_folder_contents(parent_id: str | None = None, authorization: str = Header(None)):
     """parent_id가 없으면 최상위(루트)의 폴더·오디오북을 반환한다."""
     user_id = require_user_id(authorization)
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
 
     try:
         current_folder = None
@@ -83,7 +83,7 @@ async def list_folder_contents(parent_id: str | None = None, authorization: str 
 async def update_folder(folder_id: str, payload: dict, authorization: str = Header(None)):
     """폴더 이름 변경 및/또는 다른 폴더로 이동."""
     user_id = require_user_id(authorization)
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
 
     updates = {}
     if "name" in payload:
@@ -121,7 +121,7 @@ async def update_folder(folder_id: str, payload: dict, authorization: str = Head
 async def delete_folder(folder_id: str, authorization: str = Header(None)):
     """폴더를 지우면 안의 파일·하위 폴더는 삭제되지 않고 상위(또는 루트)로 옮겨진다."""
     user_id = require_user_id(authorization)
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
 
     try:
         found = supabase.table("folders").select("*") \

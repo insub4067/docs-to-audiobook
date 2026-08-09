@@ -13,7 +13,7 @@ import logging
 import uuid
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException
 
-from state import _supabase_or_503, require_admin_user
+from state import supabase_or_503, require_admin_user
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -94,7 +94,7 @@ async def _run_one(supabase, job_id: str) -> dict | None:
 
 async def run_jobs(job_ids: list[str]) -> list[dict]:
     """작업을 차례로 처리하고 성공한 항목만 돌려준다."""
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
     created = []
     for job_id in job_ids:
         result = await _run_one(supabase, job_id)
@@ -107,7 +107,7 @@ async def run_jobs(job_ids: list[str]) -> list[dict]:
 async def list_content_jobs(authorization: str = Header(None)):
     """진행 중이거나 실패한 등록 작업. 성공한 작업은 행을 지우므로 여기 없다."""
     require_admin_user(authorization)
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
     try:
         # source_text는 작품 한 편 분량이라 목록 응답에 싣지 않는다.
         rows = supabase.table("content_jobs") \
@@ -126,7 +126,7 @@ async def retry_content_job(job_id: str, background_tasks: BackgroundTasks, auth
     'processing'에 멈춰 버린 작업도 되살릴 수 있도록 상태를 가리지 않는다 —
     원문이 남아 있는 한 다시 만드는 건 언제나 안전하다."""
     require_admin_user(authorization)
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
     try:
         response = supabase.table("content_jobs").select("id").eq("id", job_id).maybe_single().execute()
     except Exception as e:
@@ -143,7 +143,7 @@ async def retry_content_job(job_id: str, background_tasks: BackgroundTasks, auth
 async def delete_content_job(job_id: str, authorization: str = Header(None)):
     """다시 시도하지 않을 실패 작업을 목록에서 치운다."""
     require_admin_user(authorization)
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
     try:
         supabase.table("content_jobs").delete().eq("id", job_id).execute()
     except Exception as e:

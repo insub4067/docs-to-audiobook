@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from state import (
     APP_BUILD_ID, STATIC_DIR, MAX_UPLOAD_BYTES, MAX_ADMIN_UPLOAD_BYTES,
-    require_user_id, enforce_rate_limit, _supabase_or_503, require_admin_user,
+    require_user_id, enforce_rate_limit, supabase_or_503, require_admin_user,
 )
 
 router = APIRouter()
@@ -41,7 +41,7 @@ def load_admin_metrics():
     week_ago = now - timedelta(days=7)
     two_weeks_ago = now - timedelta(days=14)
     thirty_days_ago = now - timedelta(days=30)
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
     try:
         users = supabase.table("users").select("id,full_name,email,created_at").execute().data or []
         audiobooks = supabase.table("audiobooks").select("id,user_id,created_at").execute().data or []
@@ -263,7 +263,7 @@ async def create_product_event(request: Request, payload: dict, authorization: s
     if event_name not in {"generation_started", "generation_completed", "generation_failed", "playback_started", "play_5min"}:
         raise HTTPException(status_code=400, detail="지원하지 않는 이벤트입니다.")
     try:
-        _supabase_or_503().table("product_events").insert({
+        supabase_or_503().table("product_events").insert({
             "user_id": user_id,
             "event_name": event_name,
         }).execute()
@@ -306,7 +306,7 @@ async def create_client_error(request: Request, payload: dict, authorization: st
 
     logger.warning("[client-error] scope=%s user=%s %s", scope, user_id or "anonymous", message)
     try:
-        _supabase_or_503().table("client_errors").insert({
+        supabase_or_503().table("client_errors").insert({
             "user_id": user_id,
             "scope": scope,
             "message": message,

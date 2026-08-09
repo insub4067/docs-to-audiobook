@@ -17,9 +17,9 @@ from starlette.background import BackgroundTask
 
 from state import (
     BASE_DIR, JOB_AUDIO_DIR, jobs, text_storage, MAX_SYNTH_CHARS,
-    DOCUMENT_PART_CONCURRENCY, background_synthesis_lock, _has_enough_disk_for_synthesis,
-    _supabase_or_503, upload_audiobook_objects, resolve_job_owner, require_job_owner,
-    enforce_rate_limit, _validate_folder_ownership,
+    DOCUMENT_PART_CONCURRENCY, background_synthesis_lock, has_enough_disk_for_synthesis,
+    supabase_or_503, upload_audiobook_objects, resolve_job_owner, require_job_owner,
+    enforce_rate_limit, validate_folder_ownership,
 )
 from text_processing import (
     build_document_representations, extract_markdown_headings,
@@ -358,7 +358,7 @@ def _record_synthesis_usage(job_id: str, raw_text: str, voice: str, elapsed: flo
     job = jobs.get(job_id, {})
     audio_ms = sum(job.get("chunk_durations", []))
     try:
-        _supabase_or_503().table("synthesis_usage").insert({
+        supabase_or_503().table("synthesis_usage").insert({
             "user_id": job.get("user_id"),
             "provider": provider_for_voice(voice),
             "voice": voice,
@@ -427,7 +427,7 @@ def _store_background_audiobook(user_id: str, title: str, job: dict, folder_id: 
     Storage 업로드를 모두 마친 뒤에야 DB 행을 만든다 — 순서를 반대로 하면
     업로드가 중간에 실패했을 때 파일 없는 audiobooks 행이 고아로 남는다.
     """
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
     audiobook_id = str(uuid.uuid4())
 
     with open(job["audio_path"], "rb") as audio_file:
@@ -487,7 +487,7 @@ async def process_background_synthesis_task(job_id: str, user_id: str, title: st
     돌리는 비용은 낮고, 원문은 완료 전까지 DB에 그대로 있어 재시도가
     항상 안전하다.
     """
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
     max_job_attempts = 3
     last_error = "음성 합성에 실패했습니다."
 
@@ -575,9 +575,9 @@ async def synthesize_text(
         if not authorization:
             raise HTTPException(status_code=401, detail="대용량 문서는 로그인 후 변환할 수 있습니다.")
 
-        supabase = _supabase_or_503()
+        supabase = supabase_or_503()
         if folder_id:
-            _validate_folder_ownership(supabase, user_id, folder_id)
+            validate_folder_ownership(supabase, user_id, folder_id)
         async with background_synthesis_lock:
             # 업로드 단계의 락과 별개다. 실제 CPU를 오래 쓰는 건 합성이므로,
             # 이미 진행 중인 대용량 작업이 있으면 새 작업을 거부한다. 확인과
@@ -592,7 +592,7 @@ async def synthesize_text(
                     detail="이미 진행 중인 대용량 작업이 있습니다. 완료 후 다시 시도해 주세요.",
                 )
 
-            if not _has_enough_disk_for_synthesis(len(raw_text)):
+            if not has_enough_disk_for_synthesis(len(raw_text)):
                 raise HTTPException(
                     status_code=413,
                     detail="지금 서버 디스크 여유가 부족해 이 문서를 처리할 수 없습니다. "
@@ -733,7 +733,7 @@ async def get_job_audio(
 async def resume_background_synthesis_jobs():
     """배포·재시작 중 끊긴 대용량 작업을 원문으로 다시 시작한다."""
     try:
-        supabase = _supabase_or_503()
+        supabase = supabase_or_503()
         rows = await asyncio.to_thread(
             lambda: supabase.table("background_synthesis_jobs").select("*")
             .in_("status", ["queued", "processing"]).execute().data or []

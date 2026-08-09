@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException
 
 from state import (
-    _supabase_or_503, require_admin_user, AUDIOBOOK_BUCKET, _object_paths,
+    supabase_or_503, require_admin_user, AUDIOBOOK_BUCKET, object_paths,
     upload_audiobook_objects,
 )
 from routes.audiobooks import audiobook_items_with_urls
@@ -131,7 +131,7 @@ def _delete_news_rows(supabase, rows: list[dict]) -> int:
     """행과 Storage 음성 파일을 함께 지운다. 행만 지우면 화면에서는 사라져도
     버킷은 계속 불어난다."""
     for row in rows:
-        audio_path, sentences_path = _object_paths(row["user_id"], row["id"])
+        audio_path, sentences_path = object_paths(row["user_id"], row["id"])
         try:
             supabase.storage.from_(AUDIOBOOK_BUCKET).remove([audio_path, sentences_path])
         except Exception:
@@ -169,7 +169,7 @@ async def _process_news_batch(job_ids: list[str], previous_rows: list[dict]) -> 
         # 받자마자 지우면 합성이 통째로 실패했을 때 화면에 아무것도 남지
         # 않는다 — 새 뉴스가 없는 것보다 어제 뉴스라도 있는 게 낫다.
         try:
-            _delete_news_rows(_supabase_or_503(), previous_rows)
+            _delete_news_rows(supabase_or_503(), previous_rows)
         except Exception:
             logger.exception("이전 뉴스 삭제 실패")
 
@@ -179,7 +179,7 @@ async def _process_news_batch(job_ids: list[str], previous_rows: list[dict]) -> 
             logger.exception("경제 뉴스 등록 완료 알림 발송 실패")
 
     try:
-        _enforce_news_limit(_supabase_or_503())
+        _enforce_news_limit(supabase_or_503())
     except Exception:
         logger.exception("뉴스 개수 정리 실패")
 
@@ -188,7 +188,7 @@ async def _process_news_batch(job_ids: list[str], previous_rows: list[dict]) -> 
 async def add_news(payload: dict, background_tasks: BackgroundTasks, authorization: str = Header(None)):
     admin_user_id = require_admin_user(authorization)
     items = _parse_news_payload(payload.get("text") or "")[:NEWS_LIST_LIMIT]
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
 
     # ⚠️ 이미 처리 중인 묶음이 있으면 받지 않는다. 실수로 두 번 눌러 두
     # 묶음이 겹치면, 두 번째가 캡처한 "이전 목록"에 첫 번째 결과가 아직
@@ -214,7 +214,7 @@ async def add_news(payload: dict, background_tasks: BackgroundTasks, authorizati
 @router.get("/api/news")
 async def list_news():
     """경제 뉴스 공개 목록. 로그인 여부와 무관하게 누구나 볼 수 있다."""
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
     cutoff = (datetime.now(timezone.utc) - timedelta(days=NEWS_VISIBLE_DAYS)).isoformat()
     try:
         rows = supabase.table("audiobooks").select("*") \

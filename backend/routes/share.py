@@ -7,7 +7,7 @@ import uuid
 from fastapi import APIRouter, Request, UploadFile, File, Form, Header, HTTPException
 from fastapi.responses import FileResponse
 
-from state import SHARED_DIR, STATIC_DIR, require_user_id, enforce_rate_limit, save_upload_limited, _too_large
+from state import SHARED_DIR, STATIC_DIR, require_user_id, enforce_rate_limit, save_upload_limited, too_large
 from routes.default_book import default_book_paths
 
 router = APIRouter()
@@ -26,7 +26,7 @@ def validate_share_id(share_id: str) -> str:
 
 def parse_share_metadata(sentences: str, headings: str) -> tuple[list, list]:
     if len(sentences.encode("utf-8")) + len(headings.encode("utf-8")) > MAX_SHARE_METADATA_BYTES:
-        raise _too_large(MAX_SHARE_METADATA_BYTES)
+        raise too_large(MAX_SHARE_METADATA_BYTES)
     try:
         parsed_sentences = json.loads(sentences)
         parsed_headings = json.loads(headings)

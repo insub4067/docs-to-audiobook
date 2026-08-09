@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from state import _object_paths, upload_audiobook_objects
+from state import object_paths, upload_audiobook_objects
 
 
 def _supabase_with_storage(storage):
@@ -25,7 +25,7 @@ def test_uploads_audio_and_sentences_side_by_side():
         _supabase_with_storage(storage), "user-1", "book-1", b"mp3", [{"text": "가"}]
     )
 
-    expected_audio, expected_sentences = _object_paths("user-1", "book-1")
+    expected_audio, expected_sentences = object_paths("user-1", "book-1")
     assert audio_path == expected_audio
     uploaded = [call.args[0] for call in storage.upload.call_args_list]
     assert uploaded == [expected_audio, expected_sentences]
@@ -54,7 +54,7 @@ def test_audio_is_removed_when_sentences_upload_fails():
             _supabase_with_storage(storage), "user-1", "book-1", b"mp3", [{"text": "가"}]
         )
 
-    expected_audio, _ = _object_paths("user-1", "book-1")
+    expected_audio, _ = object_paths("user-1", "book-1")
     storage.remove.assert_called_once_with([expected_audio])
 
 

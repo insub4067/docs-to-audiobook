@@ -79,7 +79,7 @@ def test_get_supabase_client_missing_key():
 
 @patch.dict(os.environ, {"SUPABASE_URL": "http://test.supabase", "SUPABASE_KEY": "testkey"})
 def test_get_supabase_client_is_reused():
-    """create_client()는 호출마다 새 httpx 세션을 연다. _supabase_or_503()
+    """create_client()는 호출마다 새 httpx 세션을 연다. supabase_or_503()
     호출 지점이 49곳이라 요청마다 여러 개가 생기고 있었다."""
     with patch("supabase.create_client") as mock_create:
         mock_create.return_value = MagicMock()
