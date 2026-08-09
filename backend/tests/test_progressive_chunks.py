@@ -68,6 +68,44 @@ async def test_ready_prefix_only_advances_contiguously(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_ready_chunk_offsets_continue_across_announcements(tmp_path):
+    """두 번째 알림의 문장 시각이 첫 번째 알림 뒤에서 이어져야 한다.
+
+    클라이언트는 합성이 끝나기 전에 이 시각으로 하이라이트를 맞춘다. 알림마다
+    0부터 다시 세면 뒤쪽 청크의 하이라이트가 통째로 앞으로 밀린다.
+
+    (누적 오프셋을 들고 다니도록 고치면서 이 값이 검증되지 않고 있다는 걸
+    발견해 추가했다. 청크가 끝날 때마다 0..n을 다시 더하던 예전 코드도 값은
+    맞았지만, 청크 수의 제곱에 비례해서 관리자 상한에서는 합성보다 느려졌다.)
+    """
+    from routes import tts
+
+    gates = {i: asyncio.Event() for i in range(4)}
+
+    async def gated_chunk(idx, *args, **kwargs):
+        await gates[idx].wait()
+        return await _fake_chunk(idx, *args, **kwargs)
+
+    announced = []
+
+    with patch("routes.tts.synthesize_chunk", side_effect=gated_chunk), \
+         patch("routes.tts.DOCUMENT_PART_CONCURRENCY", 4):
+        task = asyncio.create_task(tts.synthesize_document_to_file(
+            _chunk_text(4), "voice", "+0%", "+0Hz", str(tmp_path / "book.mp3"),
+            chunk_ready_callback=announced.extend,
+        ))
+        # 0·1을 먼저 알리게 하고, 그 뒤에 2·3을 별도 알림으로 내보낸다.
+        for idx in [0, 1, 2, 3]:
+            gates[idx].set()
+            await asyncio.sleep(0.02)
+        await task
+
+    # _fake_chunk의 청크 하나는 0~100ms 문장 하나뿐이다.
+    starts = [sentence["start"] for record in announced for sentence in record["sentences"]]
+    assert starts == [0, 100, 200, 300]
+
+
+@pytest.mark.asyncio
 async def test_combined_file_is_unchanged_by_chunking(tmp_path):
     """청크 파일로 쪼개 써도 합본은 예전과 같은 바이트·같은 순서다."""
     from routes import tts

@@ -90,6 +90,23 @@ async def save_upload_limited(upload: UploadFile, dest_path: str, max_bytes: int
 
 _rate_buckets = {}
 
+def drop_expired_rate_buckets(now: float) -> int:
+    """윈도가 지난 버킷을 버린다. 호출한 IP마다 항목이 하나씩 생기고 지워지는
+    자리가 없어서, 정리하지 않으면 프로세스가 살아 있는 내내 자란다.
+
+    반환값은 지운 버킷 수(정리 루프가 로그에 남긴다)."""
+    stale = [
+        key for key, hits in _rate_buckets.items()
+        if not hits or now - max(hits) >= RATE_BUCKET_MAX_WINDOW_SEC
+    ]
+    for key in stale:
+        _rate_buckets.pop(key, None)
+    return len(stale)
+
+# enforce_rate_limit을 부르는 곳 중 가장 긴 윈도(600초)보다 넉넉히 잡는다.
+# 이보다 짧게 잡으면 아직 유효한 기록을 지워 제한이 헐거워진다.
+RATE_BUCKET_MAX_WINDOW_SEC = 3600
+
 def enforce_rate_limit(request: Request, name: str, limit: int, window_sec: int):
     ip = request.client.host if request.client else "unknown"
     key = (name, ip)

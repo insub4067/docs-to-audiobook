@@ -264,12 +264,16 @@ async def synthesize_document_to_file(
     # 끝난 자리만 채워진다. 묶음이 병렬로 도니 중간이 비어 있을 수 있다.
     chunk_results: list[dict | None] = [None] * len(chunks)
     ready_count = 0
+    # 이미 알린 구간의 총 길이. 매번 0..ready_count를 다시 더하면 청크 수의
+    # 제곱에 비례한다 — 관리자 상한(5천만 자 = 6만 청크)에서는 합성보다
+    # 이 합산이 더 오래 걸린다.
+    ready_offset = 0
 
     def advance_ready_prefix():
         """0번부터 연속으로 끝난 구간이 늘었으면 그만큼만 알린다."""
-        nonlocal ready_count
+        nonlocal ready_count, ready_offset
         newly = []
-        offset = sum(chunk_results[i]["duration"] for i in range(ready_count))
+        offset = ready_offset
         while ready_count < len(chunks) and chunk_results[ready_count] is not None:
             record = chunk_results[ready_count]
             newly.append({
@@ -282,6 +286,7 @@ async def synthesize_document_to_file(
             })
             offset += record["duration"]
             ready_count += 1
+        ready_offset = offset
         if newly and chunk_ready_callback:
             chunk_ready_callback(newly)
 
@@ -382,12 +387,13 @@ async def process_synthesis_task(job_id: str, raw_text: str, voice: str, rate: s
             job = jobs.get(job_id)
             if job is None:
                 return
-            job["sentences"] = job.get("sentences", []) + [
+            # += 가 아니라 extend인 이유: 리스트를 새로 만들면 청크가 끝날
+            # 때마다 지금까지의 문장 전체가 복사된다. 청크 수의 제곱에
+            # 비례하는 복사라, 문서가 길수록 급격히 나빠진다.
+            job["sentences"].extend(
                 sentence for record in records for sentence in record["sentences"]
-            ]
-            job["chunk_durations"] = job.get("chunk_durations", []) + [
-                record["duration"] for record in records
-            ]
+            )
+            job["chunk_durations"].extend(record["duration"] for record in records)
             job["ready_chunks"] = records[-1]["index"] + 1
 
         audio_path = os.path.join(JOB_AUDIO_DIR, f"{job_id}.mp3")

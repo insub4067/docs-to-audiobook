@@ -75,3 +75,29 @@ def test_get_supabase_client_missing_key():
     assert client is None
 
 # removed kakao tests
+
+
+@patch.dict(os.environ, {"SUPABASE_URL": "http://test.supabase", "SUPABASE_KEY": "testkey"})
+def test_get_supabase_client_is_reused():
+    """create_client()는 호출마다 새 httpx 세션을 연다. _supabase_or_503()
+    호출 지점이 49곳이라 요청마다 여러 개가 생기고 있었다."""
+    with patch("supabase.create_client") as mock_create:
+        mock_create.return_value = MagicMock()
+
+        first = get_supabase_client()
+        second = get_supabase_client()
+
+        assert first is second
+        assert mock_create.call_count == 1
+
+
+@patch.dict(os.environ, {"SUPABASE_URL": "http://test.supabase", "SUPABASE_KEY": "testkey"})
+def test_failed_supabase_client_is_not_cached():
+    """부팅 직후의 일시적 실패를 기억해버리면 그 뒤로 영영 DB에 못 붙는다."""
+    with patch("supabase.create_client") as mock_create:
+        mock_create.side_effect = RuntimeError("boom")
+        assert get_supabase_client() is None
+
+        mock_create.side_effect = None
+        mock_create.return_value = MagicMock()
+        assert get_supabase_client() is not None

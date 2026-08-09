@@ -135,12 +135,18 @@ def _reset_global_state():
     text_storage/jobs/_rate_buckets는 프로세스 전역 dict라, 한 테스트가 채운
     값이 다음 테스트에도 그대로 보여 실행 순서에 따라 결과가 달라질 수 있었다.
     """
+    import auth
     import state
 
     state._rate_buckets.clear()
     state.text_storage.clear()
     state.jobs.clear()
+    # 만들어 둔 Supabase 클라이언트도 프로세스 전역이다. 환경변수를 바꿔가며
+    # 확인하는 테스트가 있어(test_auth_advanced), 캐시가 남으면 앞 테스트가
+    # 만든 클라이언트를 그대로 돌려받는다.
+    auth.reset_supabase_clients()
     yield
     state._rate_buckets.clear()
     state.text_storage.clear()
     state.jobs.clear()
+    auth.reset_supabase_clients()
