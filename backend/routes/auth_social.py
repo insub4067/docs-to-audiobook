@@ -78,6 +78,22 @@ def _verify_google(token_string: str) -> dict:
         logger.warning("Invalid Google token: %s", e)
         raise HTTPException(status_code=401, detail="유효하지 않은 토큰입니다.")
 
+    # sub(제공자 고유 ID)와 email이 모두 있어야 계정을 만들거나 찾을 수 있다.
+    if not info.get("sub") or not info.get("email"):
+        logger.warning("Google token missing subject or email")
+        raise HTTPException(status_code=401, detail="유효하지 않은 토큰입니다.")
+
+    # ⚠️ 검증된 이메일만 받는다. _upsert_social_user가 이메일로 기존 계정을
+    # 찾아 연결하기 때문에(같은 사람이 다른 제공자로 들어온 경우를 위해),
+    # 검증되지 않은 이메일을 그대로 믿으면 남의 이메일을 적어 만든 계정으로
+    # 그 사람의 서재에 들어갈 수 있다.
+    if info.get("email_verified") is not True:
+        logger.warning("Google token email is not verified")
+        raise HTTPException(
+            status_code=401,
+            detail="이메일이 확인되지 않은 계정입니다. Google에서 이메일 확인 후 다시 시도해 주세요.",
+        )
+
     return {
         "provider": "google",
         "provider_id": info.get("sub"),
