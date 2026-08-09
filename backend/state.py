@@ -212,3 +212,9 @@ APP_BUILD_ID = str(int(time.time()))
 text_storage = {}
 
 jobs = {}
+
+# 고성능 PDF(페이지별 OCR)의 진행 상황. 클라이언트가 만든 scan_id를 키로
+# {"done": n, "total": m}를 담는다. 업로드 요청은 한 번의 응답으로 끝나므로,
+# 처리 중에 "몇 페이지 중 몇 장"을 알려면 옆으로 물어볼 자리가 따로 필요하다.
+# 요청이 끝나면 지운다.
+scan_progress = {}

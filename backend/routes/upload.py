@@ -22,7 +22,7 @@ async def _pdf_ocr_fallback_text(temp_path: str, is_admin: bool, is_pdf: bool) -
     if not (is_admin and is_pdf and os.path.exists(temp_path)):
         return None
     try:
-        text = await asyncio.to_thread(detect_pdf_text_via_ocr, temp_path)
+        text = await detect_pdf_text_via_ocr(temp_path)
         return text if text.strip() else None
     except Exception:
         return None

@@ -10,6 +10,7 @@ import type { GenerationState, GeneratingItem } from "./Generation_State.vue";
 import type { VoiceLogic } from "../Voices/Voice_Logic.vue";
 import { pickGoogleDriveFile, preloadGoogleDrivePicker } from "../Auth/GoogleDrivePicker";
 import { streamJobAudio } from "../services/progressiveAudio";
+import { postFormWithProgress } from "../services/uploadProgress";
 
 export interface GenerationArguments {
     textId: string;
@@ -82,12 +83,21 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
         return value > 0 ? `높음 (+${value}Hz)` : `낮음 (${value}Hz)`;
     }
 
+    interface ExtractedText {
+        text_id: string;
+        text_access_token: string;
+        filename: string;
+        preview: string;
+        char_count: number;
+    }
+
     // 업로드/추출은 한 번에 하나만 진행되므로(대기 오버레이가 통째로 화면을
     // 막는다) 컨트롤러 하나만 돌려써도 된다 — "취소" 버튼이 이걸 abort한다.
     let currentUploadController: AbortController | null = null;
 
     function cancelUpload(): void {
         currentUploadController?.abort();
+        state.uploadPercent.value = null;
         // abort할 요청이 아직 없는 시점(예: 선택창 대기 중)에 눌러도 오버레이가
         // 그대로 남아있지 않도록, 로딩 상태는 항상 즉시 꺼서 버튼이 눈에 보이는
         // 반응을 남기게 한다.
@@ -99,7 +109,7 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
         return error instanceof DOMException && error.name === "AbortError";
     }
 
-    async function extractText(file: File) {
+    async function extractText(file: File): Promise<ExtractedText> {
         const formData = new FormData();
         formData.append("file", file);
         formData.append("voice", voiceLogic.getSelectedVoice());
@@ -107,17 +117,18 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
         formData.append("pitch", getFormattedPitch(state.pitch.value));
 
         currentUploadController = new AbortController();
-        const response = await fetch("/api/upload", {
-            method: "POST",
-            headers: authLogic.authHeaders(),
-            body: formData,
-            signal: currentUploadController.signal,
-        });
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.detail || "텍스트 추출 실패");
-        }
-        return response.json();
+        // 여기만 fetch가 아니라 XHR을 쓴다. fetch는 업로드 진행률을 주지 않아
+        // 큰 PDF를 올릴 때 화면이 멈춘 것처럼 보였다("오래 걸리는데 진행 중인지
+        // 모르겠다"). 전송이 끝나면 헬퍼가 null을 넘겨, 진행률을 알 수 없는
+        // 서버 처리 구간임을 화면에 알린다.
+        state.uploadPercent.value = 0;
+        return await postFormWithProgress(
+            "/api/upload",
+            formData,
+            authLogic.authHeaders(),
+            currentUploadController.signal,
+            (percent) => { state.uploadPercent.value = percent; },
+        ) as ExtractedText;
     }
 
     async function extractTextFromUrl(url: string) {
@@ -159,7 +170,7 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
         return data;
     }
 
-    function applyExtractedText(data: { text_id: string; text_access_token: string; filename: string; preview: string; char_count: number }): void {
+    function applyExtractedText(data: ExtractedText): void {
         state.currentTextId.value = data.text_id;
         state.currentTextAccessToken.value = data.text_access_token;
         state.uploadedFileName.value = data.filename;
@@ -199,6 +210,7 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
             resetSelection();
         } finally {
             state.isDropzoneLoading.value = false;
+            state.uploadPercent.value = null;
         }
     }
 
@@ -455,19 +467,41 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
         }
     }
 
-    async function extractHighQualityPdf(file: File) {
+    // 고성능 PDF는 페이지마다 300dpi 렌더링 + Vision 왕복이라 오래 걸린다.
+    // 응답은 다 끝나야 오므로, 처리 중에 어디까지 왔는지는 옆으로 물어본다.
+    function pollScanProgress(scanId: string): () => void {
+        const timer = setInterval(async () => {
+            try {
+                const response = await fetch(`/api/scan-progress/${scanId}`, { headers: authLogic.authHeaders() });
+                if (!response.ok) return;
+                const { done, total } = await response.json();
+                state.scanPageProgress.value = total ? { done, total } : null;
+            } catch {
+                // 진행률을 못 가져와도 본 작업은 그대로 간다 — 화면은 경과 시간만 보여준다.
+            }
+        }, 1500);
+        return () => clearInterval(timer);
+    }
+
+    async function extractHighQualityPdf(file: File): Promise<ExtractedText> {
         const formData = new FormData();
         formData.append("file", file);
         currentUploadController = new AbortController();
-        const response = await fetch("/api/scan-pdf", {
-            method: "POST",
-            headers: authLogic.authHeaders(),
-            body: formData,
-            signal: currentUploadController.signal,
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || "PDF에서 텍스트를 추출하지 못했습니다.");
-        return data;
+        const scanId = crypto.randomUUID();
+        const stopPolling = pollScanProgress(scanId);
+        state.uploadPercent.value = 0;
+        try {
+            return await postFormWithProgress(
+                "/api/scan-pdf",
+                formData,
+                { ...authLogic.authHeaders(), "X-Scan-Id": scanId },
+                currentUploadController.signal,
+                (percent) => { state.uploadPercent.value = percent; },
+            ) as ExtractedText;
+        } finally {
+            stopPolling();
+            state.scanPageProgress.value = null;
+        }
     }
 
     async function scanHighQualityPdf(file: File): Promise<void> {

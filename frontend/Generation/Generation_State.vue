@@ -25,6 +25,11 @@ export interface GenerationState {
     fileSizeLabel: Ref<string>;
     isFileDetailsVisible: Ref<boolean>;
     isDropzoneLoading: Ref<boolean>;
+    /** 파일을 서버로 보내는 중의 진행률(0~100). 다 보내 서버가 텍스트를
+     *  뽑는 구간으로 넘어가면 null이 된다 — 그 구간은 진행률을 알 수 없다. */
+    uploadPercent: Ref<number | null>;
+    /** 고성능 PDF가 몇 페이지 중 몇 장까지 왔는지. 그 경로가 아니면 null. */
+    scanPageProgress: Ref<{ done: number; total: number } | null>;
     isDragOver: Ref<boolean>;
     previewText: Ref<string>;
     isPreviewVisible: Ref<boolean>;
@@ -62,6 +67,8 @@ export function useGenerationState(): GenerationState {
         fileSizeLabel: ref(""),
         isFileDetailsVisible: ref(false),
         isDropzoneLoading: ref(false),
+        uploadPercent: ref(null),
+        scanPageProgress: ref(null),
         isDragOver: ref(false),
         previewText: ref(""),
         isPreviewVisible: ref(false),

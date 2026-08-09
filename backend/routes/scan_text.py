@@ -11,7 +11,10 @@ import uuid
 import asyncio
 from fastapi import APIRouter, Request, UploadFile, File, Header, HTTPException
 
-from state import UPLOAD_DIR, synth_limit_for, upload_limit_for, save_upload_limited, text_storage, enforce_rate_limit, require_admin_user
+from state import (
+    UPLOAD_DIR, synth_limit_for, upload_limit_for, save_upload_limited, text_storage,
+    enforce_rate_limit, require_admin_user, scan_progress,
+)
 
 router = APIRouter()
 
@@ -57,18 +60,49 @@ def _detect_document_text(content: bytes) -> str:
 PDF_OCR_RENDER_DPI = 300  # 200dpi는 작은 글자에서 인식률이 떨어져 300으로 올림
 
 
-def detect_pdf_text_via_ocr(pdf_path: str) -> str:
+PDF_OCR_PAGE_CONCURRENCY = 5  # 합성 쪽 DOCUMENT_PART_CONCURRENCY와 같은 이유·같은 값
+
+
+async def detect_pdf_text_via_ocr(pdf_path: str, on_progress=None) -> str:
     """스캔본 PDF(텍스트 레이어 없음) 폴백 — pypdf가 텍스트를 못 뽑을 때
     upload.py가 관리자 요청에 한해 호출한다. 페이지를 이미지로 렌더링해
-    한 장씩 Vision에 넘긴다. 동기 함수라 asyncio.to_thread로 감싸 쓴다."""
+    Vision에 넘긴다.
+
+    페이지를 한 장씩 차례로 돌리면 30쪽 문서가 30번의 왕복을 직렬로 기다린다.
+    페이지끼리는 서로 독립이므로 묶음으로 나눠 동시에 보낸다.
+
+    ⚠️ 렌더링은 묶음 안에서도 순차다. PyMuPDF의 Document는 스레드 안전하지
+    않아 같은 문서를 여러 스레드에서 그리면 죽는다. 어차피 오래 걸리는 쪽은
+    Vision 왕복(네트워크)이라, 그것만 동시에 보내도 대부분을 회수한다.
+    묶음 크기만큼만 PNG를 메모리에 들고 있게 되는 것도 이 방식의 이점이다 —
+    전 페이지를 미리 렌더링하면 300dpi PNG가 통째로 램에 쌓인다.
+    """
     import fitz  # PyMuPDF
 
     doc = fitz.open(pdf_path)
     try:
-        pages_text = []
-        for page in doc:
-            pixmap = page.get_pixmap(dpi=PDF_OCR_RENDER_DPI)
-            pages_text.append(_detect_document_text(pixmap.tobytes("png")))
+        total = doc.page_count
+        if on_progress:
+            on_progress(0, total)
+        def render(start: int, end: int) -> list[bytes]:
+            """⚠️ 반드시 to_thread로 부른다. 300dpi 렌더링은 CPU를 오래 잡아
+            이벤트 루프에서 돌리면 그동안 서버가 다른 요청을 못 받는다."""
+            return [
+                doc[index].get_pixmap(dpi=PDF_OCR_RENDER_DPI).tobytes("png")
+                for index in range(start, end)
+            ]
+
+        pages_text: list[str] = []
+        for start in range(0, total, PDF_OCR_PAGE_CONCURRENCY):
+            end = min(start + PDF_OCR_PAGE_CONCURRENCY, total)
+            # 한 번에 한 스레드만 doc을 만진다(await로 직렬화) — fitz는 스레드 안전하지 않다.
+            batch = await asyncio.to_thread(render, start, end)
+            # gather는 넘긴 순서대로 결과를 돌려준다 — 페이지 순서가 유지된다.
+            pages_text.extend(await asyncio.gather(
+                *(asyncio.to_thread(_detect_document_text, png) for png in batch)
+            ))
+            if on_progress:
+                on_progress(len(pages_text), total)
         return "\n\n".join(t for t in pages_text if t)
     finally:
         doc.close()
@@ -137,27 +171,44 @@ async def scan_text(request: Request, files: list[UploadFile] = File(...), autho
 
 
 @router.post("/api/scan-pdf")
-async def scan_pdf(request: Request, file: UploadFile = File(...), authorization: str = Header(None)):
+async def scan_pdf(
+    request: Request,
+    file: UploadFile = File(...),
+    authorization: str = Header(None),
+    scan_id: str = Header(None, alias="X-Scan-Id"),
+):
     """"고성능 PDF" — pypdf를 거치지 않고 처음부터 PDF 전체를 Vision
     OCR로 처리한다(관리자 전용). 스캔본이 아니어도 pypdf보다 인식
-    품질이 필요한 PDF를 위한 명시적 선택지."""
+    품질이 필요한 PDF를 위한 명시적 선택지.
+
+    X-Scan-Id를 주면 처리하는 동안 진행 상황을 scan_progress에 남긴다.
+    클라이언트는 GET /api/scan-progress/{scan_id}로 "몇 페이지 중 몇 장"을
+    물어본다 — 이 응답은 다 끝나야 오므로 그 전에는 알 방법이 없다.
+    """
     require_admin_user(authorization)
     enforce_rate_limit(request, "scan_pdf", limit=30, window_sec=600)
 
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="PDF 파일만 업로드할 수 있습니다.")
 
+    def report(done: int, total: int) -> None:
+        if scan_id:
+            scan_progress[scan_id] = {"done": done, "total": total}
+
     safe_name = os.path.basename(file.filename)
     temp_path = os.path.join(UPLOAD_DIR, f"{uuid.uuid4()}_{safe_name}")
     try:
         await save_upload_limited(file, temp_path, MAX_PDF_BYTES)
         try:
-            text = await asyncio.to_thread(detect_pdf_text_via_ocr, temp_path)
+            text = await detect_pdf_text_via_ocr(temp_path, on_progress=report)
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"텍스트 인식에 실패했습니다: {e}")
     finally:
         if os.path.exists(temp_path):
             os.remove(temp_path)
+        # 응답이 나가면 클라이언트가 더 물어볼 일이 없다. 남겨두면 프로세스가
+        # 살아 있는 내내 쌓인다.
+        scan_progress.pop(scan_id, None)
 
     if not text:
         raise HTTPException(status_code=400, detail="PDF에서 텍스트를 찾지 못했습니다.")
@@ -188,3 +239,17 @@ async def scan_pdf(request: Request, file: UploadFile = File(...), authorization
         "preview": text[:preview_len] + ("..." if len(text) > preview_len else ""),
         "text_access_token": text_storage[text_id]["access_token"],
     }
+
+
+@router.get("/api/scan-progress/{scan_id}")
+async def get_scan_progress(scan_id: str, authorization: str = Header(None)):
+    """고성능 PDF가 몇 페이지까지 왔는지. 업로드 응답은 다 끝나야 오기 때문에,
+    처리 중에 알려면 옆으로 물어보는 수밖에 없다.
+
+    아직 첫 페이지를 그리기 전이거나 이미 끝났으면 빈 값을 준다 — 화면은
+    그때 경과 시간만 보여주면 되므로 404로 실패시키지 않는다."""
+    require_admin_user(authorization)
+    progress = scan_progress.get(scan_id)
+    if not progress:
+        return {"done": None, "total": None}
+    return {"done": progress["done"], "total": progress["total"]}

@@ -417,6 +417,38 @@
     margin-bottom: 0;
 }
 
+/* 파일을 보내는 동안만 나오는 실측 막대. 서버가 텍스트를 뽑는 구간에는
+   진행률이 없어 이 막대 대신 경과 시간을 보여준다 — 가짜로 채우지 않는다. */
+.upload-progress-track {
+    width: 100%;
+    height: 6px;
+    margin-bottom: 10px;
+    border-radius: 3px;
+    background: var(--border-color);
+    overflow: hidden;
+}
+
+.upload-progress-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: var(--primary-color);
+    transition: width 0.2s ease-out;
+}
+
+.loading-card p.upload-progress-label {
+    font-variant-numeric: tabular-nums;
+    margin-bottom: 20px;
+}
+
+/* 초가 올라가는 것만으로 "멈추지 않았다"가 보인다. */
+.loading-card p.upload-elapsed {
+    font-variant-numeric: tabular-nums;
+    font-size: 0.78rem;
+    opacity: 0.75;
+    margin-top: -12px;
+    margin-bottom: 20px;
+}
+
 .loading-cancel-btn {
     margin-top: 20px;
     padding: 10px 20px;
