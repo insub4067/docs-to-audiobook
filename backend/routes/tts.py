@@ -97,7 +97,7 @@ async def get_voice_preview(voice_key: str):
                     with open(path, "wb") as f:
                         f.write(audio_bytes)
                 except Exception as e:
-                    print(f"Voice preview generation failed ({resolved_key}): {e}")
+                    logger.warning("Voice preview generation failed voice=%s: %s", resolved_key, e)
                     raise HTTPException(status_code=503, detail="미리듣기를 만들지 못했습니다.")
 
     return FileResponse(path, media_type="audio/mpeg")
@@ -368,7 +368,7 @@ def _record_synthesis_usage(job_id: str, raw_text: str, voice: str, elapsed: flo
             "succeeded": succeeded,
         }).execute()
     except Exception as e:
-        print(f"[synthesis-usage] 기록 실패: {e}", flush=True)
+        logger.warning("[synthesis-usage] 기록 실패: %s", e)
 
 
 async def process_synthesis_task(job_id: str, raw_text: str, voice: str, rate: str, pitch: str):
@@ -765,7 +765,7 @@ async def resume_background_synthesis_jobs():
                 row.get("folder_id"),
             ))
     except Exception as e:
-        print(f"Background job resume failed: {e}")
+        logger.exception("Background job resume failed: %s", e)
 
 
 @router.get("/api/audio/{job_id}.mp3")

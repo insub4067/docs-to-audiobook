@@ -119,3 +119,55 @@ async def test_config_exposes_upload_limits():
 
     assert body["upload_limit_bytes"] == MAX_UPLOAD_BYTES
     assert body["admin_upload_limit_bytes"] == MAX_ADMIN_UPLOAD_BYTES
+
+
+def test_application_logging_defaults_to_info():
+    """설정이 없으면 우리 모듈의 logger.info가 통째로 사라진다.
+
+    uvicorn은 자기 로거만 설정하고 루트는 건드리지 않아서, 애플리케이션
+    로거가 logging.lastResort(WARNING 이상)로 떨어진다. 실제로
+    push_notifications의 logger.info는 한 번도 출력된 적이 없었다.
+
+    루트 로거의 실제 상태로 검증하지 않는 이유: pytest의 logging 플러그인이
+    테스트마다 루트 레벨을 자기 값으로 덮어써서, 프로덕션에서의 레벨을
+    여기서 관측할 수 없다. 그래서 설정 함수의 경계에서 본다.
+    """
+    import main
+
+    with patch("main.logging.basicConfig") as basic_config:
+        main.configure_logging()
+
+    assert basic_config.call_args.kwargs["level"] == "INFO"
+
+
+def test_log_level_can_be_overridden_by_env():
+    import os as _os
+    import main
+
+    with patch.dict(_os.environ, {"LOG_LEVEL": "WARNING"}), \
+         patch("main.logging.basicConfig") as basic_config:
+        main.configure_logging()
+
+    assert basic_config.call_args.kwargs["level"] == "WARNING"
+
+
+async def test_startup_uses_lifespan_not_deprecated_event():
+    """@app.on_event("startup")은 FastAPI에서 deprecated다. lifespan으로
+    옮기면서 부팅 준비 작업이 실제로 도는지 함께 고정한다."""
+    from unittest.mock import patch as _patch
+
+    with _patch("routes.tts.resume_background_synthesis_jobs") as resume, \
+         _patch("routes.default_book.prepare_default_book_from_cache") as prepare, \
+         _patch("cleanup.cleanup_expired_files_loop") as cleanup_loop:
+        async def _noop():
+            return None
+        resume.side_effect = lambda: _noop()
+        prepare.side_effect = lambda: _noop()
+        cleanup_loop.side_effect = lambda: _noop()
+
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            await client.get("/api/version")
+
+    assert app.router.on_startup == []

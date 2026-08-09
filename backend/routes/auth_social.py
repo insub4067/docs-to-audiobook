@@ -15,12 +15,14 @@ NOTE: users 테이블에 google_id 컬럼이 제공자별로 박혀 있어 확�
 그 전까지는 google_id만 채우고 나머지 제공자는 이메일로만 식별한다.
 """
 import os
+import logging
 import uuid
 from fastapi import APIRouter, Header, HTTPException
 
 from state import _admin_emails
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.get("/api/auth/me")
@@ -59,7 +61,7 @@ async def get_current_user(authorization: str = Header(None)):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Get user error: {e}")
+        logger.warning("Get user failed: %s", e)
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
@@ -73,7 +75,7 @@ def _verify_google(token_string: str) -> dict:
             token_string, google_requests.Request(), os.getenv("GOOGLE_CLIENT_ID")
         )
     except Exception as e:
-        print(f"Invalid Google token: {e}")
+        logger.warning("Invalid Google token: %s", e)
         raise HTTPException(status_code=401, detail="유효하지 않은 토큰입니다.")
 
     return {
@@ -158,5 +160,5 @@ async def social_login(provider: str, data: dict):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Social login error ({provider}): {e}")
+        logger.warning("Social login failed provider=%s: %s", provider, e)
         raise HTTPException(status_code=500, detail="로그인에 실패했습니다.")

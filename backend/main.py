@@ -1,7 +1,10 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+import os
 import asyncio
+import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,9 +12,51 @@ import mimetypes
 mimetypes.add_type("text/css", ".css")
 mimetypes.add_type("application/javascript", ".js")
 
+DEFAULT_LOG_LEVEL = "INFO"
+
+
+def configure_logging():
+    """⚠️ 이 설정이 없으면 애플리케이션 로그가 통째로 사라진다.
+
+    uvicorn은 자기 로거(uvicorn.error/uvicorn.access)만 설정하고 루트는
+    건드리지 않는다. 그래서 우리 모듈의 logger는 logging.lastResort로
+    떨어지고, 그건 WARNING 이상만 출력한다 — 실제로 push_notifications의
+    logger.info는 한 번도 나온 적이 없었다.
+    """
+    logging.basicConfig(
+        level=os.getenv("LOG_LEVEL", DEFAULT_LOG_LEVEL),
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
+
+
+configure_logging()
+
 from state import STATIC_DIR
 
-app = FastAPI(title="Docs to Audiobook Converter - Hybrid")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """부팅 시 한 번 도는 준비 작업.
+
+    @app.on_event("startup")은 FastAPI에서 deprecated라 lifespan으로 옮겼다.
+    동작은 그대로다 — 아래 태스크들은 fire-and-forget이고, 종료 시 따로
+    정리할 것이 없다(프로세스가 함께 죽는다).
+    """
+    from auth import get_secret_key
+    from cleanup import cleanup_expired_files_loop
+
+    get_secret_key()
+    asyncio.create_task(cleanup_expired_files_loop())
+    asyncio.create_task(tts_routes.resume_background_synthesis_jobs())
+    # 부팅 시에는 클라우드에 있으면 내려받기만 하고 합성은 하지 않는다.
+    # 여기서 합성을 시작하면 공유 CPU 1개를 점유해 사용자 변환이 막힌다.
+    # 클라우드에 없으면 상태를 pending으로 두고, 실제로 요청이 올 때
+    # /api/default-book이 한 번만 생성한다(락으로 중복 방지).
+    asyncio.create_task(default_book_routes.prepare_default_book_from_cache())
+    yield
+
+
+app = FastAPI(title="Docs to Audiobook Converter - Hybrid", lifespan=lifespan)
 
 # 프론트엔드는 같은 출처에서 상대 경로로만 API를 호출하므로 와일드카드가
 # 필요 없다. allow_origins=["*"] 와 allow_credentials=True 조합은 잘못된
@@ -66,21 +111,6 @@ app.include_router(content_jobs_routes.router)
 
 # Serve static files (HTML, CSS, JS)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-
-
-@app.on_event("startup")
-async def startup_event():
-    from auth import get_secret_key
-    from cleanup import cleanup_expired_files_loop
-
-    get_secret_key()
-    asyncio.create_task(cleanup_expired_files_loop())
-    asyncio.create_task(tts_routes.resume_background_synthesis_jobs())
-    # 부팅 시에는 클라우드에 있으면 내려받기만 하고 합성은 하지 않는다.
-    # 여기서 합성을 시작하면 공유 CPU 1개를 점유해 사용자 변환이 막힌다.
-    # 클라우드에 없으면 상태를 pending으로 두고, 실제로 요청이 올 때
-    # /api/default-book이 한 번만 생성한다(락으로 중복 방지).
-    asyncio.create_task(default_book_routes.prepare_default_book_from_cache())
 
 if __name__ == "__main__":
     import uvicorn

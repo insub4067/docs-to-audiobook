@@ -1,5 +1,6 @@
 """시스템/관리자 라우트: 버전, 설정, 제품 이벤트, 관리자 지표, 정적 페이지."""
 import os
+import logging
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Request, Header, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
@@ -10,6 +11,7 @@ from state import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # 클라이언트가 "사용자 경험을 안 망가뜨리려고" 조용히 삼키는 실패의 종류.
 # 아무 문자열이나 받으면 오타 하나로 지표가 두 갈래로 갈라지므로,
@@ -302,7 +304,7 @@ async def create_client_error(request: Request, payload: dict, authorization: st
             # 토큰이 만료된 채로 보내는 것도 흔하다. 그렇다고 보고를 버리진 않는다.
             user_id = None
 
-    print(f"[client-error] scope={scope} user={user_id or 'anonymous'} {message}", flush=True)
+    logger.warning("[client-error] scope=%s user=%s %s", scope, user_id or "anonymous", message)
     try:
         _supabase_or_503().table("client_errors").insert({
             "user_id": user_id,
@@ -314,7 +316,7 @@ async def create_client_error(request: Request, payload: dict, authorization: st
             "app_version": APP_BUILD_ID,
         }).execute()
     except Exception as e:
-        print(f"[client-error] 저장 실패: {e}", flush=True)
+        logger.warning("[client-error] 저장 실패: %s", e)
     return {"recorded": scope}
 
 

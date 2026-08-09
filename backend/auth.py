@@ -86,7 +86,7 @@ def get_supabase_client(use_service_role: bool = False):
 
         if use_service_role:
             if not service_key:
-                print("WARNING: service_role key not set, falling back to anon key")
+                logger.warning("service_role key not set, falling back to anon key")
                 key_to_use = key
             else:
                 key_to_use = service_key
