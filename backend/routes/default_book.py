@@ -1,5 +1,6 @@
 """기본 제공 오디오북(데미안): 서버 기동 시 미리 생성해 캐시."""
 import os
+import logging
 import json
 import asyncio
 import hashlib
@@ -12,6 +13,7 @@ from routes import tts as tts_routes
 from tts_providers.voice_catalog import DEFAULT_VOICE_KEY
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 DEFAULT_BOOK_DIR = os.path.join(BASE_DIR, "default_book")
 DEFAULT_BOOK_SOURCE = os.path.join(STATIC_DIR, "samples", "demian.txt")
@@ -88,10 +90,10 @@ def _restore_default_book_from_cloud(audio_path: str, meta_path: str) -> bool:
             f.write(audio)
         with open(meta_path, "wb") as f:
             f.write(meta)
-        print("Default audiobook restored from cloud.")
+        logger.info("Default audiobook restored from cloud.")
         return True
     except Exception as e:
-        print(f"Default book not in cloud yet ({e}).")
+        logger.info("Default book not in cloud yet: %s", e)
         return False
 
 
@@ -111,10 +113,10 @@ def _upload_default_book_to_cloud(audio_path: str, meta_path: str) -> None:
         with open(meta_path, "rb") as f:
             storage.upload(remote_meta, f.read(),
                            {"content-type": "application/json", "upsert": "true"})
-        print("Default audiobook uploaded to cloud.")
+        logger.info("Default audiobook uploaded to cloud.")
     except Exception as e:
         # 올리기 실패해도 이번 부팅에서는 이미 로컬에 있으니 서비스는 된다
-        print(f"Default book cloud upload failed: {e}")
+        logger.warning("Default book cloud upload failed: %s", e)
 
 
 async def prepare_default_book_from_cache() -> bool:
@@ -123,7 +125,7 @@ async def prepare_default_book_from_cache() -> bool:
 
     if os.path.exists(audio_path) and os.path.exists(meta_path):
         default_book_state["status"] = "ready"
-        print("Default audiobook already exists on disk.")
+        logger.info("Default audiobook already exists on disk.")
         return True
 
     if await asyncio.to_thread(_restore_default_book_from_cloud, audio_path, meta_path):
@@ -145,11 +147,11 @@ async def generate_default_book():
     if not os.path.exists(DEFAULT_BOOK_SOURCE):
         default_book_state["status"] = "error"
         default_book_state["error"] = "기본 제공 문서를 찾을 수 없습니다."
-        print(f"Default book source missing: {DEFAULT_BOOK_SOURCE}")
+        logger.warning("Default book source missing: %s", DEFAULT_BOOK_SOURCE)
         return
 
     default_book_state["status"] = "generating"
-    print(f"Starting default audiobook generation from {DEFAULT_BOOK_SOURCE}...")
+    logger.info("Starting default audiobook generation from %s", DEFAULT_BOOK_SOURCE)
     try:
         os.makedirs(DEFAULT_BOOK_DIR, exist_ok=True)
         raw_text = extract_text(DEFAULT_BOOK_SOURCE, "demian.txt")
@@ -173,13 +175,13 @@ async def generate_default_book():
 
         default_book_state["status"] = "ready"
         default_book_state["error"] = None
-        print("Default book generated.")
+        logger.info("Default book generated.")
         # 다음 부팅부터는 재합성 없이 이걸 그대로 쓴다
         await asyncio.to_thread(_upload_default_book_to_cloud, audio_path, meta_path)
     except Exception as e:
         default_book_state["status"] = "error"
         default_book_state["error"] = str(e)
-        print(f"Default book generation failed: {e}")
+        logger.exception("Default book generation failed: %s", e)
 
 
 @router.get("/api/default-book")

@@ -1,6 +1,7 @@
 <script lang="ts">
 import type { AdminState, AdminTab, JsonValidationResult, LibraryAdminItem, ContentJob } from "./Admin_State.vue";
 import type { AdminMetricName } from "../types/adminDashboard";
+import { authHeaders, readAuthToken } from "../services/authToken";
 
 export interface AdminLogic {
     formatMetric(name: AdminMetricName, value: number | null | undefined): string;
@@ -48,7 +49,7 @@ export function useAdminLogic(
     }
 
     async function loadMetrics(): Promise<void> {
-        const token = localStorage.getItem("authToken");
+        const token = readAuthToken();
         if (!token) {
             status.value = "관리자만 접근할 수 있습니다.";
             return;
@@ -57,7 +58,7 @@ export function useAdminLogic(
         status.value = "지표를 불러오는 중입니다.";
         try {
             const response = await fetch("/api/admin/metrics", {
-                headers: { "Authorization": `Bearer ${token}` },
+                headers: authHeaders(),
                 cache: "no-store",
             });
             if (response.status === 401 || response.status === 403) {
@@ -121,7 +122,7 @@ export function useAdminLogic(
     }
 
     async function submitNews(): Promise<void> {
-        const token = localStorage.getItem("authToken");
+        const token = readAuthToken();
         if (!token) {
             newsStatus.value = "관리자만 등록할 수 있습니다.";
             return;
@@ -137,7 +138,7 @@ export function useAdminLogic(
         try {
             const response = await fetch("/api/admin/news", {
                 method: "POST",
-                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                headers: { ...authHeaders(), "Content-Type": "application/json" },
                 body: JSON.stringify({ text }),
             });
             if (!response.ok) {
@@ -159,7 +160,7 @@ export function useAdminLogic(
     }
 
     async function submitLibrary(): Promise<void> {
-        const token = localStorage.getItem("authToken");
+        const token = readAuthToken();
         if (!token) {
             libraryStatus.value = "관리자만 등록할 수 있습니다.";
             return;
@@ -175,7 +176,7 @@ export function useAdminLogic(
         try {
             const response = await fetch("/api/admin/library", {
                 method: "POST",
-                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                headers: { ...authHeaders(), "Content-Type": "application/json" },
                 body: JSON.stringify({ text }),
             });
             if (!response.ok) {
@@ -198,13 +199,13 @@ export function useAdminLogic(
     }
 
     async function loadLibraryItems(): Promise<void> {
-        const token = localStorage.getItem("authToken");
+        const token = readAuthToken();
         if (!token) return;
 
         libraryItemsStatus.value = "작품 목록을 불러오는 중입니다.";
         try {
             const response = await fetch("/api/admin/library", {
-                headers: { "Authorization": `Bearer ${token}` },
+                headers: authHeaders(),
                 cache: "no-store",
             });
             if (!response.ok) throw new Error("작품 목록을 불러오지 못했습니다.");
@@ -218,12 +219,12 @@ export function useAdminLogic(
     }
 
     async function loadContentJobs(): Promise<void> {
-        const token = localStorage.getItem("authToken");
+        const token = readAuthToken();
         if (!token) return;
 
         try {
             const response = await fetch("/api/admin/content-jobs", {
-                headers: { "Authorization": `Bearer ${token}` },
+                headers: authHeaders(),
                 cache: "no-store",
             });
             if (!response.ok) throw new Error("등록 작업을 불러오지 못했습니다.");
@@ -241,12 +242,12 @@ export function useAdminLogic(
     }
 
     async function sendJobAction(job: ContentJob, method: "POST" | "DELETE", path: string): Promise<void> {
-        const token = localStorage.getItem("authToken");
+        const token = readAuthToken();
         if (!token) return;
 
         contentJobBusyIds.value = new Set(contentJobBusyIds.value).add(job.id);
         try {
-            const response = await fetch(path, { method, headers: { "Authorization": `Bearer ${token}` } });
+            const response = await fetch(path, { method, headers: authHeaders() });
             if (!response.ok) throw new Error("요청에 실패했습니다.");
             await loadContentJobs();
         } catch (error) {
@@ -286,7 +287,7 @@ export function useAdminLogic(
     }
 
     async function saveEdit(): Promise<void> {
-        const token = localStorage.getItem("authToken");
+        const token = readAuthToken();
         const item = editingItem.value;
         if (!token || !item) return;
         if (!editDraft.value.title.trim()) {
@@ -298,7 +299,7 @@ export function useAdminLogic(
         try {
             const response = await fetch(`/api/admin/library/${item.id}`, {
                 method: "PATCH",
-                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                headers: { ...authHeaders(), "Content-Type": "application/json" },
                 body: JSON.stringify(editDraft.value),
             });
             if (!response.ok) {
@@ -332,7 +333,7 @@ export function useAdminLogic(
     }
 
     async function toggleLibraryStatus(item: LibraryAdminItem): Promise<void> {
-        const token = localStorage.getItem("authToken");
+        const token = readAuthToken();
         if (!token) return;
         const nextStatus = item.library_status === "published" ? "review" : "published";
 
@@ -341,7 +342,7 @@ export function useAdminLogic(
         try {
             const response = await fetch(`/api/admin/library/${item.id}`, {
                 method: "PATCH",
-                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                headers: { ...authHeaders(), "Content-Type": "application/json" },
                 body: JSON.stringify({ status: nextStatus }),
             });
             if (!response.ok) throw new Error("상태를 변경하지 못했습니다.");

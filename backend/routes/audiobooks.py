@@ -12,8 +12,8 @@ from fastapi import APIRouter, Request, Header, HTTPException
 from postgrest.exceptions import APIError
 
 from state import (
-    AUDIOBOOK_BUCKET, SIGNED_URL_TTL, require_user_id, _supabase_or_503,
-    _object_paths, enforce_rate_limit, _validate_folder_ownership,
+    AUDIOBOOK_BUCKET, SIGNED_URL_TTL, require_user_id, supabase_or_503,
+    object_paths, enforce_rate_limit, validate_folder_ownership,
 )
 
 router = APIRouter()
@@ -26,7 +26,7 @@ def audiobook_items_with_urls(supabase, user_id: str, rows: list) -> list:
     storage = supabase.storage.from_(AUDIOBOOK_BUCKET)
     items = []
     for row in rows:
-        audio_path, sentences_path = _object_paths(user_id, row["id"])
+        audio_path, sentences_path = object_paths(user_id, row["id"])
         item = dict(row)
         # 오디오가 없으면 재생이 불가능하므로 그 항목만 목록에서 제외한다
         # (업로드가 중간에 끊긴 행). 목록 전체를 실패시키지는 않는다.
@@ -53,14 +53,14 @@ async def create_audiobook(request: Request, payload: dict, authorization: str =
     if not title:
         raise HTTPException(status_code=400, detail="제목이 필요합니다.")
 
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
 
     folder_id = payload.get("folder_id")
     if folder_id:
-        _validate_folder_ownership(supabase, user_id, folder_id)
+        validate_folder_ownership(supabase, user_id, folder_id)
 
     audiobook_id = str(uuid.uuid4())
-    audio_path, sentences_path = _object_paths(user_id, audiobook_id)
+    audio_path, sentences_path = object_paths(user_id, audiobook_id)
 
     try:
         supabase.table("audiobooks").insert({
@@ -89,7 +89,7 @@ async def create_audiobook(request: Request, payload: dict, authorization: str =
 async def list_audiobooks(authorization: str = Header(None)):
     """내 오디오북 목록. 각 항목에 다운로드용 서명 URL을 붙인다."""
     user_id = require_user_id(authorization)
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
 
     try:
         # is_news/is_library 항목은 관리자 계정에 심어둔 공용 콘텐츠라
@@ -115,7 +115,7 @@ async def get_audiobook_media_urls(audiobook_id: str, authorization: str = Heade
     목록 전체를 다시 받아도 되지만, 재생 한 번 때문에 모든 항목을 서명하는
     것은 낭비다."""
     user_id = require_user_id(authorization)
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
 
     rows = supabase.table("audiobooks").select("*").eq("id", audiobook_id) \
         .eq("user_id", user_id).execute().data or []
@@ -133,7 +133,7 @@ async def get_audiobook_media_urls(audiobook_id: str, authorization: str = Heade
 async def update_audiobook(audiobook_id: str, payload: dict, authorization: str = Header(None)):
     """내 오디오북 제목·소속 폴더·북마크 여부를 수정한다."""
     user_id = require_user_id(authorization)
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
 
     updates = {}
     if "title" in payload:
@@ -144,7 +144,7 @@ async def update_audiobook(audiobook_id: str, payload: dict, authorization: str 
     if "folder_id" in payload:
         folder_id = payload.get("folder_id")
         if folder_id:
-            _validate_folder_ownership(supabase, user_id, folder_id)
+            validate_folder_ownership(supabase, user_id, folder_id)
         updates["folder_id"] = folder_id
     if "is_bookmarked" in payload:
         updates["is_bookmarked"] = bool(payload.get("is_bookmarked"))
@@ -187,7 +187,7 @@ def _validate_playback_state(payload: dict) -> tuple[int, float, str]:
 async def get_playback_state(audiobook_id: str, authorization: str = Header(None)):
     """현재 계정의 오디오북 재생 상태를 반환한다."""
     user_id = require_user_id(authorization)
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
     try:
         response = supabase.table("playback_history").select("*") \
             .eq("audiobook_id", audiobook_id).eq("user_id", user_id).maybe_single().execute()
@@ -211,7 +211,7 @@ async def save_playback_state(audiobook_id: str, payload: dict, authorization: s
     """현재 계정의 오디오북 재생 상태를 최신 값으로 저장한다."""
     user_id = require_user_id(authorization)
     position, speed, repeat_mode = _validate_playback_state(payload)
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
     state = {
         "user_id": user_id,
         "audiobook_id": audiobook_id,
@@ -244,7 +244,7 @@ async def save_playback_state(audiobook_id: str, payload: dict, authorization: s
 @router.delete("/api/audiobooks/{audiobook_id}")
 async def delete_audiobook(audiobook_id: str, authorization: str = Header(None)):
     user_id = require_user_id(authorization)
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
 
     try:
         # user_id를 조건에 포함해 남의 항목을 지울 수 없게 한다
@@ -253,7 +253,7 @@ async def delete_audiobook(audiobook_id: str, authorization: str = Header(None))
         if not found:
             raise HTTPException(status_code=404, detail="해당 오디오북을 찾을 수 없습니다.")
 
-        audio_path, sentences_path = _object_paths(user_id, audiobook_id)
+        audio_path, sentences_path = object_paths(user_id, audiobook_id)
         try:
             supabase.storage.from_(AUDIOBOOK_BUCKET).remove([audio_path, sentences_path])
         except Exception:

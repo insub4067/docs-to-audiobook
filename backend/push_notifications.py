@@ -172,7 +172,7 @@ def send_background_job_ready(user_id: str, job_id: str) -> None:
         return
 
     try:
-        supabase = state._supabase_or_503()
+        supabase = state.supabase_or_503()
         subscriptions = supabase.table("push_subscriptions").select(
             "id,endpoint,p256dh,auth,updated_at"
         ).eq("user_id", user_id).limit(5).execute().data or []
@@ -192,7 +192,7 @@ def send_news_ready_broadcast(count: int) -> None:
         return
 
     try:
-        supabase = state._supabase_or_503()
+        supabase = state.supabase_or_503()
         subscriptions = supabase.table("push_subscriptions").select(
             "id,endpoint,p256dh,auth,updated_at"
         ).execute().data or []

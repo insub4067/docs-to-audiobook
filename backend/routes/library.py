@@ -16,7 +16,7 @@ import logging
 import uuid
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException
 
-from state import _supabase_or_503, require_admin_user, require_user_id, AUDIOBOOK_BUCKET, _object_paths
+from state import supabase_or_503, require_admin_user, require_user_id, upload_audiobook_objects
 from routes.audiobooks import audiobook_items_with_urls
 from routes.content_jobs import queue_jobs, run_jobs, progress_callback_for
 from routes.tts import synthesize_document
@@ -80,18 +80,7 @@ async def store_library_item(supabase, admin_user_id: str, item: dict, job_id: s
         raise RuntimeError("음성 합성 결과가 비어 있습니다.")
 
     audiobook_id = str(uuid.uuid4())
-    audio_path, sentences_path = _object_paths(admin_user_id, audiobook_id)
-    storage = supabase.storage.from_(AUDIOBOOK_BUCKET)
-    storage.upload(audio_path, audio_bytes, {"content-type": "audio/mpeg"})
-    try:
-        storage.upload(
-            sentences_path,
-            json.dumps(sentences, ensure_ascii=False).encode("utf-8"),
-            {"content-type": "application/json"},
-        )
-    except Exception:
-        storage.remove([audio_path])
-        raise
+    audio_path = upload_audiobook_objects(supabase, admin_user_id, audiobook_id, audio_bytes, sentences)
 
     # 목록 카드에 재생시간/장 수를 보여주려고 미리 계산해 둔다 — 매번
     # sentences 파일을 내려받아 계산하면 목록 화면이 N배 느려진다.
@@ -123,7 +112,7 @@ async def add_library_items(payload: dict, background_tasks: BackgroundTasks, au
     admin_user_id = require_admin_user(authorization)
     items = _parse_library_payload(payload.get("text") or "")
 
-    job_ids = queue_jobs(_supabase_or_503(), "library", admin_user_id, items)
+    job_ids = queue_jobs(supabase_or_503(), "library", admin_user_id, items)
     background_tasks.add_task(run_jobs, job_ids)
     return {"queued": len(job_ids)}
 
@@ -133,7 +122,7 @@ async def list_all_library_items(authorization: str = Header(None)):
     """상태(review/published) 상관없이 전체 작품을 관리자에게 보여준다 —
     /api/library(공개 목록)와 달리 published 필터를 걸지 않는다."""
     require_admin_user(authorization)
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
     try:
         rows = supabase.table("audiobooks") \
             .select("id, title, library_status, library_category, library_edition, "
@@ -191,7 +180,7 @@ async def update_library_item(audiobook_id: str, payload: dict, authorization: s
     if not changes:
         raise HTTPException(status_code=400, detail="변경할 내용이 없습니다.")
 
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
     try:
         supabase.table("audiobooks").update(changes) \
             .eq("id", audiobook_id).eq("is_library", True).execute()
@@ -203,7 +192,7 @@ async def update_library_item(audiobook_id: str, payload: dict, authorization: s
 @router.get("/api/library")
 async def list_library():
     """공개된(published) 라이브러리 작품 목록. 로그인 여부와 무관하게 볼 수 있다."""
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
     try:
         rows = supabase.table("audiobooks").select("*") \
             .eq("is_library", True).eq("library_status", "published") \
@@ -228,7 +217,7 @@ async def list_library():
 async def list_library_saves(authorization: str = Header(None)):
     """내가 서재에 추가한 라이브러리 작품 목록."""
     user_id = require_user_id(authorization)
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
     try:
         saves = supabase.table("library_saves").select("audiobook_id") \
             .eq("user_id", user_id).execute().data or []
@@ -258,7 +247,7 @@ async def list_library_playback(authorization: str = Header(None)):
     요청이 나간다(N+1). 목록은 스크롤하면서 보는 화면이라 그만큼 느려진다.
     """
     user_id = require_user_id(authorization)
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
     try:
         rows = supabase.table("playback_history") \
             .select("audiobook_id, current_time_seconds") \
@@ -271,7 +260,7 @@ async def list_library_playback(authorization: str = Header(None)):
 @router.get("/api/library/{audiobook_id}")
 async def get_library_item(audiobook_id: str):
     """작품 상세. published 상태인 작품만 조회할 수 있다."""
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
     try:
         response = supabase.table("audiobooks").select("*") \
             .eq("id", audiobook_id).eq("is_library", True).eq("library_status", "published") \
@@ -290,7 +279,7 @@ async def get_library_item(audiobook_id: str):
 @router.post("/api/library/{audiobook_id}/save")
 async def save_library_item(audiobook_id: str, authorization: str = Header(None)):
     user_id = require_user_id(authorization)
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
     found = supabase.table("audiobooks").select("id") \
         .eq("id", audiobook_id).eq("is_library", True).eq("library_status", "published").execute().data
     if not found:
@@ -307,7 +296,7 @@ async def save_library_item(audiobook_id: str, authorization: str = Header(None)
 @router.delete("/api/library/{audiobook_id}/save")
 async def unsave_library_item(audiobook_id: str, authorization: str = Header(None)):
     user_id = require_user_id(authorization)
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
     try:
         supabase.table("library_saves").delete() \
             .eq("user_id", user_id).eq("audiobook_id", audiobook_id).execute()

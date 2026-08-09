@@ -7,7 +7,6 @@ import os
 import asyncio
 import time
 import uuid
-import json
 import logging
 import secrets
 import shutil
@@ -18,9 +17,9 @@ from starlette.background import BackgroundTask
 
 from state import (
     BASE_DIR, JOB_AUDIO_DIR, jobs, text_storage, MAX_SYNTH_CHARS,
-    DOCUMENT_PART_CONCURRENCY, background_synthesis_lock, _has_enough_disk_for_synthesis,
-    _supabase_or_503, _object_paths, AUDIOBOOK_BUCKET, resolve_job_owner, require_job_owner,
-    enforce_rate_limit, _validate_folder_ownership,
+    DOCUMENT_PART_CONCURRENCY, background_synthesis_lock, has_enough_disk_for_synthesis,
+    supabase_or_503, upload_audiobook_objects, resolve_job_owner, require_job_owner,
+    enforce_rate_limit, validate_folder_ownership,
 )
 from text_processing import (
     build_document_representations, extract_markdown_headings,
@@ -98,7 +97,7 @@ async def get_voice_preview(voice_key: str):
                     with open(path, "wb") as f:
                         f.write(audio_bytes)
                 except Exception as e:
-                    print(f"Voice preview generation failed ({resolved_key}): {e}")
+                    logger.warning("Voice preview generation failed voice=%s: %s", resolved_key, e)
                     raise HTTPException(status_code=503, detail="미리듣기를 만들지 못했습니다.")
 
     return FileResponse(path, media_type="audio/mpeg")
@@ -264,12 +263,16 @@ async def synthesize_document_to_file(
     # 끝난 자리만 채워진다. 묶음이 병렬로 도니 중간이 비어 있을 수 있다.
     chunk_results: list[dict | None] = [None] * len(chunks)
     ready_count = 0
+    # 이미 알린 구간의 총 길이. 매번 0..ready_count를 다시 더하면 청크 수의
+    # 제곱에 비례한다 — 관리자 상한(5천만 자 = 6만 청크)에서는 합성보다
+    # 이 합산이 더 오래 걸린다.
+    ready_offset = 0
 
     def advance_ready_prefix():
         """0번부터 연속으로 끝난 구간이 늘었으면 그만큼만 알린다."""
-        nonlocal ready_count
+        nonlocal ready_count, ready_offset
         newly = []
-        offset = sum(chunk_results[i]["duration"] for i in range(ready_count))
+        offset = ready_offset
         while ready_count < len(chunks) and chunk_results[ready_count] is not None:
             record = chunk_results[ready_count]
             newly.append({
@@ -282,6 +285,7 @@ async def synthesize_document_to_file(
             })
             offset += record["duration"]
             ready_count += 1
+        ready_offset = offset
         if newly and chunk_ready_callback:
             chunk_ready_callback(newly)
 
@@ -354,7 +358,7 @@ def _record_synthesis_usage(job_id: str, raw_text: str, voice: str, elapsed: flo
     job = jobs.get(job_id, {})
     audio_ms = sum(job.get("chunk_durations", []))
     try:
-        _supabase_or_503().table("synthesis_usage").insert({
+        supabase_or_503().table("synthesis_usage").insert({
             "user_id": job.get("user_id"),
             "provider": provider_for_voice(voice),
             "voice": voice,
@@ -364,7 +368,7 @@ def _record_synthesis_usage(job_id: str, raw_text: str, voice: str, elapsed: flo
             "succeeded": succeeded,
         }).execute()
     except Exception as e:
-        print(f"[synthesis-usage] 기록 실패: {e}", flush=True)
+        logger.warning("[synthesis-usage] 기록 실패: %s", e)
 
 
 async def process_synthesis_task(job_id: str, raw_text: str, voice: str, rate: str, pitch: str):
@@ -382,12 +386,13 @@ async def process_synthesis_task(job_id: str, raw_text: str, voice: str, rate: s
             job = jobs.get(job_id)
             if job is None:
                 return
-            job["sentences"] = job.get("sentences", []) + [
+            # += 가 아니라 extend인 이유: 리스트를 새로 만들면 청크가 끝날
+            # 때마다 지금까지의 문장 전체가 복사된다. 청크 수의 제곱에
+            # 비례하는 복사라, 문서가 길수록 급격히 나빠진다.
+            job["sentences"].extend(
                 sentence for record in records for sentence in record["sentences"]
-            ]
-            job["chunk_durations"] = job.get("chunk_durations", []) + [
-                record["duration"] for record in records
-            ]
+            )
+            job["chunk_durations"].extend(record["duration"] for record in records)
             job["ready_chunks"] = records[-1]["index"] + 1
 
         audio_path = os.path.join(JOB_AUDIO_DIR, f"{job_id}.mp3")
@@ -422,23 +427,13 @@ def _store_background_audiobook(user_id: str, title: str, job: dict, folder_id: 
     Storage 업로드를 모두 마친 뒤에야 DB 행을 만든다 — 순서를 반대로 하면
     업로드가 중간에 실패했을 때 파일 없는 audiobooks 행이 고아로 남는다.
     """
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
     audiobook_id = str(uuid.uuid4())
-    audio_path, sentences_path = _object_paths(user_id, audiobook_id)
-    storage = supabase.storage.from_(AUDIOBOOK_BUCKET)
 
     with open(job["audio_path"], "rb") as audio_file:
-        storage.upload(audio_path, audio_file, {"content-type": "audio/mpeg"})
-    try:
-        storage.upload(
-            sentences_path,
-            json.dumps(job["sentences"], ensure_ascii=False).encode("utf-8"),
-            {"content-type": "application/json"},
+        audio_path = upload_audiobook_objects(
+            supabase, user_id, audiobook_id, audio_file, job["sentences"]
         )
-    except Exception:
-        # 문장 데이터 업로드가 실패하면 방금 올린 mp3도 고아가 되므로 함께 지운다.
-        storage.remove([audio_path])
-        raise
 
     if folder_id:
         # 작업을 큐에 올릴 때는 폴더 소유권을 확인했지만, 몇 시간짜리
@@ -492,7 +487,7 @@ async def process_background_synthesis_task(job_id: str, user_id: str, title: st
     돌리는 비용은 낮고, 원문은 완료 전까지 DB에 그대로 있어 재시도가
     항상 안전하다.
     """
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
     max_job_attempts = 3
     last_error = "음성 합성에 실패했습니다."
 
@@ -580,9 +575,9 @@ async def synthesize_text(
         if not authorization:
             raise HTTPException(status_code=401, detail="대용량 문서는 로그인 후 변환할 수 있습니다.")
 
-        supabase = _supabase_or_503()
+        supabase = supabase_or_503()
         if folder_id:
-            _validate_folder_ownership(supabase, user_id, folder_id)
+            validate_folder_ownership(supabase, user_id, folder_id)
         async with background_synthesis_lock:
             # 업로드 단계의 락과 별개다. 실제 CPU를 오래 쓰는 건 합성이므로,
             # 이미 진행 중인 대용량 작업이 있으면 새 작업을 거부한다. 확인과
@@ -597,7 +592,7 @@ async def synthesize_text(
                     detail="이미 진행 중인 대용량 작업이 있습니다. 완료 후 다시 시도해 주세요.",
                 )
 
-            if not _has_enough_disk_for_synthesis(len(raw_text)):
+            if not has_enough_disk_for_synthesis(len(raw_text)):
                 raise HTTPException(
                     status_code=413,
                     detail="지금 서버 디스크 여유가 부족해 이 문서를 처리할 수 없습니다. "
@@ -738,7 +733,7 @@ async def get_job_audio(
 async def resume_background_synthesis_jobs():
     """배포·재시작 중 끊긴 대용량 작업을 원문으로 다시 시작한다."""
     try:
-        supabase = _supabase_or_503()
+        supabase = supabase_or_503()
         rows = await asyncio.to_thread(
             lambda: supabase.table("background_synthesis_jobs").select("*")
             .in_("status", ["queued", "processing"]).execute().data or []
@@ -770,7 +765,7 @@ async def resume_background_synthesis_jobs():
                 row.get("folder_id"),
             ))
     except Exception as e:
-        print(f"Background job resume failed: {e}")
+        logger.exception("Background job resume failed: %s", e)
 
 
 @router.get("/api/audio/{job_id}.mp3")

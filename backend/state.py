@@ -5,6 +5,7 @@
 객체를 공유한다(각자 새로 만들면 안 된다).
 """
 import os
+import json
 import time
 import shutil
 import asyncio
@@ -45,7 +46,7 @@ large_admin_upload_lock = asyncio.Lock()
 
 background_synthesis_lock = asyncio.Lock()
 
-def _too_large(max_bytes: int) -> HTTPException:
+def too_large(max_bytes: int) -> HTTPException:
     return HTTPException(
         status_code=413,
         detail=f"파일이 너무 큽니다. 최대 {max_bytes // (1024 * 1024)}MB까지 지원합니다."
@@ -61,7 +62,7 @@ async def read_upload_limited(upload: UploadFile, max_bytes: int) -> bytes:
             break
         total += len(chunk)
         if total > max_bytes:
-            raise _too_large(max_bytes)
+            raise too_large(max_bytes)
         parts.append(chunk)
     return b"".join(parts)
 
@@ -77,7 +78,7 @@ async def save_upload_limited(upload: UploadFile, dest_path: str, max_bytes: int
                     break
                 total += len(chunk)
                 if total > max_bytes:
-                    raise _too_large(max_bytes)
+                    raise too_large(max_bytes)
                 f.write(chunk)
     except HTTPException:
         # 상한 초과 시 쓰다 만 파일을 남기지 않는다
@@ -89,6 +90,23 @@ async def save_upload_limited(upload: UploadFile, dest_path: str, max_bytes: int
     return total
 
 _rate_buckets = {}
+
+def drop_expired_rate_buckets(now: float) -> int:
+    """윈도가 지난 버킷을 버린다. 호출한 IP마다 항목이 하나씩 생기고 지워지는
+    자리가 없어서, 정리하지 않으면 프로세스가 살아 있는 내내 자란다.
+
+    반환값은 지운 버킷 수(정리 루프가 로그에 남긴다)."""
+    stale = [
+        key for key, hits in _rate_buckets.items()
+        if not hits or now - max(hits) >= RATE_BUCKET_MAX_WINDOW_SEC
+    ]
+    for key in stale:
+        _rate_buckets.pop(key, None)
+    return len(stale)
+
+# enforce_rate_limit을 부르는 곳 중 가장 긴 윈도(600초)보다 넉넉히 잡는다.
+# 이보다 짧게 잡으면 아직 유효한 기록을 지워 제한이 헐거워진다.
+RATE_BUCKET_MAX_WINDOW_SEC = 3600
 
 def enforce_rate_limit(request: Request, name: str, limit: int, window_sec: int):
     ip = request.client.host if request.client else "unknown"
@@ -137,7 +155,7 @@ def require_job_owner(job_id: str, authorization: str, anonymous_session: str) -
         raise HTTPException(status_code=403, detail="이 작업에 접근할 권한이 없습니다.")
     return job
 
-def _supabase_or_503():
+def supabase_or_503():
     from auth import get_supabase_client
 
     client = get_supabase_client(use_service_role=True)
@@ -148,11 +166,11 @@ def _supabase_or_503():
 def require_admin_user(authorization: str) -> str:
     """환경변수 허용 목록에 등록된 사용자만 관리자 통계를 볼 수 있게 한다."""
     user_id = require_user_id(authorization)
-    allowed_emails = _admin_emails()
+    allowed_emails = admin_emails()
     if not allowed_emails:
         raise HTTPException(status_code=403, detail="관리자 계정이 설정되지 않았습니다.")
 
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
     try:
         user = supabase.table("users").select("email").eq("id", user_id).maybe_single().execute().data
     except Exception as e:
@@ -161,7 +179,7 @@ def require_admin_user(authorization: str) -> str:
         raise HTTPException(status_code=403, detail="관리자만 접근할 수 있습니다.")
     return user_id
 
-def _admin_emails() -> set[str]:
+def admin_emails() -> set[str]:
     return {
         email.strip().lower()
         for email in os.getenv("ADMIN_EMAILS", "").split(",")
@@ -185,20 +203,49 @@ def synth_limit_for(upload_limit_bytes: int) -> int:
         else MAX_SYNTH_CHARS
     )
 
-def _has_enough_disk_for_synthesis(char_count: int) -> bool:
+def has_enough_disk_for_synthesis(char_count: int) -> bool:
     """지금 이 문서를 합성해도 디스크가 안 찰지, 고정 상한 대신 그 순간의
     실제 여유 공간을 재서 판단한다."""
     estimated_bytes = char_count * AUDIO_BYTES_PER_CHAR_ESTIMATE * DISK_ESTIMATE_SAFETY_FACTOR
     free_bytes = shutil.disk_usage(JOB_AUDIO_DIR).free
     return estimated_bytes <= free_bytes - DISK_RESERVE_BYTES
 
-def _object_paths(user_id: str, audiobook_id: str):
+def object_paths(user_id: str, audiobook_id: str):
     """오디오와 문장 데이터를 나란히 둔다. audiobooks 테이블에 sentences
     컬럼이 없어 스키마 변경 없이 버킷에 함께 보관한다."""
     base = f"{user_id}/{audiobook_id}"
     return f"{base}.mp3", f"{base}.sentences.json"
 
-def _validate_folder_ownership(supabase, user_id: str, folder_id: str) -> None:
+
+def upload_audiobook_objects(supabase, user_id: str, audiobook_id: str, audio, sentences: list) -> str:
+    """오디오와 문장 JSON을 한 쌍으로 올린다. 반환값은 오디오의 storage 경로.
+
+    이 함수가 지키는 불변식은 **둘은 항상 함께 존재한다**는 것이다. 문장
+    업로드가 실패했는데 mp3만 남으면 리더가 하이라이트 없이 열리는 반쪽짜리
+    오디오북이 되므로, 실패하면 올린 오디오를 되돌린다.
+
+    audio는 bytes이거나 열린 파일 객체다 — 백그라운드 합성은 결과가 디스크에
+    있어 파일을 그대로 넘기고, 뉴스·라이브러리는 메모리에 있다.
+
+    (news.py·library.py·tts.py 세 곳에 같은 코드가 있었다. 셋 다 이 불변식을
+    각자 지키고 있었고, 한 곳만 고치면 조용히 어긋나는 자리였다.)
+    """
+    audio_path, sentences_path = object_paths(user_id, audiobook_id)
+    storage = supabase.storage.from_(AUDIOBOOK_BUCKET)
+
+    storage.upload(audio_path, audio, {"content-type": "audio/mpeg"})
+    try:
+        storage.upload(
+            sentences_path,
+            json.dumps(sentences, ensure_ascii=False).encode("utf-8"),
+            {"content-type": "application/json"},
+        )
+    except Exception:
+        storage.remove([audio_path])
+        raise
+    return audio_path
+
+def validate_folder_ownership(supabase, user_id: str, folder_id: str) -> None:
     """folder_id가 이 사용자 소유인지 확인한다. 아니면 404.
 
     audiobooks.py(즉시 생성)와 tts.py(백그라운드 작업 큐 등록)가 함께 쓴다."""

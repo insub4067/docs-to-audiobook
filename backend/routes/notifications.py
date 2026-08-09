@@ -51,7 +51,7 @@ async def save_push_subscription(
     user_id = state.require_user_id(authorization)
     enforce_rate_limit(request, "push_subscription", limit=10, window_sec=600)
     endpoint = _validate_push_endpoint(payload.endpoint)
-    supabase = state._supabase_or_503()
+    supabase = state.supabase_or_503()
     subscriptions = supabase.table("push_subscriptions").select("endpoint").eq(
         "user_id", user_id
     ).limit(MAX_PUSH_SUBSCRIPTIONS_PER_USER + 1).execute().data or []
@@ -73,7 +73,7 @@ async def save_push_subscription(
 async def delete_push_subscription(payload: PushSubscriptionDeletion, authorization: str = Header(None)):
     user_id = state.require_user_id(authorization)
     endpoint = _validate_push_endpoint(payload.endpoint)
-    state._supabase_or_503().table("push_subscriptions").delete().eq(
+    state.supabase_or_503().table("push_subscriptions").delete().eq(
         "user_id", user_id
     ).eq("endpoint", endpoint).execute()
     return {"ok": True}
@@ -82,7 +82,7 @@ async def delete_push_subscription(payload: PushSubscriptionDeletion, authorizat
 @router.get("/api/background-jobs/{job_id}")
 async def get_background_job_status(job_id: str, authorization: str = Header(None)):
     user_id = state.require_user_id(authorization)
-    response = state._supabase_or_503().table("background_synthesis_jobs").select(
+    response = state.supabase_or_503().table("background_synthesis_jobs").select(
         "status,error,audiobook_id,completed_at"
     ).eq("id", job_id).eq("user_id", user_id).maybe_single().execute()
     # postgrest-py는 일치하는 행이 0개면 .execute()가 None을 돌려준다

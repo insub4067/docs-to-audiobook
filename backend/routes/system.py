@@ -1,12 +1,17 @@
 """시스템/관리자 라우트: 버전, 설정, 제품 이벤트, 관리자 지표, 정적 페이지."""
 import os
+import logging
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Request, Header, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 
-from state import APP_BUILD_ID, STATIC_DIR, require_user_id, enforce_rate_limit, _supabase_or_503, require_admin_user
+from state import (
+    APP_BUILD_ID, STATIC_DIR, MAX_UPLOAD_BYTES, MAX_ADMIN_UPLOAD_BYTES,
+    require_user_id, enforce_rate_limit, supabase_or_503, require_admin_user,
+)
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # 클라이언트가 "사용자 경험을 안 망가뜨리려고" 조용히 삼키는 실패의 종류.
 # 아무 문자열이나 받으면 오타 하나로 지표가 두 갈래로 갈라지므로,
@@ -36,7 +41,7 @@ def load_admin_metrics():
     week_ago = now - timedelta(days=7)
     two_weeks_ago = now - timedelta(days=14)
     thirty_days_ago = now - timedelta(days=30)
-    supabase = _supabase_or_503()
+    supabase = supabase_or_503()
     try:
         users = supabase.table("users").select("id,full_name,email,created_at").execute().data or []
         audiobooks = supabase.table("audiobooks").select("id,user_id,created_at").execute().data or []
@@ -236,6 +241,12 @@ async def get_config():
         "providers": {k: v for k, v in providers.items() if v},
         # 이전 클라이언트 호환용
         "google_client_id": providers.get("google", ""),
+        # 업로드 상한의 단일 출처. 예전에는 프론트가 같은 숫자를 따로
+        # 들고 있었고, 실제로 어긋나 있었다(관리자 상한이 백엔드 250MB인데
+        # 프론트가 50MB로 막았다). 상한은 비밀이 아니라 인증 없이 내려준다 —
+        # 실제 강제는 어차피 업로드 스트림에서 서버가 한다.
+        "upload_limit_bytes": MAX_UPLOAD_BYTES,
+        "admin_upload_limit_bytes": MAX_ADMIN_UPLOAD_BYTES,
         # 구글 드라이브 가져오기(Picker)용 공개 API 키. Picker API 자체는
         # OAuth 토큰만으로도 대부분 동작하지만, 구글 문서상 권장 조합이라
         # 설정돼 있으면 함께 내려준다 — 없어도 기능은 그대로 동작한다.
@@ -252,7 +263,7 @@ async def create_product_event(request: Request, payload: dict, authorization: s
     if event_name not in {"generation_started", "generation_completed", "generation_failed", "playback_started", "play_5min"}:
         raise HTTPException(status_code=400, detail="지원하지 않는 이벤트입니다.")
     try:
-        _supabase_or_503().table("product_events").insert({
+        supabase_or_503().table("product_events").insert({
             "user_id": user_id,
             "event_name": event_name,
         }).execute()
@@ -293,9 +304,9 @@ async def create_client_error(request: Request, payload: dict, authorization: st
             # 토큰이 만료된 채로 보내는 것도 흔하다. 그렇다고 보고를 버리진 않는다.
             user_id = None
 
-    print(f"[client-error] scope={scope} user={user_id or 'anonymous'} {message}", flush=True)
+    logger.warning("[client-error] scope=%s user=%s %s", scope, user_id or "anonymous", message)
     try:
-        _supabase_or_503().table("client_errors").insert({
+        supabase_or_503().table("client_errors").insert({
             "user_id": user_id,
             "scope": scope,
             "message": message,
@@ -305,7 +316,7 @@ async def create_client_error(request: Request, payload: dict, authorization: st
             "app_version": APP_BUILD_ID,
         }).execute()
     except Exception as e:
-        print(f"[client-error] 저장 실패: {e}", flush=True)
+        logger.warning("[client-error] 저장 실패: %s", e)
     return {"recorded": scope}
 
 

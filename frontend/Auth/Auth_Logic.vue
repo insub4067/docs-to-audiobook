@@ -2,6 +2,7 @@
 import { useAuthStore, type AuthUser } from "../stores/auth";
 import { getAllAudiobooksFromDB, DEFAULT_BOOK_DISMISSED_KEY } from "../services/indexedDb";
 import { swallowed } from "../services/clientErrors";
+import { authHeaders, readAuthToken, writeAuthToken, clearAuthToken, isAuthTokenKey } from "../services/authToken";
 
 export interface FetchUserError extends Error {
     authFailed?: boolean;
@@ -21,13 +22,12 @@ export interface AuthLogic {
 
 // static/js/auth.js 그대로. localStorage 키("authToken" 등)는 이미 로그인된
 // 사용자가 있어 바꾸면 전부 로그아웃되므로 동일하게 유지한다.
-const AUTH_TOKEN_KEY = "authToken";
 
 // 다른 탭에서 로그인/로그아웃해 authToken이 바뀌면 이 탭도 새로고침해
 // 세션을 맞춘다. 모듈이 처음 로드될 때 한 번만 등록하면 된다(원본도
 // auth.js 스크립트가 로드될 때 한 번만 등록됐다).
 window.addEventListener("storage", (event) => {
-    if (event.key !== AUTH_TOKEN_KEY || event.oldValue === event.newValue) return;
+    if (!isAuthTokenKey(event.key) || event.oldValue === event.newValue) return;
     (window as any).__refreshBackgroundNotificationNamespace?.();
     location.reload();
 });
@@ -74,15 +74,11 @@ export function useAuthLogic(): AuthLogic {
     const store = useAuthStore();
 
     function isLoggedIn(): boolean {
-        return !!localStorage.getItem(AUTH_TOKEN_KEY);
+        return !!readAuthToken();
     }
 
     // 변환 계열 요청에 붙일 인증 헤더. FormData 전송 시 Content-Type을
     // 직접 지정하면 boundary가 깨지므로 Authorization만 넣는다.
-    function authHeaders(): Record<string, string> {
-        const token = localStorage.getItem(AUTH_TOKEN_KEY);
-        return token ? { Authorization: `Bearer ${token}` } : {};
-    }
 
     function anonymousSessionHeaders(): Record<string, string> {
         let sessionId = localStorage.getItem("anonymousSessionId");
@@ -129,7 +125,7 @@ export function useAuthLogic(): AuthLogic {
     }
 
     async function initializeAuth(): Promise<void> {
-        const token = localStorage.getItem(AUTH_TOKEN_KEY);
+        const token = readAuthToken();
         if (!token) {
             store.clearSession();
             return;
@@ -142,7 +138,7 @@ export function useAuthLogic(): AuthLogic {
             const err = error as FetchUserError;
             if (err.authFailed) {
                 // 토큰이 실제로 무효하다. 이때만 지운다.
-                localStorage.removeItem(AUTH_TOKEN_KEY);
+                clearAuthToken();
                 store.clearSession();
             } else {
                 // 네트워크 실패나 서버 일시 오류다. 토큰은 멀쩡하므로 지우지
@@ -169,7 +165,7 @@ export function useAuthLogic(): AuthLogic {
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail || "로그인 실패");
 
-            localStorage.setItem(AUTH_TOKEN_KEY, data.access_token);
+            writeAuthToken(data.access_token);
             setTimeout(() => location.reload(), 500);
         } catch (error) {
             store.clearBusy();
@@ -241,7 +237,7 @@ export function useAuthLogic(): AuthLogic {
         }
 
         // 재생 설정 등 사용자 흔적도 함께 정리한다
-        localStorage.removeItem(AUTH_TOKEN_KEY);
+        clearAuthToken();
         localStorage.removeItem("textAudio_playbackSpeed");
         localStorage.removeItem("textAudio_repeatMode");
         store.clearSession();

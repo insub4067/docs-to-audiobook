@@ -315,7 +315,7 @@ def test_admin_metrics_include_named_users_for_detail_sheets():
                 "product_events": [{"user_id": "user-1", "event_name": "playback_started", "created_at": "2026-08-01T00:00:00+00:00"}],
             }[name])
 
-    with patch("routes.system._supabase_or_503", return_value=Client()):
+    with patch("routes.system.supabase_or_503", return_value=Client()):
         metrics = load_admin_metrics()
 
     assert metrics["metric_details"]["total_users"] == [{"name": "인섭", "email": "insub@example.com", "meta": "가입일 2026-08-01"}]

@@ -180,10 +180,10 @@ def test_has_enough_disk_for_synthesis_uses_real_free_space(tmp_path, monkeypatc
     # 실제 shutil.disk_usage를 그대로 쓰되, 대상 디렉터리만 바꿔서 순수
     # 계산 로직(추정 바이트 vs 여유- 예비분)을 검증한다.
     monkeypatch.setattr(state, "JOB_AUDIO_DIR", str(tmp_path))
-    assert state._has_enough_disk_for_synthesis(1) is True  # 글자 1개는 항상 충분하다
+    assert state.has_enough_disk_for_synthesis(1) is True  # 글자 1개는 항상 충분하다
 
     huge_char_count = 10**15  # 어떤 실제 디스크보다도 훨씬 큰 값
-    assert state._has_enough_disk_for_synthesis(huge_char_count) is False
+    assert state.has_enough_disk_for_synthesis(huge_char_count) is False
 
 
 @pytest.mark.asyncio

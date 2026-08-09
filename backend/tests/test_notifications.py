@@ -425,7 +425,7 @@ def test_ready_push_logs_only_redacted_counts_and_status_class(mock_supabase, ca
 
 def test_ready_push_does_not_propagate_subscription_lookup_failure(caplog):
     with patch("push_notifications.push_is_configured", return_value=True), \
-         patch("push_notifications.state._supabase_or_503", side_effect=RuntimeError("private detail")):
+         patch("push_notifications.state.supabase_or_503", side_effect=RuntimeError("private detail")):
         send_background_job_ready("user-1", "job-1")
 
     assert "private detail" not in caplog.text

@@ -6,6 +6,7 @@ import { useSwipeToDismiss } from "../utils/swipeToDismiss";
 import { useAuthStore } from "../stores/auth";
 import { usePromptSheetLogic } from "./PromptSheet_Logic.vue";
 import { usePromptSheetState } from "./PromptSheet_State.vue";
+import { uploadLimitBytes } from "../services/appConfig";
 
 const props = defineProps<{
     state: GenerationState;
@@ -17,10 +18,16 @@ const props = defineProps<{
 const authStore = useAuthStore();
 const promptSheetLogic = usePromptSheetLogic(usePromptSheetState());
 
-// Generation_Logic.vue의 getUploadLimitBytes()와 같은 값 — 안내 문구용으로만
-// 쓰므로 별도 API 호출 없이 그대로 미러링한다. 관리자는 사실상 여유로워
-// 굳이 상한을 강조해 보여줄 필요가 없다(글자 수 배지와 같은 판단).
-const maxUploadLabel = authStore.isAdmin ? null : "최대 10MB";
+// 안내 문구도 서버가 말하는 상한에서 파생시킨다 — 예전에는 "최대 10MB"를
+// 문자열로 박아두고 Generation_Logic의 숫자를 따로 들고 있어서, 상한을
+// 바꾸면 두 곳이 조용히 어긋났다. 관리자는 사실상 여유로워 굳이 상한을
+// 강조해 보여줄 필요가 없다(글자 수 배지와 같은 판단).
+const maxUploadLabel = ref<string | null>(null);
+if (!authStore.isAdmin) {
+    uploadLimitBytes(false).then((limit) => {
+        if (limit !== null) maxUploadLabel.value = `최대 ${Math.round(limit / 1024 / 1024)}MB`;
+    });
+}
 
 const sheet = ref<HTMLElement | null>(null);
 useSwipeToDismiss(sheet, () => props.logic.closeAddSourceSheet());

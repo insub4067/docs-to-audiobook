@@ -88,3 +88,33 @@ async def test_cleanup_one_iteration(tmp_path, monkeypatch):
     # job_audio 고아 파일 검증
     assert not orphan_old.exists()
     assert orphan_new.exists()
+
+
+@pytest.mark.asyncio
+async def test_cleanup_drops_expired_rate_buckets(tmp_path, monkeypatch):
+    """요청 제한 버킷은 IP마다 생기고 지워지는 자리가 없었다.
+
+    프로세스가 살아 있는 내내 자라기만 하는 유일한 인메모리 상태였다 —
+    text_storage/jobs/공유파일/고아오디오는 모두 정리 대상인데 이것만 빠져
+    있었다. 아직 윈도 안에 있는 기록까지 지우면 제한이 헐거워지므로,
+    지난 것만 지우는지도 함께 본다.
+    """
+    monkeypatch.setattr(cleanup, "SHARED_DIR", str(tmp_path / "shared"))
+    monkeypatch.setattr(cleanup, "JOB_AUDIO_DIR", str(tmp_path / "job_audio"))
+    now = time.time()
+
+    state._rate_buckets[("synthesize", "1.1.1.1")] = [now - state.RATE_BUCKET_MAX_WINDOW_SEC - 1]
+    state._rate_buckets[("synthesize", "2.2.2.2")] = [now]
+    state._rate_buckets[("product_event", "3.3.3.3")] = []
+
+    task = asyncio.create_task(cleanup.cleanup_expired_files_loop())
+    await asyncio.sleep(0.2)
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+    assert ("synthesize", "1.1.1.1") not in state._rate_buckets
+    assert ("product_event", "3.3.3.3") not in state._rate_buckets
+    assert ("synthesize", "2.2.2.2") in state._rate_buckets
