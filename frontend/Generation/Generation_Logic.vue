@@ -264,9 +264,16 @@ export function useGenerationLogic(state: GenerationState, voiceLogic: VoiceLogi
     }
 
     async function handleBatchFileSelect(files: FileList | File[]): Promise<void> {
+        // ⚠️ await보다 먼저 복사한다. 넘어오는 것은 대개 input.files인데, 이건
+        // 복사본이 아니라 입력창을 가리키는 살아있는 FileList다. 호출부는 이
+        // 함수를 부른 직후 input.value = ""로 입력창을 비우고(같은 파일을 다시
+        // 골라도 change가 나게 하려고), 그 순간 목록도 함께 비워진다.
+        // await에서 양보한 뒤에 읽으면 이미 늦어서, 파일을 골라도 아무 일도
+        // 일어나지 않았다 — 에러도 요청도 토스트도 없이.
+        const selected = Array.from(files);
         const maxUploadBytes = await getUploadLimitBytes();
         const validFiles: File[] = [];
-        for (const file of Array.from(files)) {
+        for (const file of selected) {
             if (maxUploadBytes !== null && file.size > maxUploadBytes) {
                 showToast(`${file.name}: 파일이 너무 큽니다 (최대 ${maxUploadBytes / 1024 / 1024}MB)`, "error");
             } else {
