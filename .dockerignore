@@ -1,0 +1,51 @@
+# Docker 빌드 컨텍스트에서 제외할 것.
+#
+# Dockerfile이 `COPY . $HOME/app`으로 저장소 전체를 복사한다. .gitignore는
+# 빌드 컨텍스트에 아무 영향이 없으므로, 이 파일이 없으면 git이 무시하는
+# 파일까지 전부 이미지에 들어간다.
+#
+# CI는 fresh checkout에서 `flyctl deploy --remote-only`를 돌려 이런 파일이
+# 애초에 없지만, 개발 머신에서 직접 flyctl deploy를 하면 로컬의 .env와
+# 가상환경·node_modules가 그대로 이미지에 실린다. 시크릿은 Fly secrets로
+# 주입되므로 이미지 안에 .env가 들어갈 이유가 전혀 없다.
+
+# 시크릿 — 절대 이미지에 들어가면 안 된다
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+# 파이썬 가상환경·캐시
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 프론트엔드 — node_modules는 빌드 스테이지가 npm ci로 직접 만든다.
+# dist는 빌드 스테이지 결과물을 COPY --from으로 가져오므로 로컬 산출물이
+# 섞이면 오히려 오래된 번들이 실릴 수 있다.
+frontend/node_modules/
+frontend/static/dist/
+node_modules/
+
+# 런타임 생성 디렉터리 — 컨테이너가 스스로 만든다
+backend/uploads/
+backend/shared/
+backend/job_audio/
+backend/voice_previews/
+backend/default_book/
+
+# 버전 관리·에디터·문서
+.git/
+.github/
+.gitignore
+.worktrees/
+.DS_Store
+docs/
+*.md
+!README.md
