@@ -311,7 +311,7 @@ onMounted(async () => {
          이 실패가 아예 불가능해진다. -->
     <div class="bottom-bars">
         <MiniPlayerView :state="readerState" :logic="readerLogic" :audio-list-state="audioListState" />
-        <TabBarView v-show="!readerState.isOpen.value" :active-tab="activeTab" @select="(tab) => (activeTab = tab)" />
+        <TabBarView :class="{ 'tab-bar-hidden': readerState.isOpen.value }" :active-tab="activeTab" @select="(tab) => (activeTab = tab)" />
     </div>
 
     <input
