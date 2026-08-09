@@ -9,6 +9,7 @@ import asyncio
 import time
 import uuid
 import socket
+import threading
 import ipaddress
 import requests
 from urllib.parse import urlparse, urljoin
@@ -24,38 +25,98 @@ URL_FETCH_TIMEOUT_SEC = 10
 URL_FETCH_MAX_REDIRECTS = 5
 
 
-def _is_safe_public_host(hostname: str) -> bool:
-    """호스트명이 가리키는 IP가 전부 공인망인지 확인한다.
+# DNS 재바인딩 방어 —
+#
+# 검사한 주소와 실제로 연결하는 주소가 같아야 의미가 있다. 예전에는
+# getaddrinfo로 검사한 뒤 requests가 **다시** 조회했다. 그 사이 권한 있는
+# 공격자의 DNS가 답을 바꾸면(첫 조회 공인 IP, 두 번째 조회 169.254.169.254)
+# 검사를 통과한 채로 내부망에 연결된다.
+#
+# 그래서 검사에 쓴 주소를 그대로 고정해서 연결한다. URL의 호스트명을 IP로
+# 바꿔치기하는 방법도 있지만 그러면 TLS 인증서 검증과 SNI가 깨진다. 대신
+# 이름 해석 단계만 가로채, 호스트명은 그대로 두고 주소만 고정한다.
+#
+# 전역 socket.getaddrinfo를 교체하지만, 이 스레드에 고정 항목이 등록된
+# 호스트에만 개입하고 나머지는 원래 함수로 그대로 넘긴다. URL 가져오기는
+# asyncio.to_thread로 자기 스레드에서 돌기 때문에(extract_url 참고) 스레드
+# 로컬이면 동시 요청끼리 서로의 고정값을 볼 수 없다.
+_system_getaddrinfo = socket.getaddrinfo
+_pinned = threading.local()
 
-    사설/루프백/링크로컬 대역과 클라우드 메타데이터 엔드포인트
-    (169.254.169.254)를 막는다. 후자는 is_private로 안 잡혀서 따로 확인한다.
-    """
+
+def _pinning_getaddrinfo(host, port, *args, **kwargs):
+    entries = getattr(_pinned, "by_host", {}).get(host)
+    if entries is None:
+        return _system_getaddrinfo(host, port, *args, **kwargs)
+    # 검사 때 받아 둔 주소를 그대로 쓰되 포트만 이번 요청 것으로 바꾼다.
+    return [
+        (family, socket.SOCK_STREAM, proto, canonname, (sockaddr[0], port) + tuple(sockaddr[2:]))
+        for family, _socktype, proto, canonname, sockaddr in entries
+    ]
+
+
+socket.getaddrinfo = _pinning_getaddrinfo
+
+
+def _is_public_address(raw_address: str) -> bool:
+    """사설/루프백/링크로컬 대역과 클라우드 메타데이터 엔드포인트
+    (169.254.169.254)를 막는다. 후자는 is_private로 안 잡혀서 따로 확인한다."""
+    ip = ipaddress.ip_address(raw_address)
+    if (ip.is_private or ip.is_loopback or ip.is_link_local
+            or ip.is_multicast or ip.is_reserved or ip.is_unspecified):
+        return False
+    return str(ip) != "169.254.169.254"
+
+
+def _pin_safe_public_host(hostname: str) -> bool:
+    """호스트명이 가리키는 IP가 전부 공인망이면, 그 주소들을 이 스레드에
+    고정하고 True를 돌려준다. 이후 이 호스트로 나가는 연결은 다시 조회하지
+    않고 여기서 검사한 주소만 쓴다."""
     try:
-        infos = socket.getaddrinfo(hostname, None)
+        entries = _system_getaddrinfo(hostname, None, 0, socket.SOCK_STREAM)
     except socket.gaierror:
         return False
-    for info in infos:
-        ip = ipaddress.ip_address(info[4][0])
-        if (ip.is_private or ip.is_loopback or ip.is_link_local
-                or ip.is_multicast or ip.is_reserved or ip.is_unspecified):
+    if not entries:
+        return False
+    for entry in entries:
+        if not _is_public_address(entry[4][0]):
             return False
-        if str(ip) == "169.254.169.254":
-            return False
+
+    if not hasattr(_pinned, "by_host"):
+        _pinned.by_host = {}
+    _pinned.by_host[hostname] = entries
     return True
+
+
+def _clear_pinned_hosts() -> None:
+    getattr(_pinned, "by_host", {}).clear()
 
 
 def _fetch_url_safely(url: str) -> requests.Response:
     """스킴/호스트를 검증하며 요청하고, 리다이렉트는 직접 따라가며 매 홉마다
     다시 검증한다. requests의 allow_redirects=True를 쓰면 최종 목적지만
     보게 되어, 공인 IP로 한 번 응답한 뒤 내부망으로 리다이렉트하는 공격을
-    놓칠 수 있다."""
+    놓칠 수 있다.
+
+    매 홉의 검사 결과는 이 스레드에 고정되고, 실제 연결은 그 주소로만 나간다
+    (_pin_safe_public_host 참고) — 검사와 연결 사이에 DNS 답이 바뀌어도
+    소용없게 만든다."""
+    try:
+        return _fetch_following_redirects(url)
+    finally:
+        # 고정은 이 요청 동안만 유효하다. 스레드는 풀에서 재사용되므로
+        # 남겨두면 다음 요청이 낡은 주소로 나간다.
+        _clear_pinned_hosts()
+
+
+def _fetch_following_redirects(url: str) -> requests.Response:
     for _ in range(URL_FETCH_MAX_REDIRECTS + 1):
         parsed = urlparse(url)
         if parsed.scheme not in ("http", "https"):
             raise HTTPException(status_code=400, detail="http/https 주소만 지원합니다.")
         if not parsed.hostname:
             raise HTTPException(status_code=400, detail="올바른 URL이 아닙니다.")
-        if not _is_safe_public_host(parsed.hostname):
+        if not _pin_safe_public_host(parsed.hostname):
             raise HTTPException(status_code=400, detail="내부망 주소는 요청할 수 없습니다.")
 
         resp = requests.get(
