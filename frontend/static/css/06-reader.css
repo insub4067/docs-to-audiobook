@@ -134,6 +134,35 @@
     line-height: 1.7;
     color: var(--text-color);
 }
+.library-detail-now-playing {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+    color: var(--primary-color);
+    font-size: 0.88rem;
+    font-weight: 600;
+}
+.detail-play-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    width: 16px;
+    height: 16px;
+}
+.detail-play-bars span {
+    width: 3px;
+    border-radius: 1px;
+    background-color: var(--primary-color);
+    animation: now-playing-bounce 0.9s ease-in-out infinite;
+}
+.detail-play-bars span:nth-child(1) { animation-delay: -0.6s; }
+.detail-play-bars span:nth-child(2) { animation-delay: -0.3s; }
+.detail-play-bars.paused span {
+    height: 65%;
+    animation: none;
+}
+
 .library-detail-actions {
     display: flex;
     flex-direction: column;

@@ -3,6 +3,7 @@ import { computed, onMounted } from "vue";
 import type { ReaderLogic } from "../../Reader/Reader_Logic.vue";
 import { useNewsState } from "./News_State.vue";
 import { useNewsLogic } from "./News_Logic.vue";
+import { nowPlayingId, nowPlayingState } from "../../services/nowPlaying";
 import ListRowPlaceholderView from "../Placeholder/ListRowPlaceholder_View.vue";
 
 const props = defineProps<{ logic: ReaderLogic }>();
@@ -10,6 +11,8 @@ const state = useNewsState();
 const newsLogic = useNewsLogic(state, props.logic);
 
 const topItem = computed(() => state.items.value[0] ?? null);
+const isCurrent = computed(() => topItem.value ? nowPlayingId.value === topItem.value.id : false);
+const isPlaying = computed(() => isCurrent.value && nowPlayingState.value === "playing");
 
 function formatRelativeTime(iso: string): string {
     const diffMin = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
@@ -48,10 +51,13 @@ onMounted(() => {
                 <ListRowPlaceholderView />
             </div>
             <div v-else class="audio-list">
-                <button type="button" class="audio-item audio-item-news" @click="newsLogic.openNewsItem(topItem)">
+                <button type="button" class="audio-item audio-item-news" :class="{ 'is-playing': isCurrent, 'is-paused': isCurrent && !isPlaying }" @click="newsLogic.openNewsItem(topItem)">
                     <div class="audio-item-front">
                         <div class="audio-title-group">
-                            <i data-lucide="play-circle"></i>
+                            <span class="row-play-icon">
+                                <i data-lucide="play-circle"></i>
+                                <span class="row-play-bars" aria-hidden="true"><span></span><span></span><span></span></span>
+                            </span>
                             <div class="audio-title-col">
                                 <span class="audio-title">{{ topItem.title }}</span>
                                 <span class="audio-subtitle">

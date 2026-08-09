@@ -14,6 +14,13 @@ import { useAuthLogic } from "../Auth/Auth_Logic.vue";
 import { swallowed } from "../services/clientErrors";
 import { setNowPlaying, setNowPlayingState } from "../services/nowPlaying";
 
+const PLAY_5MIN_MS = 300_000;
+let _accumulatedPlayMs = 0;
+let _playStartedAt: number | null = null;
+let _play5minFired = false;
+let _play5minTimer: ReturnType<typeof setTimeout> | null = null;
+try { _play5minFired = localStorage.getItem("play_5min_fired") === "true"; } catch {}
+
 export interface SharedReaderModeOptions {
     shareId?: string | null;
     // 재생목록(뉴스 연속 재생)이 있을 때 다음 항목으로 넘길 콜백. 현재 반복
@@ -103,6 +110,30 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         playbackStartTracked = true;
         authLogic.trackProductEvent("playback_started");
     }
+
+    function firePlay5min(): void {
+        _play5minFired = true;
+        if (_play5minTimer) { clearTimeout(_play5minTimer); _play5minTimer = null; }
+        try { localStorage.setItem("play_5min_fired", "true"); } catch {}
+        authLogic.trackProductEvent("play_5min");
+    }
+
+    function onPlayFor5minTracking(): void {
+        if (_play5minFired) return;
+        _playStartedAt = Date.now();
+        const remaining = PLAY_5MIN_MS - _accumulatedPlayMs;
+        if (remaining <= 0) { firePlay5min(); return; }
+        _play5minTimer = setTimeout(firePlay5min, remaining);
+    }
+
+    function onPauseFor5minTracking(): void {
+        if (_play5minFired) return;
+        if (_play5minTimer) { clearTimeout(_play5minTimer); _play5minTimer = null; }
+        if (_playStartedAt !== null) {
+            _accumulatedPlayMs += Date.now() - _playStartedAt;
+            _playStartedAt = null;
+        }
+    }
     // 우리가 직접 부른 scrollTo(smooth)가 끝나기 전에 scroll 이벤트가
     // 튀어서 "사용자가 스크롤해서 벗어났다"로 오인하지 않도록 잠깐 무시한다.
     let suppressScrollAwayUntil = 0;
@@ -117,6 +148,7 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
     }
 
     function resetAudioHandlers(): void {
+        onPauseFor5minTracking();
         const el = state.audioEl.value;
         if (!el) return;
         el.onplay = null;
@@ -285,8 +317,8 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
                 state.isPlaying.value = true;
             }
         };
-        el.onplay = () => { state.isPlaying.value = true; setNowPlayingState("playing"); trackPlaybackStartOnce(); };
-        el.onpause = () => { state.isPlaying.value = false; setNowPlayingState("paused"); };
+        el.onplay = () => { state.isPlaying.value = true; setNowPlayingState("playing"); trackPlaybackStartOnce(); onPlayFor5minTracking(); };
+        el.onpause = () => { state.isPlaying.value = false; setNowPlayingState("paused"); onPauseFor5minTracking(); };
         // 반복 모드 처리. resetAudioHandlers()가 onended를 지우므로 매번 다시
         // 걸어야 한다 — 이걸 빠뜨려서 "전체 문서 반복"을 골라도 재생이 그냥
         // 끝나 버렸다.
@@ -376,8 +408,8 @@ export function useReaderLogic(state: ReaderState, readerControls: ReaderControl
         // 자동재생으로 막힌다. load() 직후 같은 흐름에서 요청해 두면
         // 브라우저가 그 요청을 이어지는 재생으로 취급한다(연속 재생이
         // PWA를 벗어나면 멈추던 원인).
-        el.onplay = () => { state.isPlaying.value = true; setNowPlayingState("playing"); trackPlaybackStartOnce(); };
-        el.onpause = () => { state.isPlaying.value = false; setNowPlayingState("paused"); };
+        el.onplay = () => { state.isPlaying.value = true; setNowPlayingState("playing"); trackPlaybackStartOnce(); onPlayFor5minTracking(); };
+        el.onpause = () => { state.isPlaying.value = false; setNowPlayingState("paused"); onPauseFor5minTracking(); };
         el.ontimeupdate = () => {
             const currentSec = el.currentTime;
             const duration = el.duration || 0;

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { ref, computed, watch } from "vue";
 import type { LibraryState } from "./Library_State.vue";
 import type { LibraryLogic } from "./Library_Logic.vue";
+import { nowPlayingId, nowPlayingState } from "../services/nowPlaying";
 
 interface TocEntry {
     text: string;
@@ -18,6 +19,8 @@ const toc = ref<TocEntry[]>([]);
 const rawSentences = ref<unknown[]>([]);
 const isLoadingToc = ref(false);
 const hasPlaybackHistory = ref(false);
+const isCurrent = computed(() => props.state.detailItem.value ? nowPlayingId.value === props.state.detailItem.value.id : false);
+const isPlaying = computed(() => isCurrent.value && nowPlayingState.value === "playing");
 
 watch(() => props.state.detailItem.value, async (item) => {
     toc.value = [];
@@ -67,6 +70,11 @@ function onChapterClick(entry: TocEntry): void {
                 <p v-if="state.detailItem.value.library_description" class="library-detail-description">
                     {{ state.detailItem.value.library_description }}
                 </p>
+
+                <div v-if="isCurrent" class="library-detail-now-playing">
+                    <span class="detail-play-bars" :class="{ paused: !isPlaying }" aria-hidden="true"><span></span><span></span><span></span></span>
+                    {{ isPlaying ? '재생 중' : '일시정지' }}
+                </div>
 
                 <div class="library-detail-actions">
                     <button type="button" class="action-sheet-btn action-sheet-btn-primary" @click="logic.playFromStart(state.detailItem.value)">

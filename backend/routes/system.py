@@ -197,6 +197,7 @@ def load_admin_metrics():
         "generation_failed_30d": failed,
         "generation_success_rate": round(completed / (completed + failed) * 100) if completed + failed else None,
         "playback_started_30d": sum(event["event_name"] == "playback_started" for event, _ in recent_events),
+        "play_5min_30d": sum(event["event_name"] == "play_5min" for event, _ in recent_events),
         "week_one_retention_rate": round(len(returning_users) / len(week_one_cohort) * 100) if week_one_cohort else None,
         "retention_cohort_size": len(week_one_cohort),
         "client_errors_7d": len(client_errors),
@@ -248,7 +249,7 @@ async def create_product_event(request: Request, payload: dict, authorization: s
     user_id = require_user_id(authorization)
     enforce_rate_limit(request, "product_event", limit=120, window_sec=600)
     event_name = payload.get("event_name")
-    if event_name not in {"generation_started", "generation_completed", "generation_failed", "playback_started"}:
+    if event_name not in {"generation_started", "generation_completed", "generation_failed", "playback_started", "play_5min"}:
         raise HTTPException(status_code=400, detail="지원하지 않는 이벤트입니다.")
     try:
         _supabase_or_503().table("product_events").insert({

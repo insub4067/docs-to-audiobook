@@ -20,6 +20,7 @@ import MoveToFolderSheetView from "../Sheet/MoveToFolderSheet_View.vue";
 import AddMenuSheetView from "../Sheet/AddMenuSheet_View.vue";
 import { usePromptSheetLogic } from "../Sheet/PromptSheet_Logic.vue";
 import { usePromptSheetState } from "../Sheet/PromptSheet_State.vue";
+import { nowPlayingId, nowPlayingState } from "../services/nowPlaying";
 
 const props = defineProps<{
     audioListState: AudioListState;
@@ -228,11 +229,15 @@ onUnmounted(() => {
                 :key="item.id"
                 type="button"
                 class="audio-item audio-item-news"
+                :class="{ 'is-playing': nowPlayingId === item.id, 'is-paused': nowPlayingId === item.id && nowPlayingState !== 'playing' }"
                 @click="libraryLogic.openDetail(item)"
             >
                 <div class="audio-item-front">
                     <div class="audio-title-group">
-                        <i data-lucide="book-open"></i>
+                        <span class="row-play-icon">
+                            <i data-lucide="book-open"></i>
+                            <span class="row-play-bars" aria-hidden="true"><span></span><span></span><span></span></span>
+                        </span>
                         <div class="audio-title-col">
                             <span class="audio-title">{{ item.title }}</span>
                             <span v-if="item.library_category" class="audio-subtitle">{{ item.library_category }}</span>
