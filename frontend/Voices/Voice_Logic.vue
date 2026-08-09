@@ -34,7 +34,7 @@ export function useVoiceLogic(state: VoiceState): VoiceLogic {
             previewAudio = null;
         }
         state.isPreviewBusy.value = false;
-        state.previewLabel.value = "미리듣기";
+        state.previewLabel.value = "이 목소리로 들어보기";
     }
 
     async function togglePreview(): Promise<void> {

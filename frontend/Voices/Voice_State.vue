@@ -22,7 +22,7 @@ export function useVoiceState(): VoiceState {
         selectedVoice: ref(""),
         voiceDesc: ref("선택한 음성의 상세 특징이 표시됩니다."),
         isPreviewBusy: ref(false),
-        previewLabel: ref("미리듣기"),
+        previewLabel: ref("이 목소리로 들어보기"),
     };
 }
 

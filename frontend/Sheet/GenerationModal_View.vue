@@ -75,12 +75,17 @@ function onVoiceChange(event: Event): void {
                                     </select>
                                     <i data-lucide="chevron-down" class="select-arrow"></i>
                                 </div>
-                                <button type="button" class="btn-voice-preview" aria-label="선택한 목소리 미리듣기" @click="voiceLogic.togglePreview">
-                                    <i data-lucide="volume-2"></i>
-                                    <span>{{ voiceState.previewLabel.value }}</span>
-                                </button>
                             </div>
                             <div class="voice-desc">{{ voiceState.voiceDesc.value }}</div>
+                            <!-- 목소리 선택 칸 옆에 두면 좁은 화면에서 글자를 숨겨야
+                                 했고(선택 칸 폭을 뺏겨서), 그러면 이런 기능이 있는 줄
+                                 모른다. 라벨은 "준비 중.../정지" 상태까지 겸하고 있어
+                                 숨기면 눌러도 반응이 없어 보인다. 아래 한 줄로 내려
+                                 폭 다툼을 없앤다. -->
+                            <button type="button" class="btn-voice-preview" @click="voiceLogic.togglePreview">
+                                <i data-lucide="volume-2"></i>
+                                <span>{{ voiceState.previewLabel.value }}</span>
+                            </button>
                         </div>
                         <div class="form-group">
                             <div class="label-with-val">
