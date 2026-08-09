@@ -740,13 +740,12 @@
     left: 0;
     right: 0;
     z-index: 10;
-    /* 터치 영역은 홈 인디케이터를 비켜야 한다. 배경은 화면 끝까지 full-bleed로
-       깔리고(부모가 뷰포트 하단까지 닿음) 버튼만 인셋만큼 올라온다. */
     padding: 8px 20px max(12px, env(safe-area-inset-bottom));
-    border-top: 1px solid var(--reader-border);
-    background-color: var(--reader-surface);
-    backdrop-filter: blur(24px) saturate(160%);
-    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    border-top: 1px solid var(--glass-border);
+    background: var(--reader-surface);
+    backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.06), var(--glass-highlight);
 }
 
 
