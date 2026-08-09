@@ -35,10 +35,16 @@ def restore_jobs_state():
 
 
 def _seed_large_text(text_id="large-doc", max_synth_chars=None):
+    """백그라운드 분기를 타려면 본문이 실제로 MAX_SYNTH_CHARS를 넘어야 한다.
+    예전에는 20자짜리에 관리자 상한만 붙여 두고 "대용량"이라 불렀는데, 분기가
+    계정 등급이 아니라 문서 길이를 보도록 바뀌면서 그건 더 이상 대용량이
+    아니다(routes/tts.py의 분기 주석 참고)."""
+    text = "관리자 대용량 문서 테스트 본문입니다. " * 6000  # 12만 자 이상
+    assert len(text) > state.MAX_SYNTH_CHARS
     state.text_storage[text_id] = {
         "filename": "large.pdf",
-        "text": "관리자 대용량 문서 테스트 본문입니다.",
-        "char_count": 20,
+        "text": text,
+        "char_count": len(text),
         "max_synth_chars": max_synth_chars or state.MAX_ADMIN_SYNTH_CHARS,
         "created_at": 0,
         "access_token": "text-token",
@@ -501,3 +507,63 @@ async def test_process_background_synthesis_task_gives_up_after_max_attempts(moc
     update_calls = mock_supabase.table().update.call_args_list
     assert any(call.args[0].get("status") == "error" for call in update_calls)
     state.jobs.pop("job-all-fail", None)
+
+
+# ---- 백그라운드 분기 기준: 계정 등급이 아니라 문서 길이 ----
+#
+# 예전에는 관리자면 다섯 줄짜리 메모도 백그라운드로 갔다. 백그라운드에는
+# 합성 중 앞부분부터 듣는 기능이 붙어 있지 않아, 관리자 계정에서는 그 기능을
+# 아예 만날 수 없었다 — 만들어 놓고 확인을 못 한 이유가 이것이었다.
+
+@pytest.mark.asyncio
+async def test_short_document_stays_in_foreground_even_for_admin(mock_supabase):
+    """관리자가 올려도 짧은 문서는 포그라운드로 간다(= 라이브 TTS를 탄다)."""
+    import httpx
+
+    state.text_storage["short-doc"] = {
+        "filename": "memo.txt",
+        "text": "다섯 줄짜리 메모입니다.",
+        "char_count": 13,
+        # 관리자 상한이 붙어 있어도 본문이 짧으면 백그라운드가 아니다.
+        "max_synth_chars": state.MAX_ADMIN_SYNTH_CHARS,
+        "created_at": 0,
+        "access_token": "text-token",
+    }
+
+    with patch("state.require_user_id", return_value="admin-user"), \
+         patch("routes.tts.process_synthesis_task"):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/synthesize",
+                data={"text_id": "short-doc", "text_access_token": "text-token"},
+                headers={"Authorization": "Bearer fake"},
+            )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "job_id" in data
+    # 포그라운드 경로는 background_started를 달지 않는다.
+    assert data.get("background_started") is not True
+    # 백그라운드 큐에 넣지 않았어야 한다.
+    mock_supabase.table().insert.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_long_document_goes_to_background(mock_supabase):
+    """본문이 MAX_SYNTH_CHARS를 넘으면 백그라운드로 간다."""
+    import httpx
+
+    _seed_large_text("long-doc")
+    mock_supabase.table().select().in_().limit().execute.return_value = MagicMock(data=[])
+
+    with patch("state.require_user_id", return_value="admin-user"), \
+         patch("routes.tts.process_background_synthesis_task"):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url="http://test") as client:
+            response = await client.post(
+                "/api/synthesize",
+                data={"text_id": "long-doc", "text_access_token": "text-token"},
+                headers={"Authorization": "Bearer fake"},
+            )
+
+    assert response.status_code == 200
+    assert response.json()["background_started"] is True

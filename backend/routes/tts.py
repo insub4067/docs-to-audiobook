@@ -576,7 +576,14 @@ async def synthesize_text(
         jobs[job_id] = _fresh_job_state(user_id)
         return job_id
 
-    if max_synth_chars > MAX_SYNTH_CHARS:
+    # ⚠️ 여기서 보는 것은 "이 문서가 큰가"이지 "이 사람이 관리자인가"가 아니다.
+    #
+    # 예전에는 max_synth_chars(관리자 5천만 / 일반 10만)를 비교해서, 관리자가
+    # 올리면 다섯 줄짜리 메모도 백그라운드로 갔다. 백그라운드에는 합성 중
+    # 앞부분부터 듣는 기능(services/progressiveAudio.ts)이 붙어 있지 않아,
+    # 관리자 계정에서는 그 기능을 아예 만날 수 없었다 — 만들어 놓고 정작
+    # 확인을 못 한 이유가 이것이었다.
+    if len(raw_text) > MAX_SYNTH_CHARS:
         # 대용량 작업은 브라우저의 폴링·클라우드 업로드에 의존하지 않는다.
         # 완료 후 서버가 직접 보관함에 저장하므로 앱을 닫아도 결과가 남는다.
         if not authorization:
