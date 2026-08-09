@@ -899,6 +899,14 @@
     height: 16px;
 }
 
+.btn-speed-label {
+    font-family: var(--font-sans);
+    font-size: 0.72rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+}
+
 .btn-reader-secondary:hover {
     background: rgba(93, 75, 64, 0.05);
     color: var(--text-color);
