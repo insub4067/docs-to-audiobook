@@ -40,9 +40,17 @@ pip install pytest pytest-asyncio pytest-cov httpx ruff
 - **`pytest.ini`에 `--cov` 옵션이 박혀 있다.** `pytest-cov`를 안 깔면 pytest가 인자 에러를 낸다. 깔거나 `-o addopts=""`로 우회.
 - **테스트 실행**: `cd backend && python3 -m pytest -q` (레포 루트의 `pytest.ini`가 rootdir를 잡는다). 프론트: `cd frontend && npm ci && npm test`.
 
-### DB 마이그레이션 — 아직 적용 안 됨 ⚠️
+### DB 마이그레이션 — 적용 완료 ✅ (2026-08-11)
 
-`SUPABASE_SETUP.md` §2.8.1에 SQL을 문서화만 했다. **실제 Supabase에는 적용하지 않았다.** 3단계 이후를 프로덕션에서 돌리려면 그 SQL(news_sources 테이블 + audiobooks 3개 컬럼 + news_guid unique index + GRANT)을 먼저 실행해야 한다. `GRANT ... TO service_role`을 빠뜨리면 `42501 permission denied`로 기능 전체가 죽는다(SUPABASE_SETUP.md의 library_saves 사고 참고).
+`SUPABASE_SETUP.md` §2.8.1의 SQL을 프로덕션에 적용했다(마이그레이션 이름 `news_curation_step0`). 적용 후 확인한 것:
+
+- `service_role`의 news_sources SELECT/INSERT/UPDATE/DELETE 전부 `true` — 문서가 경고한 `42501` 사고 없음
+- `anon`·`authenticated`는 SELECT `false` — 의도대로 차단
+- `audiobooks`에 `news_status`/`news_url`/`news_guid` 3개 컬럼 + `audiobooks_news_guid_idx` unique index 생성
+- **기존 붙여넣기 뉴스 10건이 그대로 남아 있고 전부 `news_status='published'`** — 기본값 덕에 향후 필터에서 사라지지 않는다
+- `GET /api/news`가 10건을 그대로 반환(프로덕션 확인)
+
+즉 이제 `news_url`/`news_guid`/`news_status`를 insert해도 깨지지 않는다.
 
 ---
 

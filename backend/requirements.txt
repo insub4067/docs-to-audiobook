@@ -20,6 +20,9 @@ trafilatura>=1.8.0
 youtube-transcript-api>=1.0.0
 # 뉴스 자동 큐레이션(Step 0): 등록된 RSS 피드에서 후보를 수집한다(news_sources.py).
 feedparser>=6.0.0
+# 수집한 후보를 선별·요약한다(summarizer.py). ANTHROPIC_API_KEY가 필요하다 —
+# 키가 없으면 요약 호출만 실패하고 나머지 기능은 그대로 돈다(_client 참고).
+anthropic>=0.69.0
 pywebpush==2.3.0
 
 # P2: Database & Authentication
