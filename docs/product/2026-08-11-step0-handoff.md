@@ -17,10 +17,20 @@
 | Step 0 설계 | `2026-08-11-step0-curation-automation-design.md` | 문서 |
 | 1단계 | `_normalize_items` 추출 + `SUPABASE_SETUP.md` 스키마 | **동작 변화 없음** (순수 리팩터) |
 | 2단계 | `news_sources.py` (RSS 수집) + `feedparser` 의존성 | **없음** (아직 아무 데도 연결 안 됨) |
+| 마이그레이션 | `news_curation_step0` 프로덕션 적용 | 스키마만. 새 컬럼은 nullable, 기본값이 기존 행을 보호 |
+| 3단계 (1/2) | `summarizer.py` (Claude 선별·요약) + `anthropic` 의존성 | **없음** (아직 아무 데도 연결 안 됨) |
+| 3단계 (2/2) | `_normalize_items` url/guid 통과 + `store_news_item`이 새 컬럼 저장 | **붙여넣기 경로 동작 그대로** (아래 참고) |
 
-`git log --oneline origin/main..HEAD`로 확인.
+`git log --oneline origin/main..HEAD`로 확인. 백엔드 400건 통과, ruff 통과.
 
-**중요:** 여기까지는 사용자에게 보이는 동작이 하나도 바뀌지 않았다. 관리자 붙여넣기 경로(`POST /api/admin/news`)가 그대로 살아 있고, 자동 수집은 어디에서도 호출되지 않는다. 되돌리기가 안전하다.
+**중요: 여기까지도 사용자에게 보이는 동작이 하나도 바뀌지 않았다.** 관리자 붙여넣기
+경로(`POST /api/admin/news`)가 그대로 살아 있고, 자동 수집·요약은 어디에서도
+호출되지 않는다. 되돌리기가 안전한 마지막 지점이다 — 4단계부터는 프로덕션에서
+실제로 도는 코드가 들어간다.
+
+3단계 (2/2)가 붙여넣기 경로를 건드리지만 동작은 같다: 새 컬럼은 `None`으로
+들어가고 `news_status`는 `'published'`가 기본이다. 기존 news 테스트 18건이
+그대로 통과하는 것으로 확인했다.
 
 ---
 
@@ -58,37 +68,52 @@ pip install pytest pytest-asyncio pytest-cov httpx ruff
 
 설계 원본 §10의 구현 순서 3~7단계. 각 단계는 독립 배포 가능하고, 앞 단계 없이 뒷 단계를 못 한다.
 
-### 3단계 — `summarizer.py` (Claude 요약) ⬅ 다음 차례
+### 3단계 — `summarizer.py` + 저장 경로 확장 ✅ 완료 (2026-08-11)
 
-**목표:** RSS 후보 목록을 받아 Claude로 선별·요약한다. 카테고리당 1회 호출.
+커밋 두 개로 나눠 넣었다. 핸드오프 원안은 둘을 한 단계로 묶었는데, 저장 경로
+확장은 마이그레이션 없이는 붙여넣기 경로를 죽이는 변경이라 분리했다.
 
-- 새 파일 `backend/summarizer.py`, 새 의존성 `anthropic` (requirements.txt에 추가).
-- **모델·파라미터**: `claude-opus-5`, effort `medium`부터. `client.messages.parse()` + Pydantic 스키마로 JSON 파싱 실패 경로를 없앤다. Batch API·프롬프트 캐싱은 넣지 않는다(설계 §4.1 근거).
-  - ⚠️ 코드 쓰기 전에 `claude-api` 스킬을 읽어 최신 SDK 시그니처를 확인할 것. 모델 ID/파라미터를 기억으로 쓰지 말 것.
-  - API 키는 `ANTHROPIC_API_KEY` 환경변수. fly.io secrets에도 등록 필요.
-- **스키마** (설계 §4.2):
-  ```python
-  class NewsItem(BaseModel):
-      title: str; content: str; source: str; url: str; guid: str
-  class Briefing(BaseModel):
-      items: list[NewsItem]
-  async def summarize_category(category, candidates, limit) -> list[NewsItem]
-  ```
-- **시스템 프롬프트가 담을 것** (설계 §4.2): 오디오용(귀로 듣는다)·중복 사건 하나만·중요도순 최대 N건·**원문 문장 그대로 옮기지 않는다**·400자 이내·출처와 링크는 입력 값 그대로.
-- **길이 강제**: `SUMMARY_MAX_CHARS = 400`. 초과 시 자르지 말고 한 번 재시도, 그래도 넘으면 그 항목만 버린다.
-- **거부 규칙**: `url` 없거나 `source` 없는 항목은 저장 단계에서 거부(아래 `_normalize_items` 확장과 연계).
+**`summarizer.py`** — `claude-opus-5` + `messages.parse()` + Pydantic. effort는
+`medium`. 400자 초과는 자르지 않고 한 번 재시도, 두 번째도 넘치면 그 항목만 버린다.
+출처·링크 없는 항목 거부. 클라이언트는 호출 시점에 만든다(import 시점이면 키 없는
+환경에서 모듈 자체를 못 읽는다). 테스트 8건.
 
-**`_normalize_items` 확장 (여기서 함께)**: 1단계에서 url/guid를 일부러 안 넣었다. 이제 `routes/news.py`의 `_normalize_items`에 `url`/`guid` 패스스루를 추가하고, `store_news_item`이 `news_url`/`news_guid`/`news_status='review'`를 insert하도록 확장한다. 두 값이 없으면 거부하는 규칙도 여기. **붙여넣기 경로가 깨지지 않는지 기존 news 테스트로 확인** — 붙여넣기는 url/guid가 없으므로, 자동 경로에서만 거부하도록 분기하거나 붙여넣기엔 관대하게 둘지 결정할 것(설계 §3.2와 어긋나지 않게).
+> ⚠️ **`MAX_TOKENS = 16000`을 줄이지 말 것.** Claude Opus 5는 thinking이 기본으로
+> 켜져 있고 thinking과 응답이 같은 한도를 나눠 쓴다. 5건 × 400자면 응답만 보고
+> 3천 토큰이면 될 것 같지만, 그렇게 잡으면 답이 중간에 잘린다.
 
-**테스트** (`backend/tests/test_summarizer.py`): 400자 초과 재시도 / url 없는 항목 거부 / source 없는 항목 거부. Claude 호출은 mock.
+**저장 경로** — `_normalize_items(items, *, automated=False)`가 url/guid를
+통과시키고, `store_news_item(..., news_status="published")`이 새 컬럼을 저장한다.
+테스트 6건 추가, 기존 18건 그대로 통과.
 
-**완료 기준:** 실제 RSS 피드 몇 개로 로컬에서 요약 품질을 눈으로 확인. (아직 자동 실행 아님)
+**핸드오프가 남긴 결정 — 이렇게 정했다.** 설계 §3.2는 매체명·원문 링크가 없으면
+거부하라고 하지만 붙여넣기 경로는 둘 다 보낸 적이 없다. **자동 경로(`automated=True`)에만
+걸었다.** 자동 수집분은 사람이 본 적 없는 글이라 출처를 되짚을 수 있어야 하고,
+붙여넣기는 관리자가 직접 확인하고 넣는 것이다.
 
----
+> ⚠️ **여기서 한 번 틀렸으니 같은 실수를 반복하지 말 것.** 프로덕션 뉴스 10건이
+> 매체명을 전부 채우고 있는 것을 보고 "필수"라고 판단해 양쪽 모두에 걸었다가
+> 기존 테스트 13건이 깨졌다. 그건 관리자가 매번 넣어준 것이지 API가 요구한 게
+> 아니다. **데이터가 우연히 채워진 것과 계약이 요구하는 것은 다르다** —
+> 스키마·데이터가 아니라 테스트를 계약으로 읽을 것.
 
-### 4단계 — `briefing.py` 트리거
+### 4단계 — `briefing.py` 트리거 ⬅ 다음 차례
 
 **목표:** 수집→요약→기존 파이프라인을 잇는 HTTP 엔드포인트.
+
+> **여기서 성격이 바뀐다.** 3단계까지는 만들어만 뒀고 아무 데도 안 붙었다.
+> 4단계는 **프로덕션에서 실제로 도는 첫 코드**다. 되돌리기 단위를 작게 유지하려면
+> 별도 PR로 가는 게 좋다.
+
+**3단계에서 이미 끝나서 여기서 안 해도 되는 것:**
+
+- `_normalize_items`의 url/guid 통과 — `automated=True`로 부르기만 하면 된다
+- `store_news_item`의 새 컬럼 저장 — `news_status="review"`를 건네기만 하면 된다
+- 마이그레이션 — 프로덕션에 적용 완료
+
+**시작 전 확인:** fly.io secrets에 `ANTHROPIC_API_KEY`가 등록돼 있는지. 3단계에서
+코드만 넣었고 키는 아직 안 넣었다 — 없으면 `summarize_category`가
+`RuntimeError("ANTHROPIC_API_KEY가 설정되지 않았습니다.")`로 죽는다.
 
 - 새 파일 `backend/routes/briefing.py`, `main.py`에 라우터 등록.
 - `POST /api/admin/briefing/run` — `Authorization: Bearer BRIEFING_TRIGGER_SECRET` 검증(`state.py`에 헬퍼 추가). **즉시 202 반환 + `BackgroundTasks`로 처리** (`add_news`와 같은 방식, TTS 포함 수 분 걸림).
