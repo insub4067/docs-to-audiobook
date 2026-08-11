@@ -263,6 +263,56 @@ select
   has_table_privilege('service_role', 'public.content_jobs', 'DELETE');
 ```
 
+### 2.8.1 뉴스 자동 큐레이션 (Step 0)
+
+관리자가 손으로 붙여넣던 경제 뉴스를 서버가 자동으로 수집·요약·합성하도록 확장한다
+(`docs/product/2026-08-11-step0-curation-automation-design.md` 참고). 뉴스는 별도 테이블
+없이 `audiobooks`에 `is_news` 플래그로 얹혀 있으므로, 자동화에 필요한 세 컬럼과 소스
+화이트리스트 테이블만 추가한다.
+
+```sql
+-- 소스 화이트리스트. 임의 URL을 수집하지 않기 위해(저작권·SSRF) 관리자가
+-- 등록한 RSS 피드에서만 후보를 가져온다. name은 화면·오디오 출처 표기에 쓴다.
+create table public.news_sources (
+  id uuid primary key default gen_random_uuid(),
+  category varchar(50) not null,
+  name varchar(100) not null,
+  feed_url text not null unique,
+  enabled boolean not null default true,
+  created_at timestamptz not null default now()
+);
+create index news_sources_category_idx on public.news_sources(category) where enabled;
+alter table public.news_sources enable row level security;
+revoke all on table public.news_sources from anon, authenticated;
+grant select, insert, update, delete on table public.news_sources to service_role;
+
+-- audiobooks 확장.
+--  news_status : 자동 생성분은 'review'로 들어가고 관리자 승인 후 'published'.
+--                (서점의 library_status와 같은 게이트 — 품질 검증 전 자동 공개 방지)
+--  news_url    : 원문 링크. 출처 표기에 쓰고, 없으면 저장을 거부한다.
+--  news_guid   : RSS 항목 식별자. 어제 다룬 기사가 오늘 다시 들어오는 것을 막는다.
+alter table public.audiobooks add column if not exists news_status varchar(20) default 'published';
+alter table public.audiobooks add column if not exists news_url text;
+alter table public.audiobooks add column if not exists news_guid varchar(255);
+
+-- 같은 기사 중복 저장 방지. RSS는 같은 기사를 며칠씩 반복 노출한다.
+create unique index if not exists audiobooks_news_guid_idx
+  on public.audiobooks(news_guid) where news_guid is not null;
+```
+
+`news_status`의 기본값을 `'published'`로 둔 이유: 기존 관리자 붙여넣기 행이 전부 `NULL`이
+되어 `GET /api/news`(향후 `news_status = 'published'` 필터가 붙는다)에서 사라지는 것을
+막는다. 자동 생성분만 저장 함수에서 명시적으로 `'review'`를 넣는다.
+
+`GRANT`를 빠뜨리면 §2.7의 `library_saves`가 그랬듯 `42501 permission denied`로 기능이
+죽는다. 적용 후 확인한다.
+
+```sql
+select
+  has_table_privilege('service_role', 'public.news_sources', 'SELECT'),
+  has_table_privilege('service_role', 'public.news_sources', 'INSERT');
+```
+
 ### 2.9 조용한 실패 테이블
 
 클라이언트가 사용자 경험을 위해 삼킨 실패를 한 줄씩 남긴다. **이 테이블이 없던 동안

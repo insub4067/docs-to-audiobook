@@ -366,6 +366,28 @@ async def test_add_news_cleanup_runs_even_when_every_item_fails(mock_supabase_ta
     assert ("id", "stale-1") in deleted_ids
 
 
+def test_normalize_items_and_paste_path_apply_the_same_rules():
+    """정제 규칙은 _normalize_items 한 곳에 있어야 한다. 붙여넣기 경로가
+    _normalize_items를 그대로 통과하는지(중복 제거·citation 정제·필드 길이)
+    확인해, 나중에 자동 수집 경로가 붙어도 규칙이 갈리지 않게 한다."""
+    from routes.news import _normalize_items, _parse_news_payload
+
+    raw_items = [
+        {"title": "달러 약세", "content": "본문 A [oaicitation:1‡Reuters]", "source": "Reuters", "category": "경제"},
+        {"title": "  달러   약세 ", "content": "본문 B"},   # 중복 제목 → 버림
+        {"title": "제목만"},                                  # content 없음 → 버림
+        {"title": "금값 급등", "content": "본문 C"},
+    ]
+
+    normalized = _normalize_items(raw_items)
+    from_paste = _parse_news_payload(json.dumps(raw_items, ensure_ascii=False))
+
+    assert normalized == from_paste
+    assert [i["title"] for i in normalized] == ["달러 약세", "금값 급등"]
+    assert "oaicitation" not in normalized[0]["content"]
+    assert normalized[0]["source"] == "Reuters"
+
+
 @pytest.mark.asyncio
 async def test_list_news_filters_recent_news_items_only(mock_supabase):
     rows = [{

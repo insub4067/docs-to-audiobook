@@ -47,6 +47,38 @@ def _strip_citation_artifacts(text: str) -> str:
     return cleaned.strip()
 
 
+def _normalize_items(items: list[dict]) -> list[dict]:
+    """뉴스 항목을 정제하고 제목 중복을 거른다.
+
+    관리자 붙여넣기(_parse_news_payload)와 자동 수집(향후 briefing 경로)이
+    같은 규칙을 통과하도록 정제 로직을 여기 한 곳에 모은다. 두 경로가 갈리면
+    "붙여넣기는 걸러지는데 자동 생성은 안 걸러진다" 같은 어긋남이 생긴다.
+    """
+    normalized = []
+    # 같은 묶음 안에 같은 기사가 두 번 들어오는 일이 있다(GPT가 같은 뉴스를
+    # 다른 출처로 두 번 뽑거나, RSS가 같은 기사를 여러 피드로 노출하는 경우).
+    # 제목을 공백·대소문자만 정규화해 비교하고 먼저 온 것만 남긴다.
+    seen_titles = set()
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        title = (item.get("title") or "").strip()
+        content = _strip_citation_artifacts((item.get("content") or "").strip())
+        if not title or not content:
+            continue
+        title_key = _title_key(title)
+        if title_key in seen_titles:
+            continue
+        seen_titles.add(title_key)
+        normalized.append({
+            "title": title[:255],
+            "content": content,
+            "category": (item.get("category") or "").strip()[:50] or None,
+            "source": (item.get("source") or "").strip()[:100] or None,
+        })
+    return normalized
+
+
 def _parse_news_payload(raw_text: str) -> list[dict]:
     text = raw_text.strip()
     if text.startswith("```"):
@@ -63,29 +95,7 @@ def _parse_news_payload(raw_text: str) -> list[dict]:
     if not isinstance(items, list) or not items:
         raise HTTPException(status_code=400, detail="뉴스 배열이 비어 있습니다.")
 
-    parsed = []
-    # 같은 붙여넣기 안에 같은 기사가 두 번 들어오는 일이 있다(GPT가 같은
-    # 뉴스를 다른 출처로 두 번 뽑는 경우). 제목을 공백·대소문자만 정규화해
-    # 비교하고 먼저 온 것만 남긴다.
-    seen_titles = set()
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        title = (item.get("title") or "").strip()
-        content = _strip_citation_artifacts((item.get("content") or "").strip())
-        if not title or not content:
-            continue
-        title_key = _title_key(title)
-        if title_key in seen_titles:
-            continue
-        seen_titles.add(title_key)
-        parsed.append({
-            "title": title[:255],
-            "content": content,
-            "category": (item.get("category") or "").strip()[:50] or None,
-            "source": (item.get("source") or "").strip()[:100] or None,
-        })
-
+    parsed = _normalize_items(items)
     if not parsed:
         raise HTTPException(status_code=400, detail="title/content가 있는 뉴스 항목이 없습니다.")
     return parsed
