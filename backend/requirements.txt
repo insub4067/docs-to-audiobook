@@ -18,6 +18,8 @@ requests>=2.31.0
 olefile>=0.46
 trafilatura>=1.8.0
 youtube-transcript-api>=1.0.0
+# 뉴스 자동 큐레이션(Step 0): 등록된 RSS 피드에서 후보를 수집한다(news_sources.py).
+feedparser>=6.0.0
 pywebpush==2.3.0
 
 # P2: Database & Authentication
