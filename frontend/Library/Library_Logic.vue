@@ -191,9 +191,24 @@ export function useLibraryLogic(state: LibraryState, readerLogic: ReaderLogic): 
                 headers: authLogic.authHeaders(),
             });
             if (!response.ok) throw new Error("요청에 실패했습니다.");
+
+            // ⚠️ savedIds와 savedItems를 함께 갱신한다. 예전에는 id 집합만
+            // 고쳐서, 서점에서 "내 서재에 추가"를 눌러도 서재 화면에는
+            // 아무것도 나타나지 않았다 — 서재 목록은 savedItems를 그리는데
+            // 그건 loadSaves()로만 채워지고, 서재 탭은 v-show라 다시
+            // 마운트되지 않아 그 호출이 영영 일어나지 않았다.
             const next = new Set(state.savedIds.value);
-            if (saved) next.delete(item.id);
-            else next.add(item.id);
+            if (saved) {
+                next.delete(item.id);
+                state.savedItems.value = state.savedItems.value.filter((entry) => entry.id !== item.id);
+            } else {
+                next.add(item.id);
+                // 방금 담은 것이 맨 위에 온다. 목록을 다시 받아 오지 않아도
+                // 서재로 넘어가면 바로 보인다.
+                if (!state.savedItems.value.some((entry) => entry.id === item.id)) {
+                    state.savedItems.value = [item, ...state.savedItems.value];
+                }
+            }
             state.savedIds.value = next;
             showToast(saved ? "내 서재에서 제거했어요" : "내 서재에 추가했어요", "success");
         } catch (error) {

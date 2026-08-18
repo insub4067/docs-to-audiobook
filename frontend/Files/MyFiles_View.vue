@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import type { AudioListState } from "../components/Library/AudioList_State.vue";
 import type { AudioListLogic } from "../components/Library/AudioList_Logic.vue";
 import type { AudiobookRecord } from "../services/indexedDb";
@@ -31,6 +31,10 @@ const props = defineProps<{
     generatingItems: GeneratingItem[];
     hasMiniPlayer: boolean;
     readerLogic: ReaderLogic;
+    /** 지금 서재 탭이 보이고 있는가. 이 탭은 v-show로 숨겨질 뿐 계속
+     *  마운트돼 있어서, onMounted만으로는 다른 기기에서 담은 작품이나
+     *  앱을 켜 둔 채 서점에서 담은 것이 반영되지 않는다. */
+    active: boolean;
 }>();
 
 const browserState = useFolderBrowserState("내 파일");
@@ -187,6 +191,13 @@ function onVisibilityChange(): void {
     // 끊겨 touchend/touchcancel이 아예 안 올 수 있다.
     if (document.visibilityState !== "visible") resetDragState();
 }
+
+// 탭으로 돌아올 때마다 다시 받는다. 담기/빼기 자체는 toggleSave가
+// 그 자리에서 목록까지 갱신하므로, 이건 다른 경로로 바뀐 것을 따라잡기
+// 위한 것이다.
+watch(() => props.active, (isActive) => {
+    if (isActive) libraryLogic.loadSaves();
+});
 
 onMounted(() => {
     browserLogic.loadCurrentFolder();

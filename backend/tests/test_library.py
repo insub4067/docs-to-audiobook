@@ -687,3 +687,45 @@ async def test_update_library_status_propagates_to_parts(mock_supabase):
     eq_calls = [call.args for call in mock_supabase.table().update().eq.call_args_list]
     assert ("id", "work-1") in eq_calls
     assert ("library_part_of", "work-1") in eq_calls
+
+
+@pytest.mark.asyncio
+async def test_part_inherits_the_works_current_status_not_the_queued_one(mock_supabase_tables):
+    """24부짜리는 합성에 20분 가까이 걸린다. 그동안 관리자가 앞부분을 확인하고
+    발행을 누르면, 그 뒤에 만들어지는 부만 review로 남아 작품과 갈린다.
+    실제로 오디세이 등록에서 1~15부는 published, 16~24부는 review가 됐다.
+    """
+    from routes.library import store_library_item
+
+    client, tables = mock_supabase_tables
+    # 작품 행은 이미 published로 바뀌어 있다.
+    audiobooks = tables.setdefault("audiobooks", MagicMock())
+    audiobooks.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = \
+        MagicMock(data={"library_status": "published"})
+
+    item = {
+        "title": "오디세이 · 20/24 제20권", "work_title": "오디세이", "content": "본문",
+        "audiobook_id": "part-20-id", "part_of": "work-id", "part_number": 20,
+        "part_title": "제20권", "status": "review",   # ← 큐잉 때의 값
+    }
+
+    with patch("routes.tts.synthesize_document_to_file", side_effect=_fake_synthesize_document):
+        await store_library_item(client, "admin-user", item, "job-20")
+
+    row = rows_inserted_into(tables, "audiobooks")[0]
+    assert row["library_status"] == "published", "부가 작품의 현재 상태를 따라야 한다"
+
+
+@pytest.mark.asyncio
+async def test_single_work_keeps_its_queued_status(mock_supabase_tables):
+    """단권은 따라갈 작품이 없다. 큐잉 때의 status를 그대로 쓴다 —
+    기본값 review가 유지돼야 검토 없이 공개되는 일이 없다."""
+    from routes.library import store_library_item
+
+    client, tables = mock_supabase_tables
+    item = {"title": "도덕경", "content": "도가도 비상도", "part_of": None, "status": "review"}
+
+    with patch("routes.tts.synthesize_document_to_file", side_effect=_fake_synthesize_document):
+        await store_library_item(client, "admin-user", item, "job-single")
+
+    assert rows_inserted_into(tables, "audiobooks")[0]["library_status"] == "review"
