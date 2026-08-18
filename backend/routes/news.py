@@ -47,6 +47,60 @@ def _strip_citation_artifacts(text: str) -> str:
     return cleaned.strip()
 
 
+def _normalize_items(items: list[dict], *, automated: bool = False) -> list[dict]:
+    """뉴스 항목을 정제하고 제목 중복을 거른다.
+
+    관리자 붙여넣기(_parse_news_payload)와 자동 수집(summarizer.py)이 같은
+    규칙을 통과하도록 정제 로직을 여기 한 곳에 모은다. 두 경로가 갈리면
+    "붙여넣기는 걸러지는데 자동 생성은 안 걸러진다" 같은 어긋남이 생긴다.
+
+    `automated=True`일 때만 매체명과 원문 링크를 요구하는 이유(설계 §3.2·§3.3):
+    자동 수집분은 사람이 본 적 없는 글이라, 어디서 온 이야기인지 되짚을 수
+    있어야 한다. 붙여넣기는 관리자가 직접 확인하고 넣는 것이고 지금까지 둘 다
+    선택값이었다 — 같은 규칙을 걸면 유일하게 돌아가는 등록 경로가 막힌다.
+
+    ⚠️ 프로덕션의 기존 뉴스 10건이 매체명을 전부 채우고 있다고 해서 필수인
+    것은 아니다. 그건 관리자가 매번 넣어준 것이고, API는 없어도 받아들인다
+    (test_add_news_strips_json_code_fence_and_stores_items가 그 계약을 못박고
+    있다). 데이터가 우연히 채워진 것과 계약이 요구하는 것은 다르다.
+    """
+    normalized = []
+    # 같은 묶음 안에 같은 기사가 두 번 들어오는 일이 있다(GPT가 같은 뉴스를
+    # 다른 출처로 두 번 뽑거나, RSS가 같은 기사를 여러 피드로 노출하는 경우).
+    # 제목을 공백·대소문자만 정규화해 비교하고 먼저 온 것만 남긴다.
+    seen_titles = set()
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        title = (item.get("title") or "").strip()
+        content = _strip_citation_artifacts((item.get("content") or "").strip())
+        if not title or not content:
+            continue
+        source = (item.get("source") or "").strip()[:100]
+        url = (item.get("url") or "").strip()
+        if automated and not (source and url):
+            logger.warning("매체명 또는 원문 링크가 없어 버림: %r", title)
+            continue
+
+        title_key = _title_key(title)
+        if title_key in seen_titles:
+            continue
+        seen_titles.add(title_key)
+        normalized.append({
+            "title": title[:255],
+            "content": content,
+            "category": (item.get("category") or "").strip()[:50] or None,
+            "source": source or None,
+            "url": url or None,
+            # guid가 없으면 링크가 사실상 식별자다(news_sources._entry_to_candidate와
+            # 같은 규칙). 둘 다 없는 붙여넣기 항목은 None으로 두고 중복 검사에서
+            # 제외한다 — unique index가 NULL은 서로 다른 값으로 보기 때문에
+            # 기존 방식대로 여러 건이 들어간다.
+            "guid": (item.get("guid") or "").strip() or url or None,
+        })
+    return normalized
+
+
 def _parse_news_payload(raw_text: str) -> list[dict]:
     text = raw_text.strip()
     if text.startswith("```"):
@@ -63,36 +117,22 @@ def _parse_news_payload(raw_text: str) -> list[dict]:
     if not isinstance(items, list) or not items:
         raise HTTPException(status_code=400, detail="뉴스 배열이 비어 있습니다.")
 
-    parsed = []
-    # 같은 붙여넣기 안에 같은 기사가 두 번 들어오는 일이 있다(GPT가 같은
-    # 뉴스를 다른 출처로 두 번 뽑는 경우). 제목을 공백·대소문자만 정규화해
-    # 비교하고 먼저 온 것만 남긴다.
-    seen_titles = set()
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        title = (item.get("title") or "").strip()
-        content = _strip_citation_artifacts((item.get("content") or "").strip())
-        if not title or not content:
-            continue
-        title_key = _title_key(title)
-        if title_key in seen_titles:
-            continue
-        seen_titles.add(title_key)
-        parsed.append({
-            "title": title[:255],
-            "content": content,
-            "category": (item.get("category") or "").strip()[:50] or None,
-            "source": (item.get("source") or "").strip()[:100] or None,
-        })
-
+    parsed = _normalize_items(items)
     if not parsed:
         raise HTTPException(status_code=400, detail="title/content가 있는 뉴스 항목이 없습니다.")
     return parsed
 
 
-async def store_news_item(supabase, admin_user_id: str, item: dict, job_id: str) -> str:
-    """content_jobs 처리기가 호출하는 저장 함수(kind='news')."""
+async def store_news_item(
+    supabase, admin_user_id: str, item: dict, job_id: str, *, news_status: str = "published"
+) -> str:
+    """content_jobs 처리기가 호출하는 저장 함수(kind='news').
+
+    `news_status`의 기본값이 'published'인 이유(설계 §3.4): 관리자가 직접
+    넣은 것은 이미 사람이 확인한 글이다. 자동 생성분만 호출부가 'review'를
+    건네고, 관리자가 승인해야 공개된다 — 요약 품질이 검증되기 전에 자동
+    공개하면 이상한 요약이 그대로 나간다.
+    """
     audiobook_id = str(uuid.uuid4())
     audio_path, sentences = await synthesize_into_storage(
         supabase, admin_user_id, audiobook_id, item["content"], job_id
@@ -113,6 +153,9 @@ async def store_news_item(supabase, admin_user_id: str, item: dict, job_id: str)
             "is_news": True,
             "news_category": item.get("category"),
             "news_source": item.get("source"),
+            "news_url": item.get("url"),
+            "news_guid": item.get("guid"),
+            "news_status": news_status,
         }).execute()
     except Exception:
         # 행이 없으면 이 파일들을 가리키는 것이 아무것도 없다 — 버킷에만
