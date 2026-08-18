@@ -71,6 +71,38 @@ CREATE TABLE audiobooks (
 CREATE INDEX idx_audiobooks_user_id ON audiobooks(user_id);
 ```
 
+### 2.2.1 서점 시리즈 컬럼 (나중에 추가됨)
+
+오디세이처럼 긴 작품을 여러 "부"로 나눠 담기 위한 컬럼이다. 이미 만들어진 DB에는
+아래를 실행해 추가한다.
+
+```sql
+alter table public.audiobooks
+  add column if not exists library_part_of uuid,
+  add column if not exists library_part_number int,
+  add column if not exists library_part_title text;
+
+create index if not exists audiobooks_library_parts_idx
+  on public.audiobooks(library_part_of, library_part_number)
+  where library_part_of is not null;
+```
+
+**서점의 "작품"은 `library_part_of`가 NULL인 행이다.** 목록 쿼리가 이 조건 하나로
+작품과 부를 가르므로 그룹핑 코드가 필요 없다. 단권 작품은 세 컬럼이 전부 NULL이라
+컬럼을 추가하기 전과 똑같이 동작한다.
+
+| 값 | 의미 |
+|---|---|
+| `part_of = NULL`, `part_number = NULL` | 단권 작품 |
+| `part_of = NULL`, `part_number = 1` | 시리즈의 1부 = 작품 대표 행 |
+| `part_of = <1부 id>`, `part_number = 2..N` | 2부 이후 |
+
+⚠️ **`library_part_of`에 외래키를 걸지 않는다.** 걸면 재시도 경로가 망가진다. 5부만
+실패해 관리자가 재시도할 때 그 작업은 단독으로 도는데, 1부 행이 아직 없으면 FK
+위반으로 또 실패한다. 정합성은 대신 `routes/library.py`의 `_expand_to_job_items`가
+큐잉 시점에 오디오북 id를 확정하는 것으로 보장한다 — 재시도하면 같은 id로 행이
+되살아나 나머지 부에 그대로 붙는다.
+
 ### 2.3 재생 기록 테이블
 ```sql
 CREATE TABLE playback_history (

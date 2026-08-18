@@ -7,6 +7,7 @@ product_events에는 user_id와 event_name밖에 없어 그 계산이 불가능�
 1. 합성이 끝나면(성공이든 실패든) 문자 수가 남는다.
 2. 기록이 실패해도 합성은 멀쩡하다 — 지표는 부수적이고 오디오가 본체다.
 """
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -16,6 +17,17 @@ from tests.conftest import rows_inserted_into
 from main import app
 from routes import tts
 from state import jobs
+
+
+def _hours_ago(hours: int) -> str:
+    """지금으로부터 N시간 전. 지표 테스트의 시각은 반드시 상대값으로 만든다.
+
+    ⚠️ 예전에는 "2026-08-08T12:00:00+00:00" 같은 고정 날짜를 썼는데, 주간
+    활성 사용자는 최근 7일만 세므로(routes/system.py의 week_ago) 그 날짜가
+    일주일을 넘기는 순간 테스트가 스스로 깨졌다. 실제로 그렇게 깨져서 관계
+    없는 PR의 CI를 막았다 — 코드는 그대로였고 달력만 넘어갔을 뿐이다.
+    """
+    return (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
 
 
 def _auth_headers(user_id="test_user_id"):
@@ -150,14 +162,14 @@ async def test_metrics_expose_cost_per_active_user(mock_supabase_tables):
     usage = MagicMock()
     usage.select.return_value.gte.return_value.execute.return_value.data = [
         {"user_id": "u1", "provider": "google", "characters": 1_000_000,
-         "audio_seconds": 3600, "succeeded": True, "created_at": "2026-08-08T10:00:00+00:00"},
+         "audio_seconds": 3600, "succeeded": True, "created_at": _hours_ago(30)},
         {"user_id": "u1", "provider": "edge_tts", "characters": 500_000,
-         "audio_seconds": 1800, "succeeded": False, "created_at": "2026-08-08T11:00:00+00:00"},
+         "audio_seconds": 1800, "succeeded": False, "created_at": _hours_ago(29)},
     ]
     tables["synthesis_usage"] = usage
     events = MagicMock()
     events.select.return_value.gte.return_value.execute.return_value.data = [
-        {"user_id": "u1", "event_name": "playback_started", "created_at": "2026-08-08T12:00:00+00:00"},
+        {"user_id": "u1", "event_name": "playback_started", "created_at": _hours_ago(28)},
     ]
     tables["product_events"] = events
     for name in ("users", "audiobooks"):
