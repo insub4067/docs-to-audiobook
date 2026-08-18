@@ -28,7 +28,7 @@ export interface ReaderState {
     isPlaylistSheetOpen: Ref<boolean>;
     isBookmarkSheetOpen: Ref<boolean>;
     bookmarks: Ref<BookmarkRecord[]>;
-    sharedPlaylistKind: Ref<"news" | null>;
+    sharedPlaylistKind: Ref<"news" | "library" | null>;
     currentAudioObject: Ref<AudiobookRecord | null>;
     audioEl: Ref<HTMLAudioElement | null>;
     contentEl: Ref<HTMLElement | null>;

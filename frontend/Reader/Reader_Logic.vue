@@ -27,7 +27,7 @@ export interface SharedReaderModeOptions {
     // 모드를 함께 넘겨 "전체 반복"이면 마지막 항목 뒤에 처음으로 돌아갈지
     // 큐 쪽에서 판단하게 한다.
     onEnded?: (repeatMode: RepeatMode) => void;
-    playlistKind?: "news" | null;
+    playlistKind?: "news" | "library" | null;
     // 라이브러리 작품처럼 실제 audiobooks 행이 있는 콘텐츠는 재생 위치를
     // 서버에 이어 듣기용으로 저장/복원할 수 있다 — 24시간짜리 임시 공유
     // 링크(shareId)에는 해당 없다.

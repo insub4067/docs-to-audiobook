@@ -199,6 +199,103 @@
     border: 1px solid var(--border-color);
     border-radius: 14px;
 }
+/* ── 여러 부로 나뉜 작품의 목차 ─────────────────────────────────────
+   부 하나가 한 줄이다. 제목과 상태(재생 중 / N% 들음 / 재생시간)를 위아래로
+   쌓고, 들은 만큼은 줄 아래 얇은 막대로 보여 준다. 목록 카드의 진행률과 같은
+   문법이라 서점 안에서 진행률이 늘 같은 모양으로 읽힌다. */
+.library-part-count {
+    margin-left: 6px;
+    font-family: var(--font-sans);
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+.library-part-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 13px 20px;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--reader-border);
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.library-part-item:last-child {
+    border-bottom: none;
+}
+
+.library-part-item:hover {
+    background-color: var(--reader-highlight-bg);
+}
+
+.library-part-main {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+    flex: 1;
+}
+
+.library-part-title {
+    font-family: var(--font-serif);
+    font-size: 0.98rem;
+    color: var(--text-color);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.library-part-meta {
+    font-family: var(--font-sans);
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+/* 지금 듣고 있는 부. 목차가 길어 스크롤되므로 왼쪽 포인트 라인으로
+   어디쯤인지 한눈에 잡히게 한다(.index-item.is-current와 같은 문법). */
+.library-part-item.is-playing::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 8px;
+    bottom: 8px;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background-color: var(--primary-color);
+}
+
+.library-part-item.is-playing .library-part-title,
+.library-part-item.is-playing .library-part-meta {
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+/* 들은 만큼을 줄 맨 아래에 얇게 깐다. 별도 행을 쓰지 않아 목차가 길어지지
+   않고, 훑어볼 때 어디까지 들었는지가 눈에 남는다. */
+.library-part-progress {
+    position: absolute;
+    left: 20px;
+    right: 20px;
+    bottom: 0;
+    height: 2px;
+    border-radius: 2px;
+    background-color: var(--reader-border);
+    overflow: hidden;
+}
+
+.library-part-progress > span {
+    display: block;
+    height: 100%;
+    border-radius: 2px;
+    background-color: var(--primary-color);
+    opacity: 0.65;
+}
+
 .library-detail-rights p {
     margin: 0 0 8px;
     font-size: 0.88rem;

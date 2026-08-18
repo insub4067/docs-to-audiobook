@@ -89,7 +89,7 @@ function onPlaylistClick(): void {
                 내 오디오북에 저장
             </button>
             <button
-                v-if="state.sharedPlaylistKind.value === 'news' || !!state.currentAudioObject.value?.folderId"
+                v-if="state.sharedPlaylistKind.value !== null || !!state.currentAudioObject.value?.folderId"
                 class="action-sheet-btn"
                 type="button"
                 @click="onPlaylistClick"
