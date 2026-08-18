@@ -213,6 +213,23 @@ async def store_library_item(supabase, admin_user_id: str, item: dict, job_id: s
     # 큐잉 때 확정해 둔 id를 쓴다(_expand_to_job_items). 없으면 예전처럼
     # 새로 만든다 — 이 경로로 들어오는 오래된 작업이 남아 있을 수 있다.
     audiobook_id = item.get("audiobook_id") or str(uuid.uuid4())
+
+    # ⚠️ 부의 공개 상태는 큐잉 때 정한 값이 아니라 "지금 작품이 어떤 상태인가"를
+    # 따른다. 24부짜리는 합성에 20분 가까이 걸리는데, 그동안 관리자가 앞부분을
+    # 확인하고 발행을 누르면 그 시점 이후에 만들어지는 부들만 review로 남는다.
+    # 실제로 오디세이 등록에서 1~15부는 published, 16~24부는 review가 됐다.
+    # 작품과 부의 상태는 어떤 경우에도 갈리면 안 된다.
+    part_of = item.get("part_of")
+    if part_of:
+        try:
+            work = supabase.table("audiobooks").select("library_status") \
+                .eq("id", part_of).maybe_single().execute()
+            if work and work.data and work.data.get("library_status") in LIBRARY_STATUSES:
+                status = work.data["library_status"]
+        except Exception:
+            # 작품 행을 못 읽어도 부는 만들어야 한다. 그때는 큐잉 때의 값을
+            # 그대로 쓰고, 어긋나면 관리자가 발행을 다시 누르면 전파된다.
+            logger.exception("작품의 공개 상태를 읽지 못했습니다 part_of=%s", part_of)
     # 시리즈의 부는 작품명을 제목으로 갖는다. item["title"]은 관리자 작업
     # 목록에 보여줄 "오디세이 · 3/24 제3권" 쪽이라 그대로 쓰면 안 된다.
     title = item.get("work_title") or item["title"]

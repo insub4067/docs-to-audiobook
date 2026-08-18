@@ -3,6 +3,7 @@ import { ref, computed, watch } from "vue";
 import type { LibraryState } from "./Library_State.vue";
 import type { LibraryLogic } from "./Library_Logic.vue";
 import { nowPlayingId, nowPlayingState } from "../services/nowPlaying";
+import { useSwipeToDismiss } from "../utils/swipeToDismiss";
 
 interface TocEntry {
     text: string;
@@ -95,6 +96,16 @@ function onChapterClick(entry: TocEntry): void {
     props.logic.playFromChapter(item, rawSentences.value, entry.startMs / 1000);
 }
 
+// 상단바를 끌어내리면 화면 전체가 따라 내려가다가, 충분히 끌면(또는 빠르게
+// 튕기면) 상세를 닫는다. 읽기 화면과 같은 제스처다 — 같은 전체 화면 오버레이인데
+// 한쪽만 닫히면 어느 화면에서 되는지 매번 시험해 보게 된다.
+//
+// 손잡이를 상단바로 둔 이유는 본문이 스크롤 영역이기 때문이다. 본문에서
+// 끌면 목차를 훑는 것과 구분되지 않는다.
+const container = ref<HTMLElement | null>(null);
+const detailHeader = ref<HTMLElement | null>(null);
+useSwipeToDismiss(container, () => props.logic.closeDetail(), detailHeader);
+
 function onPartClick(index: number): void {
     const item = props.state.detailItem.value;
     if (!item) return;
@@ -104,8 +115,8 @@ function onPartClick(index: number): void {
 
 <template>
     <div class="library-detail-overlay" :class="{ show: state.isDetailOpen.value }" role="dialog" aria-modal="true" aria-label="작품 상세">
-        <div v-if="state.detailItem.value" class="library-detail-container">
-            <header class="library-detail-header">
+        <div v-if="state.detailItem.value" class="library-detail-container" ref="container">
+            <header class="library-detail-header" ref="detailHeader">
                 <button class="btn-reader-close" type="button" aria-label="닫기" @click="logic.closeDetail">
                     <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
                 </button>

@@ -280,6 +280,7 @@ onMounted(async () => {
 
     <MyFilesView
         v-show="activeTab === 'files'"
+        :active="activeTab === 'files'"
         :audio-list-state="audioListState"
         :audio-list-logic="audioListLogic"
         :my-files-state="myFilesState"
