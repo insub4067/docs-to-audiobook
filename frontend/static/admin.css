@@ -174,7 +174,11 @@ h2 { margin-bottom: 0; font-size: 1.4rem; }
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-.library-review-info span {
+/* ⚠️ 직계 자식만 잡는다. 자손 선택자로 두면 제목 안의 배지 span까지
+   걸려서(.content-job-kind) display가 -webkit-box로 덮인다 — 그건 블록
+   레벨이라 배지가 한 줄을 통째로 차지하고 제목이 다음 줄로 밀린다.
+   실제로 등록 작업 목록에서 그렇게 보였다. */
+.library-review-info > span {
     overflow: hidden;
     display: -webkit-box;
     -webkit-line-clamp: 2;
