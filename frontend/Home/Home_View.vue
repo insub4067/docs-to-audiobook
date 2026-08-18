@@ -238,6 +238,9 @@ onMounted(async () => {
     document.addEventListener("visibilitychange", onVisibilityChangeForLayout);
     await voiceLogic.loadVoices();
     readerLogic.checkSharedLink();
+    // 서점 작품 공유 링크로 들어왔으면 서점 탭으로 옮기고 상세를 편다.
+    // 이게 없으면 링크를 눌러도 홈에 그대로 머문다.
+    if (await libraryLogic.checkLibraryLink()) activeTab.value = "library";
     restoreLastPlayedSession();
 });
 </script>
