@@ -30,7 +30,7 @@ const themeState = useThemeState();
 const themeLogic = useThemeLogic(themeState);
 
 const newsValidation = computed(() => validateJson(newsInputText.value));
-const libraryValidation = computed(() => validateJson(libraryInputText.value));
+const libraryValidation = computed(() => validateJson(libraryInputText.value, { allowParts: true }));
 
 function submitLabel(text: string, validation: { isValid: boolean; itemCount: number; errors: string[] }, submitting: boolean): string {
     if (submitting) return "등록 중...";
@@ -337,21 +337,40 @@ onUnmounted(() => {
             <div class="action-sheet-handle"></div>
             <div class="index-sheet-header"><h3>라이브러리 작품 추가</h3></div>
             <div class="input-sheet-scroll">
-                <p class="dashboard-subtitle">아래 형식에 맞는 json을 붙여넣으세요.</p>
+                <p class="dashboard-subtitle">
+                    아래 형식에 맞는 json을 붙여넣으세요.
+                    긴 작품은 <code>content</code> 대신 <code>parts</code>로 나눠 올리면
+                    서점에 카드 한 장으로 보이고 부가 이어서 재생됩니다.
+                </p>
                 <textarea
                     class="news-input"
                     rows="10"
-                    placeholder='[
+                    placeholder='단권:
+[
   {
     "title": "도덕경",
     "category": "철학·사상",
     "edition": "왕필본",
-    "translator": "원문 기반",
     "source": "중국 고전 《도덕경》",
     "rights": "원전 공개 이용 가능",
     "description": "노자가 전하는 도와 덕의 철학...",
     "status": "published",
     "content": "# 1장\n도가도 비상도...\n\n# 2장\n..."
+  }
+]
+
+여러 부로 나뉜 작품:
+[
+  {
+    "title": "오디세이",
+    "category": "고전문학",
+    "description": "오디세우스의 십 년 귀향...",
+    "rights": "원전 공개 이용 가능",
+    "status": "review",
+    "parts": [
+      { "title": "제1권 · 아테나의 방문", "content": "..." },
+      { "title": "제2권 · 텔레마코스의 출항", "content": "..." }
+    ]
   }
 ]'
                     v-model="libraryInputText"
