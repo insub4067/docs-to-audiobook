@@ -7,7 +7,7 @@ export interface AdminLogic {
     formatMetric(name: AdminMetricName, value: number | null | undefined): string;
     loadMetrics(): Promise<void>;
     selectTab(tab: AdminTab): void;
-    validateJson(raw: string): JsonValidationResult;
+    validateJson(raw: string, options?: { allowParts?: boolean }): JsonValidationResult;
     submitNews(): Promise<void>;
     submitLibrary(): Promise<void>;
     loadLibraryItems(): Promise<void>;
@@ -80,7 +80,11 @@ export function useAdminLogic(
     // 등록 전에 형식·필수 필드를 미리 확인한다 — 모바일에서 긴 JSON을
     // 손으로 붙여넣다 보면 title/content 누락이나 문법 오류가 흔한데,
     // 그걸 등록 요청을 보내기 전에(백엔드 왕복 없이) 바로 알려준다.
-    function validateJson(raw: string): JsonValidationResult {
+    //
+    // allowParts는 라이브러리에서만 켠다. 서점 작품은 content 하나를 통째로
+    // 갖거나(단권) parts에 부를 나눠 갖는데(시리즈), 뉴스에는 부라는 개념이
+    // 없어 content가 계속 필수다.
+    function validateJson(raw: string, { allowParts = false } = {}): JsonValidationResult {
         const empty: JsonValidationResult = { isValid: false, itemCount: 0, previewTitles: [], errors: [] };
         const text = raw.trim();
         if (!text) return empty;
@@ -114,8 +118,36 @@ export function useAdminLogic(
                 return;
             }
             if (typeof item.title !== "string" || !item.title.trim()) errors.push(`${ordinal}에 title 필드가 없습니다.`);
-            if (typeof item.content !== "string" || !item.content.trim()) errors.push(`${ordinal}에 content 필드가 없습니다.`);
-            previewTitles.push(typeof item.title === "string" && item.title.trim() ? item.title : `(제목 없음 #${index + 1})`);
+
+            const parts = allowParts && Array.isArray(item.parts) ? item.parts : null;
+            if (parts) {
+                if (parts.length === 0) {
+                    errors.push(`${ordinal}의 parts가 비어 있습니다.`);
+                }
+                parts.forEach((rawPart, partIndex) => {
+                    const part = rawPart as Record<string, unknown> | null;
+                    const where = `${ordinal}의 ${partIndex + 1}번째 부`;
+                    if (typeof part !== "object" || part === null) {
+                        errors.push(`${where}가 객체가 아닙니다.`);
+                        return;
+                    }
+                    if (typeof part.title !== "string" || !part.title.trim()) errors.push(`${where}에 title이 없습니다.`);
+                    if (typeof part.content !== "string" || !part.content.trim()) errors.push(`${where}에 content가 없습니다.`);
+                });
+            } else if (typeof item.content !== "string" || !item.content.trim()) {
+                // parts를 쓸 수 있는 화면에서는 무엇을 넣어야 하는지까지 알려준다.
+                // "content가 없습니다"만 보면 시리즈를 올리려던 사람은 형식이
+                // 틀렸다고 오해한다.
+                errors.push(allowParts
+                    ? `${ordinal}에 content 또는 parts가 없습니다.`
+                    : `${ordinal}에 content 필드가 없습니다.`);
+            }
+
+            const title = typeof item.title === "string" && item.title.trim()
+                ? item.title : `(제목 없음 #${index + 1})`;
+            // 24부짜리를 붙여넣고 "1개 항목 인식됨"만 보면 정말 24부가 다
+            // 들어갔는지 알 수 없다. 부 수까지 보여 준다.
+            previewTitles.push(parts ? `${title} (${parts.length}부)` : title);
         });
 
         return { isValid: errors.length === 0, itemCount: parsed.length, previewTitles, errors };
