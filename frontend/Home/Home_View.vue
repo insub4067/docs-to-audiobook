@@ -21,6 +21,7 @@ import TabBarView from "../components/TabBar/TabBar_View.vue";
 import MiniPlayerView from "../components/MiniPlayer/MiniPlayer_View.vue";
 import MyFilesView from "../Files/MyFiles_View.vue";
 import TodayNewsView from "../components/News/TodayNews_View.vue";
+import LibraryHighlightView from "../Library/LibraryHighlight_View.vue";
 import NewsListSheetView from "../components/News/NewsListSheet_View.vue";
 import LibraryView from "../Library/Library_View.vue";
 import LibraryDetailView from "../Library/LibraryDetail_View.vue";
@@ -251,6 +252,7 @@ onMounted(async () => {
         <OnboardingView :state="audioListState" :logic="audioListLogic" />
         <UploadView :state="generationState" :logic="generationLogic" />
         <TodayNewsView :logic="readerLogic" />
+        <LibraryHighlightView :logic="readerLogic" @more="activeTab = 'library'" />
         <AudioListView
             :state="audioListState"
             :logic="audioListLogic"
