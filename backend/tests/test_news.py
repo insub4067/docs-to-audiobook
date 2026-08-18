@@ -5,7 +5,7 @@ TTS 호출은 synthesize_document 하나로 모아 패치해 edge-tts/구글 TTS
 실호출 없이 테스트한다.
 """
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -366,6 +366,28 @@ async def test_add_news_cleanup_runs_even_when_every_item_fails(mock_supabase_ta
     assert ("id", "stale-1") in deleted_ids
 
 
+def test_normalize_items_and_paste_path_apply_the_same_rules():
+    """정제 규칙은 _normalize_items 한 곳에 있어야 한다. 붙여넣기 경로가
+    _normalize_items를 그대로 통과하는지(중복 제거·citation 정제·필드 길이)
+    확인해, 나중에 자동 수집 경로가 붙어도 규칙이 갈리지 않게 한다."""
+    from routes.news import _normalize_items, _parse_news_payload
+
+    raw_items = [
+        {"title": "달러 약세", "content": "본문 A [oaicitation:1‡Reuters]", "source": "Reuters", "category": "경제"},
+        {"title": "  달러   약세 ", "content": "본문 B"},   # 중복 제목 → 버림
+        {"title": "제목만"},                                  # content 없음 → 버림
+        {"title": "금값 급등", "content": "본문 C"},
+    ]
+
+    normalized = _normalize_items(raw_items)
+    from_paste = _parse_news_payload(json.dumps(raw_items, ensure_ascii=False))
+
+    assert normalized == from_paste
+    assert [i["title"] for i in normalized] == ["달러 약세", "금값 급등"]
+    assert "oaicitation" not in normalized[0]["content"]
+    assert normalized[0]["source"] == "Reuters"
+
+
 @pytest.mark.asyncio
 async def test_list_news_filters_recent_news_items_only(mock_supabase):
     rows = [{
@@ -414,3 +436,103 @@ async def test_list_news_hides_duplicate_rows_already_in_db(mock_supabase_tables
     ids = [item["id"] for item in response.json()["news"]]
     # 최신순으로 오므로 더 최근인 "new"가 남는다.
     assert ids == ["new", "other"]
+
+
+# ---- 자동 수집 경로: 매체명·원문 링크 필수 (설계 §3.2) ----
+#
+# 붙여넣기는 관리자가 직접 확인하고 넣는 것이라 지금까지 둘 다 선택값이었다.
+# 자동 수집분은 사람이 본 적 없는 글이라 어디서 왔는지 되짚을 수 있어야 한다.
+
+def test_normalize_keeps_paste_items_without_source_or_url():
+    """붙여넣기 경로는 예전 그대로 관대하다 — 여기에 규칙을 걸면 유일하게
+    돌아가는 등록 경로가 막힌다."""
+    from routes.news import _normalize_items
+
+    items = _normalize_items([{"title": "제목", "content": "본문입니다."}])
+
+    assert len(items) == 1
+    assert items[0]["source"] is None
+    assert items[0]["url"] is None
+    assert items[0]["guid"] is None
+
+
+def test_normalize_rejects_automated_item_without_url():
+    from routes.news import _normalize_items
+
+    items = _normalize_items(
+        [
+            {"title": "링크 없음", "content": "본문", "source": "연합뉴스"},
+            {"title": "정상", "content": "본문", "source": "연합뉴스",
+             "url": "https://example.com/a", "guid": "g1"},
+        ],
+        automated=True,
+    )
+
+    assert [item["title"] for item in items] == ["정상"]
+
+
+def test_normalize_rejects_automated_item_without_source():
+    from routes.news import _normalize_items
+
+    items = _normalize_items(
+        [
+            {"title": "매체명 없음", "content": "본문", "url": "https://example.com/a"},
+            {"title": "정상", "content": "본문", "source": "연합뉴스",
+             "url": "https://example.com/b", "guid": "g2"},
+        ],
+        automated=True,
+    )
+
+    assert [item["title"] for item in items] == ["정상"]
+
+
+def test_normalize_falls_back_to_url_when_guid_missing():
+    """guid 없는 피드가 있다 — 그럴 땐 링크가 사실상 식별자다
+    (news_sources._entry_to_candidate와 같은 규칙)."""
+    from routes.news import _normalize_items
+
+    items = _normalize_items(
+        [{"title": "제목", "content": "본문", "source": "연합뉴스",
+          "url": "https://example.com/a"}],
+        automated=True,
+    )
+
+    assert items[0]["guid"] == "https://example.com/a"
+
+
+@pytest.mark.asyncio
+async def test_store_news_item_defaults_to_published(mock_supabase_tables):
+    """관리자가 직접 넣은 것은 이미 사람이 확인한 글이다 — 승인 게이트를
+    다시 태우지 않는다(설계 §3.4)."""
+    from routes.news import store_news_item
+
+    client, tables = mock_supabase_tables
+    item = {"title": "제목", "content": "본문", "source": "연합뉴스",
+            "url": None, "guid": None, "category": None}
+
+    with patch("routes.news.synthesize_into_storage",
+               new=AsyncMock(return_value=("path.mp3", [{"end": 1000}]))):
+        await store_news_item(client, "admin-user", item, "job-1")
+
+    inserted = tables["audiobooks"].insert.call_args[0][0]
+    assert inserted["news_status"] == "published"
+    assert inserted["news_url"] is None
+
+
+@pytest.mark.asyncio
+async def test_store_news_item_accepts_review_status(mock_supabase_tables):
+    """자동 생성분은 호출부가 'review'를 건네 승인 전까지 공개되지 않는다."""
+    from routes.news import store_news_item
+
+    client, tables = mock_supabase_tables
+    item = {"title": "제목", "content": "본문", "source": "연합뉴스",
+            "url": "https://example.com/a", "guid": "g1", "category": "economy"}
+
+    with patch("routes.news.synthesize_into_storage",
+               new=AsyncMock(return_value=("path.mp3", [{"end": 1000}]))):
+        await store_news_item(client, "admin-user", item, "job-1", news_status="review")
+
+    inserted = tables["audiobooks"].insert.call_args[0][0]
+    assert inserted["news_status"] == "review"
+    assert inserted["news_url"] == "https://example.com/a"
+    assert inserted["news_guid"] == "g1"
