@@ -22,6 +22,8 @@ export interface LibraryLogic {
     selectCategory(category: string | null): void;
     openDetail(item: LibraryItem): void;
     closeDetail(): void;
+    /** 공유 링크(/?library=<id>)로 들어왔으면 그 작품 상세를 연다. */
+    checkLibraryLink(): Promise<boolean>;
     isSaved(item: LibraryItem): boolean;
     toggleSave(item: LibraryItem): Promise<void>;
     share(item: LibraryItem): Promise<void>;
@@ -146,6 +148,47 @@ export function useLibraryLogic(state: LibraryState, readerLogic: ReaderLogic): 
 
     function closeDetail(): void {
         state.isDetailOpen.value = false;
+    }
+
+    /** id만 알고 있을 때 상세를 연다(공유 링크로 들어온 경우). */
+    async function openDetailById(audiobookId: string): Promise<boolean> {
+        // 목록에 이미 있으면 그걸 쓴다 — 서점 탭을 이미 본 뒤라면 요청이 준다.
+        const known = state.items.value.find((item) => item.id === audiobookId);
+        if (known) {
+            openDetail(known);
+            return true;
+        }
+        try {
+            const response = await fetch(`/api/library/${audiobookId}`);
+            if (!response.ok) return false;
+            const item = await response.json();
+            state.detailItem.value = item;
+            state.isDetailOpen.value = true;
+            // 상세 응답이 이미 부를 들고 있다. openDetail로 가면 같은 것을
+            // 한 번 더 받아 온다.
+            state.detailParts.value = item.parts ?? [];
+            state.isLoadingParts.value = false;
+            return true;
+        } catch (error) {
+            console.error("공유된 작품을 불러오지 못했습니다:", error);
+            return false;
+        }
+    }
+
+    /** 공유 링크(/?library=<id>)로 들어왔으면 그 작품 상세를 연다. */
+    async function checkLibraryLink(): Promise<boolean> {
+        const audiobookId = new URLSearchParams(window.location.search).get("library");
+        if (!audiobookId) return false;
+
+        // ⚠️ 주소를 먼저 정리한다. 남겨 두면 새로고침할 때마다 상세가 다시
+        // 열리고, 사용자가 닫아도 뒤로 가기로 같은 화면이 또 뜬다.
+        window.history.replaceState({}, "", window.location.pathname);
+
+        if (await openDetailById(audiobookId)) return true;
+        // 아직 공개 전이거나(review) 내려간 작품이다. 링크를 준 사람은
+        // 볼 수 있어도 받은 사람은 못 볼 수 있다.
+        showToast("이 작품을 찾을 수 없습니다.", "error");
+        return false;
     }
 
     async function share(item: LibraryItem): Promise<void> {
@@ -456,7 +499,7 @@ export function useLibraryLogic(state: LibraryState, readerLogic: ReaderLogic): 
 
     return {
         loadLibrary, loadSaves, loadPlaybackPositions, getProgress,
-        selectCategory, openDetail, closeDetail, isSaved, toggleSave, share,
+        selectCategory, openDetail, closeDetail, checkLibraryLink, isSaved, toggleSave, share,
         loadSentences: fetchSentences, getLastPosition: fetchLastPosition,
         playFromStart, playFromLastPosition, playFromChapter,
         playPart, playQueuePartAt: playNextPart,
